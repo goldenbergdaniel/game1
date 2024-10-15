@@ -27,14 +27,14 @@ main :: proc()
 
 Game :: struct
 {
-  state: Game_State,
-  p1: Player,
-  p2: Player,
+  state:   Game_State,
+  player1: Player,
+  player2: Player,
   paddle1: Paddle,
   paddle2: Paddle,
-  balls: [MAX_BALLS]Ball,
+  balls:   [MAX_BALLS]Ball,
 
-  perm_arena: mem.Arena,
+  perm_arena:  mem.Arena,
   frame_arena: mem.Arena,
 }
 
