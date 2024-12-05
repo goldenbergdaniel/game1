@@ -16,10 +16,10 @@
   "enable_hover": true,
   "enable_snippets": true,
   "verbose": true,
-  "checker_args": "-vet",
+  "checker_args": "-vet-shadowing -vet-unused-variables",
   "profile": "main",
   "profiles":
   [
-    {"name": "main", "checker_path": ["src/common", "src/client", "src/server"]}
+    {"name": "main", "checker_path": ["src", "src/draw", "src/platform"]}
   ]
 }
