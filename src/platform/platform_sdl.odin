@@ -76,7 +76,7 @@ sdl_poll_event :: proc(window: ^Window, event: ^Event) -> bool
 
 	sdl_event: sdl.Event
 	result = cast(bool) sdl.PollEvent(&sdl_event)
-	event^ = sdl_event_translate(&sdl_event)
+	event^ = sdl_translate_event(&sdl_event)
 
 	return result
 }
@@ -88,7 +88,7 @@ sdl_pump_events :: proc(window: ^Window)
 }
 
 @(private="file")
-sdl_event_translate :: proc(sdl_event: ^sdl.Event) -> Event
+sdl_translate_event :: proc(sdl_event: ^sdl.Event) -> Event
 {
 	result: Event
 
@@ -98,14 +98,13 @@ sdl_event_translate :: proc(sdl_event: ^sdl.Event) -> Event
   case .KEYDOWN:
     #partial switch sdl_event.key.keysym.scancode
     {
-    case .ESCAPE: result.kind = .QUIT
+    case .ESCAPE: 
+			result = Event{
+				kind = .KEY_DOWN,
+				key_kind = .ESCAPE,
+			}
     }
 	}
 
 	return result
-}
-
-sdl_new_event :: proc() -> ^sdl.Event
-{
-	return new(sdl.Event)
 }

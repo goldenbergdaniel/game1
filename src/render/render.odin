@@ -1,6 +1,7 @@
-package draw
+package render
 
-import gen "src:draw/generated"
+import "src:render/shaders"
+import vm "src:vecmath"
 import plf "src:platform"
 import sg "ext:sokol/gfx"
 
@@ -10,7 +11,18 @@ Vertex :: struct
   color: [4]f32,
 }
 
-@(private)
+Renderer :: struct
+{
+  vertices:    [40000]Vertex,
+  vertex_cnt:  int,
+  indices:     [10000]u16,
+  index_cnt:   int,
+  projection:  vm.Mat3x3,
+  bindings:    sg.Bindings,
+  pipeline:    sg.Pipeline,
+  pass_action: sg.Pass_Action,
+}
+
 renderer: Renderer
 
 setup_scratch :: proc()
@@ -34,11 +46,11 @@ setup_scratch :: proc()
   })
 
   renderer.pipeline = sg.make_pipeline({
-    shader = sg.make_shader(gen.triangle_shader_desc(BACKEND)),
+    shader = sg.make_shader(shaders.triangle_shader_desc(BACKEND)),
     layout = {
       attrs = {
-        gen.ATTR_triangle_position = {format = .FLOAT2},
-        gen.ATTR_triangle_color    = {format = .FLOAT4},
+        shaders.ATTR_triangle_position = {format = .FLOAT2},
+        shaders.ATTR_triangle_color    = {format = .FLOAT4},
       },
     },
   })

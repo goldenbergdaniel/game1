@@ -49,7 +49,6 @@ Event_Kind :: enum u16
 
   QUIT,
   KEY_DOWN,
-  KEY_UP,
 }
 
 Key_Kind :: enum u8
@@ -96,7 +95,7 @@ create_window :: #force_inline proc(
 	return result
 }
 
-release_os_resources :: proc(
+release_resources :: proc(
   window: ^Window,
 )
 {

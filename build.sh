@@ -1,24 +1,21 @@
 #!/bin/bash
 set -e
 
-SHADER_SOURCES=("triangle")
+SHADERS=("triangle")
 
 # --- CONFIGURE ---------------------------------------------------------------------
 
-MODE="debug"
-if [[ $1 == "d" ]]; then MODE="dev"; fi
-if [[ $1 == "r" ]]; then MODE="release"; fi
+MODE="dev"
+if [[ $1 != "" ]]; then MODE=$1; fi
 
 TARGET="linux_amd64"
-if [[ $1 == "-target" ]]; then TARGET=$2; fi
-if [[ $2 == "-target" ]]; then TARGET=$3; fi
+if [[ $2 != "" ]]; then TARGET=$2; fi
 
-COLLECTIONS="-collection:src=src -collection:ext=ext"
-
-FLAGS=""
-if [[ $MODE == "dev"     ]]; then FLAGS="-o:none -use-separate-modules"; fi
-if [[ $MODE == "debug"   ]]; then FLAGS="-o:none -debug"; fi
-if [[ $MODE == "release" ]]; then FLAGS="-o:speed -vet -no-bounds-check -no-type-assert"; fi
+EXTRA=$3
+FLAGS="-collection:src=src -collection:ext=ext -define:USE_SDL=true $EXTRA"
+if [[ $MODE == "dev"     ]]; then FLAGS="-o:none -use-separate-modules $FLAGS"; fi
+if [[ $MODE == "debug"   ]]; then FLAGS="-o:none -debug $FLAGS"; fi
+if [[ $MODE == "release" ]]; then FLAGS="-o:speed -microarch:native -no-bounds-check $FLAGS"; fi
 
 echo [target:$TARGET]
 echo [mode:$MODE]
@@ -27,11 +24,11 @@ echo [mode:$MODE]
 
 echo [preprocess]
 
-pushd src/draw > /dev/null
+pushd src/render > /dev/null
   SOKOL_SHDC="../../bin/$TARGET/sokol-shdc"
   mkdir -p generated
-  for s in ${SHADER_SOURCES[@]}; do
-    $SOKOL_SHDC -i shaders/$s.glsl -o generated/$s.odin -l glsl430:hlsl4:metal_macos -f sokol_odin
+  for s in ${SHADERS[@]}; do
+    $SOKOL_SHDC -i shaders/$s.glsl -o shaders/$s.odin -l glsl430 -f sokol_odin
   done
 popd > /dev/null
 
@@ -40,9 +37,5 @@ popd > /dev/null
 echo [build]
 
 mkdir -p out
-
-odin build src -out:out/game -target:$TARGET $COLLECTIONS $FLAGS -define:USE_SDL=true
-
-# --- RUN ---------------------------------------------------------------------------
-
+odin build src -out:out/game -target:$TARGET $FLAGS
 if [[ $MODE == "dev" ]]; then out/game; fi
