@@ -29,7 +29,7 @@ echo [mode:%MODE%]
 echo [preprocess]
 
 pushd src\draw
-  set SOKOL_SHDC=..\..\bin\%TARGET%\sokol-shdc.exe
+  set SOKOL_SHDC=..\..\bin\sokol-shdc-%TARGET%.exe
   if not exist generated mkdir generated
   for %%s in (%SHADER_SOURCES%) do (
     %SOKOL_SHDC% -i shaders/%%s.glsl -o generated\%%s.odin -l glsl430:hlsl4:metal_macos -f sokol_odin

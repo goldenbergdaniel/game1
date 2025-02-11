@@ -44,7 +44,7 @@ allocator :: #force_inline proc "contextless" (arena: ^Arena) -> Allocator
 {
 	return Allocator{
 		procedure = virtual.arena_allocator_proc,
-		data = arena
+		data = arena,
 	}
 }
 

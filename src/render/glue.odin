@@ -5,24 +5,22 @@ import "base:runtime"
 import plf "src:platform"
 import sg "ext:sokol/gfx"
 import shelp "ext:sokol/helpers"
+import slog "ext:sokol/log"
 
 when ODIN_OS == .Darwin  do BACKEND :: sg.Backend.METAL_MACOS
 when ODIN_OS == .Linux   do BACKEND :: sg.Backend.GLCORE
 when ODIN_OS == .Windows do BACKEND :: sg.Backend.D3D11
 
-@(private)
 glue_allocator :: #force_inline proc(ctx: ^runtime.Context) -> sg.Allocator
 {
   return cast(sg.Allocator) shelp.allocator(ctx)
 }
 
-@(private)
 glue_logger :: #force_inline proc(ctx: ^runtime.Context) -> sg.Logger
 {
-  return cast(sg.Logger) shelp.logger(ctx)
+  return sg.Logger{ func = slog.func },
 }
 
-@(private)
 glue_environment :: #force_inline proc() -> sg.Environment
 {
   result: sg.Environment
@@ -36,7 +34,6 @@ glue_environment :: #force_inline proc() -> sg.Environment
   return result
 }
 
-@(private)
 glue_swapchain :: #force_inline proc(window: ^plf.Window) -> sg.Swapchain
 {
   result: sg.Swapchain

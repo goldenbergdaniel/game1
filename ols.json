@@ -17,10 +17,10 @@
   "enable_snippets": true,
   "verbose": true,
   "enable_fake_methods": true,
-  "checker_args": "-vet-shadowing -vet-unused-variables",
+  "checker_args": "-vet-shadowing -vet-style -vet-cast",
   "profile": "main",
   "profiles":
   [
-    {"name": "main", "checker_path": ["src", "src/render", "src/platform"]}
+    {"name": "main", "checker_path": ["src", "src/render", "src/platform", "src/vecmath"]}
   ]
 }

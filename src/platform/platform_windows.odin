@@ -18,7 +18,7 @@ windows_create_window :: proc(
 	temp := mem.begin_temp(mem.get_scratch())
 	defer mem.end_temp(temp)
 
-  title_utf16 := &win.utf8_to_utf16(title)[0]
+  title_utf16 := raw_data(win.utf8_to_utf16(title))
 
   win.SetProcessDPIAware()
 
@@ -40,8 +40,7 @@ windows_create_window :: proc(
                             hWndParent=nil,
                             hMenu=nil,
                             hInstance=instance,
-                            lpParam=nil
-  )
+                            lpParam=nil)
 
   win.SetForegroundWindow(hwnd)
   result.handle = hwnd

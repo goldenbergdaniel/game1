@@ -2,35 +2,34 @@ package platform
 
 import mem "src:basic/mem"
 
-USE_SDL :: #config(USE_SDL, false)
-
 @(private)
 EVENT_QUEUE_CAP :: 16
 
 Window :: struct
 {
-  handle: rawptr,
+  handle:      rawptr,
   event_queue: Event_Queue,
-  width: int,
-  height: int,
+  width:       int,
+  height:      int,
+  should_close: bool,
   draw_ctx: struct #raw_union
   {
     metal: struct
     {
-      drawable: rawptr,
+      drawable:              rawptr,
       depth_stencil_texture: rawptr,
-      msaa_color_texture: rawptr,
+      msaa_color_texture:    rawptr,
     },
     d3d11: struct
     {
-      render_view: rawptr,
-      resolve_view: rawptr,
+      render_view:        rawptr,
+      resolve_view:       rawptr,
       depth_stencil_view: rawptr,
     },
     opengl: struct
     {
       framebuffer: u32,
-      sdl_ctx: rawptr,
+      sdl_ctx:     rawptr,
     },
   },
 }
@@ -49,6 +48,7 @@ Event_Kind :: enum u16
 
   QUIT,
   KEY_DOWN,
+  KEY_UP,
 }
 
 Key_Kind :: enum u8
@@ -56,6 +56,7 @@ Key_Kind :: enum u8
   NONE,
 
   ESCAPE,
+  SPACE,
 }
 
 Mouse_Btn_Kind :: enum u8
@@ -67,26 +68,34 @@ Mouse_Btn_Kind :: enum u8
   MIDDLE,
 }
 
+Input :: struct
+{
+  keys:      [Key_Kind]bool,
+  prev_keys: [Key_Kind]bool,
+  mouse_pos: [2]f32,
+}
+
+@(private)
+input: Input
+
 global: struct
 {
-  metal_device: rawptr,
-  d3d11_device: rawptr,
   d3d11_device_ctx: rawptr,
+  d3d11_device:     rawptr,
+  metal_device:     rawptr,
 }
 
 create_window :: #force_inline proc(
 	title:  string, 
 	width:  int, 
 	height: int, 
-	arena:  ^mem.Arena
+	arena:  ^mem.Arena,
 ) -> Window
 {
 	result: Window
 
-	when USE_SDL                  do result = sdl_create_window(title, width, height, arena)
-	else when ODIN_OS == .Darwin  do result = darwin_create_window(title, width, height, arena)
-  else when ODIN_OS == .Linux   do result = linux_create_window(title, width, height, arena)
-  else when ODIN_OS == .Windows do result = windows_create_window(title, width, height, arena)
+  when ODIN_OS == .Windows do result = windows_create_window(title, width, height, arena)
+  else                     do result = sdl_create_window(title, width, height, arena)
 
   result.width = width
   result.height = height
@@ -99,54 +108,69 @@ release_resources :: proc(
   window: ^Window,
 )
 {
-	when USE_SDL                  do sdl_release_os_resources(window)
-	else when ODIN_OS == .Darwin  do darwin_release_os_resources(window)
-  else when ODIN_OS == .Linux   do linux_release_os_resources(window)
-  else when ODIN_OS == .Windows do windows_release_os_resources(window)
+  when ODIN_OS == .Windows do windows_release_os_resources(window)
+	else                     do sdl_release_os_resources(window)
 }
 
 swap_buffers :: #force_inline proc(
-  window: ^Window
+  window: ^Window,
 )
 {
-  when ODIN_OS == .Linux
-  {
-    when USE_SDL do sdl_gl_swap_buffers(window)
-    else do linux_gl_swap_buffers(window)
-  }
+  when ODIN_OS != .Windows do sdl_gl_swap_buffers(window)
 }
 
+@(private)
 poll_event :: #force_inline proc(
   window: ^Window, 
-  event: ^Event
+  event:  ^Event,
 ) -> bool
 {
 	result: bool
-
-	when USE_SDL                  do result = sdl_poll_event(window, event)
-	else when ODIN_OS == .Darwin  do result = darwin_poll_event(window, event)
-	else when ODIN_OS == .Linux   do result = linux_poll_event(window, event)
-  else when ODIN_OS == .Windows do result = windows_poll_event(window, event)
+  
+  when ODIN_OS == .Windows do result = windows_poll_event(window, event)
+	else                     do result = sdl_poll_event(event)
 
 	return result
 }
 
 pump_events :: #force_inline proc(
-  window: ^Window
+  window: ^Window,
 )
 {
-	when USE_SDL                  do sdl_pump_events(window)
-	else when ODIN_OS == .Darwin  do darwin_pump_events(window)
-  else when ODIN_OS == .Linux   do linux_pump_events(window)
-  else when ODIN_OS == .Windows do windows_pump_events(window)
+  when ODIN_OS == .Windows do windows_pump_events(window)
+	else                     do sdl_pump_events()
+
+  event: Event
+  for poll_event(window, &event)
+  {
+    switch event.kind
+    {
+    case .NONE:
+    case .QUIT: window.should_close = true
+    case .KEY_DOWN:
+      switch event.key_kind
+      {
+      case .NONE:
+      case .ESCAPE: input.keys[.ESCAPE] = true
+      case .SPACE: input.keys[.ESCAPE] = true
+      }
+    case .KEY_UP:
+      switch event.key_kind
+      {
+      case .NONE:
+      case .ESCAPE: input.keys[.ESCAPE] = false
+      case .SPACE: input.keys[.ESCAPE] = false
+      }
+    }
+  }
 }
 
 @(private)
 Event_Queue :: struct
 {
-  data: []Event,
+  data:  []Event,
   front: int,
-  back: int,
+  back:  int,
 }
 
 @(private)
@@ -180,3 +204,25 @@ pop_event :: proc(queue: ^Event_Queue) -> ^Event
 
   return result
 }
+
+is_key_pressed :: proc(key: Key_Kind) -> bool
+{
+  return input.keys[key]
+}
+
+is_key_just_pressed :: proc(key: Key_Kind) -> bool
+{
+  return false
+}
+
+is_key_released :: proc(key: Key_Kind) -> bool
+{
+  return !input.keys[key]
+}
+
+is_key_just_released :: proc(key: Key_Kind) -> bool
+{
+  return false
+}
+
+// set_window_
