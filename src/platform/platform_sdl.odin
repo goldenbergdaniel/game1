@@ -23,7 +23,7 @@ sdl_create_window :: proc(
 	{
 		sdl.SetHint("SDL_VIDEO_WAYLAND_ALLOW_LIBDECOR", "1")
 	}
-
+	
 	_ = sdl.Init({.VIDEO, .EVENTS})
 
 	window_flags: sdl.WindowFlags
@@ -34,7 +34,6 @@ sdl_create_window :: proc(
 	
   title_cstr := strings.clone_to_cstring(title, mem.allocator(scratch.arena))
 	sdl_window := sdl.CreateWindow(title_cstr, i32(width), i32(height), window_flags)
-	// sdl.SetWindowOpacity(sdl_window, 1)
 
 	when ODIN_OS == .Linux
 	{
@@ -45,14 +44,17 @@ sdl_create_window :: proc(
 		sdl.GL_SetAttribute(.BLUE_SIZE, 8)
 		sdl.GL_SetAttribute(.DEPTH_SIZE, 8)
 		sdl.GL_SetAttribute(.DOUBLEBUFFER, 1)
+		sdl.GL_SetAttribute(.MULTISAMPLEBUFFERS, 1)
 		sdl.GL_SetAttribute(.MULTISAMPLESAMPLES, 4)
-		
+	
 		gl_ctx := sdl.GL_CreateContext(sdl_window)
 		sdl.GL_MakeCurrent(sdl_window, gl_ctx)
 
 		gl.load_up_to(4, 6, sdl.gl_set_proc_address)
 		gl.Enable(gl.MULTISAMPLE)
 	}
+
+	// sdl.GL_SetSwapInterval(0)
 
 	// window_system_info: sdl.SysWMinfo
 	// sdl.GetVersion(&window_system_info.version)
@@ -106,16 +108,22 @@ sdl_translate_event :: #force_inline proc(sdl_event: ^sdl.Event) -> Event
   case .KEY_DOWN:
     #partial switch sdl_event.key.scancode
     {
-    case .ESCAPE: 
-			result = Event{
-				kind = .KEY_DOWN,
-				key_kind = .ESCAPE,
-			}
-    case .SPACE: 
-			result = Event{
-				kind = .KEY_DOWN,
-				key_kind = .SPACE,
-			}
+		case .A:			result = Event{kind = .KEY_DOWN, key_kind = .A}
+		case .D:			result = Event{kind = .KEY_DOWN, key_kind = .D}
+		case .S:			result = Event{kind = .KEY_DOWN, key_kind = .S}
+		case .W:			result = Event{kind = .KEY_DOWN, key_kind = .W}
+    case .ESCAPE: result = Event{kind = .KEY_DOWN, key_kind = .ESCAPE}
+    case .SPACE:  result = Event{kind = .KEY_DOWN, key_kind = .SPACE}
+    }
+	case .KEY_UP:
+    #partial switch sdl_event.key.scancode
+    {
+		case .A:			result = Event{kind = .KEY_UP, key_kind = .A}
+		case .D:			result = Event{kind = .KEY_UP, key_kind = .D}
+		case .S:			result = Event{kind = .KEY_UP, key_kind = .S}
+		case .W:			result = Event{kind = .KEY_UP, key_kind = .W}
+    case .ESCAPE: result = Event{kind = .KEY_UP, key_kind = .ESCAPE}
+    case .SPACE:  result = Event{kind = .KEY_UP, key_kind = .SPACE}
     }
 	}
 

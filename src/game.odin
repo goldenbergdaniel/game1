@@ -9,28 +9,30 @@ import plf "src:platform"
 
 Game :: struct
 {
-  ship_one:    Entity,
-  ship_two:    Entity,
+  ship_1:      Entity,
+  ship_2:      Entity,
   projectiles: [64]Entity,
   asteroids:   [16]Entity,
   
-  perm_arena:  mem.Arena,
   frame_arena: mem.Arena,
 }
 
 init_game :: proc(gm: ^Game)
 {
-  mem.init_static_arena(&gm.perm_arena)
   mem.init_growing_arena(&gm.frame_arena)
 
-  gm.ship_one = Entity{
+  gm.ship_1 = Entity{
     kind = .SHIP,
     active = true,
+    dim = {100, 100},
+    color = {0, 0, 1, 1},
   }
 
-  gm.ship_two = Entity{
+  gm.ship_2 = Entity{
     kind = .SHIP,
     active = true,
+    dim = {100, 100},
+    color = {1, 0, 0, 1},
   }
   
   for &projectile in gm.projectiles
@@ -50,30 +52,65 @@ init_game :: proc(gm: ^Game)
 
 free_game :: proc(gm: ^Game)
 {
-  mem.destroy_arena(&gm.perm_arena)
   mem.destroy_arena(&gm.frame_arena)
 }
 
-copy_game :: proc(old_gm: ^Game, new_gm: ^Game)
+copy_game :: proc(new_gm, old_gm: ^Game)
 {
-  
+  new_gm^ = old_gm^
 }
 
-update_game :: proc(gm: ^Game, dt: f64)
+update_game :: proc(gm: ^Game, dt: f32)
 {
   if plf.is_key_pressed(.ESCAPE)
   {
     g_user.window.should_close = true
   }
 
+  SPEED :: 500
+
+  if plf.is_key_pressed(.D) && !plf.is_key_pressed(.A)
+  {
+    gm.ship_1.vel.x = SPEED
+  }
+
+  if plf.is_key_pressed(.A) && !plf.is_key_pressed(.D)
+  {
+    gm.ship_1.vel.x = -SPEED
+  }
+
+  if plf.is_key_pressed(.W) && !plf.is_key_pressed(.S)
+  {
+    gm.ship_1.vel.y = -SPEED
+  }
+
+  if plf.is_key_pressed(.S) && !plf.is_key_pressed(.W)
+  {
+    gm.ship_1.vel.y = SPEED
+  }
+
+  if !plf.is_key_pressed(.A) && !plf.is_key_pressed(.D)
+  {
+    gm.ship_1.vel.x = 0
+  }
+
+  if !plf.is_key_pressed(.W) && !plf.is_key_pressed(.S)
+  {
+    gm.ship_1.vel.y = 0
+  }
+
+  gm.ship_1.pos += gm.ship_1.vel * dt
+
   mem.clear_arena(&gm.frame_arena)
 }
 
-render_game :: proc(gm: ^Game)
+render_game :: proc(curr_gm, prev_gm: ^Game, alpha: f32)
 {
-  draw_rect({100, 100}, {100, 100}, {1, 0, 0, 1})
-  draw_rect({200, 400}, {100, 100}, {0, 1, 0, 1})
-  draw_rect({600, 300}, {100, 100}, {0, 0, 1, 1})
+  ship_1_pos := (curr_gm.ship_1.pos * alpha) + (prev_gm.ship_1.pos * (1 - alpha))
+  draw_rect(ship_1_pos, curr_gm.ship_1.dim, curr_gm.ship_1.color)
+  // draw_rect(curr_gm.ship_1.pos, curr_gm.ship_1.dim, curr_gm.ship_1.color)
+  draw_rect(curr_gm.ship_2.pos, curr_gm.ship_2.dim, curr_gm.ship_2.color)
+  draw_rect({600, 300}, {100, 100}, {0, 1, 0, 1})
 
   r_flush()
 }
@@ -87,7 +124,7 @@ Entity :: struct
   pos:    [2]f32,
   vel:    [2]f32,
   dim:    [2]f32,
-  color:  [4]u8,
+  color:  [4]f32,
 }
 
 Entity_Kind :: enum

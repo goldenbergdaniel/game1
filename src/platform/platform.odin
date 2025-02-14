@@ -55,6 +55,10 @@ Key_Kind :: enum u8
 {
   NONE,
 
+  A,
+  D,
+  S,
+  W,
   ESCAPE,
   SPACE,
 }
@@ -151,15 +155,23 @@ pump_events :: #force_inline proc(
       switch event.key_kind
       {
       case .NONE:
+      case .A:      input.keys[.A] = true
+      case .D:      input.keys[.D] = true
+      case .S:      input.keys[.S] = true
+      case .W:      input.keys[.W] = true
       case .ESCAPE: input.keys[.ESCAPE] = true
-      case .SPACE: input.keys[.ESCAPE] = true
+      case .SPACE:  input.keys[.SPACE] = true
       }
     case .KEY_UP:
       switch event.key_kind
       {
       case .NONE:
+      case .A:      input.keys[.A] = false
+      case .D:      input.keys[.D] = false
+      case .S:      input.keys[.S] = false
+      case .W:      input.keys[.W] = false
       case .ESCAPE: input.keys[.ESCAPE] = false
-      case .SPACE: input.keys[.ESCAPE] = false
+      case .SPACE:  input.keys[.SPACE] = false
       }
     }
   }
@@ -224,5 +236,3 @@ is_key_just_released :: proc(key: Key_Kind) -> bool
 {
   return false
 }
-
-// set_window_
