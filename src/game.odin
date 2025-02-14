@@ -2,6 +2,7 @@ package game
 
 import "base:runtime"
 import "core:fmt"
+import "core:image/bmp"
 import "core:net"
 import "core:os"
 import "core:slice"
@@ -12,19 +13,19 @@ import plf "src:platform"
 
 // Game //////////////////////////////////////////////////////////////////////////////////
 
+game_frame_arena: mem.Arena
+
 Game :: struct
 {
   ship_1:      Entity,
   ship_2:      Entity,
   projectiles: [64]Entity,
-  asteroids:   [16]Entity,
-  
-  frame_arena: mem.Arena,
+  asteroids:   [16]Entity,  
 }
 
 init_game :: proc(gm: ^Game)
 {
-  mem.init_growing_arena(&gm.frame_arena)
+  mem.init_growing_arena(&game_frame_arena)
 
   gm.ship_1 = Entity{
     kind = .SHIP,
@@ -36,6 +37,7 @@ init_game :: proc(gm: ^Game)
   gm.ship_2 = Entity{
     kind = .SHIP,
     active = true,
+    pos = {WIDTH - 70, 0},
     dim = {70, 70},
     color = {1, 0, 0, 1},
   }
@@ -57,52 +59,52 @@ init_game :: proc(gm: ^Game)
 
 update_game :: proc(gm: ^Game, dt: f32)
 {
-  if plf.is_key_pressed(.ESCAPE)
+  if plf.key_pressed(.ESCAPE)
   {
     g_user.window.should_close = true
   }
 
   SPEED :: 500
 
-  if plf.is_key_pressed(.D) && !plf.is_key_pressed(.A)
+  if plf.key_pressed(.D) && !plf.key_pressed(.A)
   {
     gm.ship_1.vel.x = SPEED
   }
 
-  if plf.is_key_pressed(.A) && !plf.is_key_pressed(.D)
+  if plf.key_pressed(.A) && !plf.key_pressed(.D)
   {
     gm.ship_1.vel.x = -SPEED
   }
 
-  if plf.is_key_pressed(.W) && !plf.is_key_pressed(.S)
+  if plf.key_pressed(.W) && !plf.key_pressed(.S)
   {
     gm.ship_1.vel.y = -SPEED
   }
 
-  if plf.is_key_pressed(.S) && !plf.is_key_pressed(.W)
+  if plf.key_pressed(.S) && !plf.key_pressed(.W)
   {
     gm.ship_1.vel.y = SPEED
   }
 
-  if !plf.is_key_pressed(.A) && !plf.is_key_pressed(.D)
+  if !plf.key_pressed(.A) && !plf.key_pressed(.D)
   {
     gm.ship_1.vel.x = 0
   }
 
-  if !plf.is_key_pressed(.W) && !plf.is_key_pressed(.S)
+  if !plf.key_pressed(.W) && !plf.key_pressed(.S)
   {
     gm.ship_1.vel.y = 0
   }
 
   gm.ship_1.pos += gm.ship_1.vel * dt
 
-  mem.clear_arena(&gm.frame_arena)
+  mem.clear_arena(&game_frame_arena)
 
   // - Save/load game ---
   {
     SAVE_PATH :: "res/saves/main"
 
-    if plf.is_key_just_pressed(.K) && plf.is_key_pressed(.LEFT_CTRL)
+    if plf.key_just_pressed(.K) && plf.key_pressed(.LEFT_CTRL)
     {
       save_file, open_err := os.open(SAVE_PATH, os.O_CREATE | os.O_TRUNC | os.O_RDWR, 0o644)
       defer os.close(save_file)
@@ -116,7 +118,7 @@ update_game :: proc(gm: ^Game, dt: f32)
       }
     }
 
-    if plf.is_key_just_pressed(.L) && plf.is_key_pressed(.LEFT_CTRL)
+    if plf.key_just_pressed(.L) && plf.key_pressed(.LEFT_CTRL)
     {
       save_file, open_err := os.open(SAVE_PATH, os.O_RDWR)
       defer os.close(save_file)
@@ -136,7 +138,7 @@ render_game :: proc(gm: ^Game)
 {
   draw_rect(gm.ship_1.pos, gm.ship_1.dim, gm.ship_1.color)
   draw_rect(gm.ship_2.pos, gm.ship_2.dim, gm.ship_2.color)
-  draw_rect({600, 300}, {100, 100}, {0, 1, 0, 1})
+  draw_rect({WIDTH/2 - 50, HEIGHT/2 - 50}, {100, 100}, {0, 1, 0, 1})
 
   r_flush()
 }
@@ -150,7 +152,7 @@ interpolate_games :: proc(curr_gm, prev_gm, res_gm: ^Game, alpha: f32)
 
 free_game :: proc(gm: ^Game)
 {
-  mem.destroy_arena(&gm.frame_arena)
+  mem.destroy_arena(&game_frame_arena)
 }
 
 copy_game :: proc(new_gm, old_gm: ^Game)

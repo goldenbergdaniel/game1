@@ -211,22 +211,22 @@ save_prev_input :: proc()
   }
 }
 
-is_key_pressed :: proc(key: Key_Kind) -> bool
+key_pressed :: proc(key: Key_Kind) -> bool
 {
   return input.keys[key]
 }
 
-is_key_just_pressed :: proc(key: Key_Kind) -> bool
+key_just_pressed :: proc(key: Key_Kind) -> bool
 {
   return input.keys[key] && !input.prev_keys[key]
 }
 
-is_key_released :: proc(key: Key_Kind) -> bool
+key_released :: proc(key: Key_Kind) -> bool
 {
   return !input.keys[key]
 }
 
-is_key_just_released :: proc(key: Key_Kind) -> bool
+key_just_released :: proc(key: Key_Kind) -> bool
 {
   return !input.keys[key] && input.prev_keys[key]
 }
