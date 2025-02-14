@@ -7,8 +7,9 @@ import "src:basic/mem"
 import plf "src:platform"
 import "src:render"
 
-WIDTH  :: 1440
-HEIGHT :: 810
+WIDTH     :: 960
+HEIGHT    :: 540
+TICK_RATE :: 1.0/20
 
 User :: struct
 {
@@ -27,12 +28,10 @@ main :: proc()
   g_user.window = plf.create_window("GAME", WIDTH, HEIGHT, &g_user.perm_arena)
   defer plf.release_resources(&g_user.window)
 
-  curr_game, prev_game: Game
+  curr_game, prev_game, res_game: Game
   init_game(&curr_game)
 
   r_init_renderer()
-
-  TIME_STEP :: 1.0/30
 
   elapsed_time, accumulator: f64
   start_tick := time.tick_now()
@@ -46,17 +45,18 @@ main :: proc()
     elapsed_time = curr_time
     accumulator += frame_time
     
-    for accumulator >= TIME_STEP
+    for accumulator >= TICK_RATE
     {
       copy_game(&prev_game, &curr_game)
-      update_game(&curr_game, TIME_STEP)
-      
-      accumulator -= TIME_STEP
-      if frame_time * 1000 > 1/TIME_STEP do fmt.println("ft:", frame_time * 1000)
+      update_game(&curr_game, TICK_RATE)
+      plf.save_prev_input()
+
+      accumulator -= TICK_RATE
     }
 
-    alpha := accumulator / TIME_STEP
-    render_game(&curr_game, &prev_game, f32(alpha))
+    alpha := accumulator / TICK_RATE
+    interpolate_games(&curr_game, &prev_game, &res_game, f32(alpha))
+    render_game(&res_game)
     
     plf.swap_buffers(&g_user.window)
   }

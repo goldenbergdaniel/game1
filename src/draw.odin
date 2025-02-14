@@ -4,7 +4,7 @@ import "core:fmt"
 import "core:log"
 import "core:math"
 
-import "src:render"
+import r "src:render"
 import vm "src:vecmath"
 import sg "ext:sokol/gfx"
 
@@ -88,9 +88,9 @@ r_init_renderer :: proc()
   ctx := context
 
   sg.setup({
-    allocator = render.glue_allocator(&ctx),
-    logger = render.glue_logger(&ctx),
-    environment = render.glue_environment(),
+    allocator = r.glue_allocator(&ctx),
+    logger = r.glue_logger(&ctx),
+    environment = r.glue_environment(),
   })
 
   g_renderer.projection = vm.orthographic_3x3(0, WIDTH, 0, HEIGHT)
@@ -110,11 +110,11 @@ r_init_renderer :: proc()
   g_renderer.pipeline = sg.make_pipeline(sg.Pipeline_Desc{
     primitive_type = .TRIANGLES,
     index_type = .UINT16,
-    shader = sg.make_shader(render.triangle_shader_desc(render.BACKEND)),
+    shader = sg.make_shader(r.triangle_shader_desc(r.BACKEND)),
     layout = {
       attrs = {
-        render.ATTR_triangle_position = {format = .FLOAT2},
-        render.ATTR_triangle_color    = {format = .FLOAT4},
+        r.ATTR_triangle_position = {format = .FLOAT2},
+        r.ATTR_triangle_color    = {format = .FLOAT4},
       },
     },
   })
@@ -137,7 +137,7 @@ r_flush :: proc()
 
   sg.begin_pass(sg.Pass{
     action = g_renderer.pass_action,
-    swapchain = render.glue_swapchain(window),
+    swapchain = r.glue_swapchain(window),
   })
 
   sg.apply_viewport(0, 0, i32(window.width), i32(window.height), true)
@@ -153,7 +153,7 @@ r_flush :: proc()
   sg.apply_bindings(g_renderer.bindings)
   
   g_renderer.uniforms.proj = cast(vm.Mat4x4) g_renderer.projection
-  sg.apply_uniforms(render.UB_params, sg.Range{&g_renderer.uniforms, size_of(Uniforms)})
+  sg.apply_uniforms(r.UB_params, sg.Range{&g_renderer.uniforms, size_of(Uniforms)})
 
   sg.draw(0, g_renderer.index_count, 1)
   sg.end_pass()

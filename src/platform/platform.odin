@@ -7,10 +7,10 @@ EVENT_QUEUE_CAP :: 16
 
 Window :: struct
 {
-  handle:      rawptr,
-  event_queue: Event_Queue,
-  width:       int,
-  height:      int,
+  handle:       rawptr,
+  event_queue:  Event_Queue,
+  width:        int,
+  height:       int,
   should_close: bool,
   draw_ctx: struct #raw_union
   {
@@ -57,8 +57,11 @@ Key_Kind :: enum u8
 
   A,
   D,
+  K,
+  L,
   S,
   W,
+  LEFT_CTRL,
   ESCAPE,
   SPACE,
 }
@@ -150,29 +153,12 @@ pump_events :: #force_inline proc(
     switch event.kind
     {
     case .NONE:
-    case .QUIT: window.should_close = true
+    case .QUIT: 
+      window.should_close = true
     case .KEY_DOWN:
-      switch event.key_kind
-      {
-      case .NONE:
-      case .A:      input.keys[.A] = true
-      case .D:      input.keys[.D] = true
-      case .S:      input.keys[.S] = true
-      case .W:      input.keys[.W] = true
-      case .ESCAPE: input.keys[.ESCAPE] = true
-      case .SPACE:  input.keys[.SPACE] = true
-      }
+      input.keys[event.key_kind] = true
     case .KEY_UP:
-      switch event.key_kind
-      {
-      case .NONE:
-      case .A:      input.keys[.A] = false
-      case .D:      input.keys[.D] = false
-      case .S:      input.keys[.S] = false
-      case .W:      input.keys[.W] = false
-      case .ESCAPE: input.keys[.ESCAPE] = false
-      case .SPACE:  input.keys[.SPACE] = false
-      }
+      input.keys[event.key_kind] = false
     }
   }
 }
@@ -217,6 +203,14 @@ pop_event :: proc(queue: ^Event_Queue) -> ^Event
   return result
 }
 
+save_prev_input :: proc()
+{
+  for key in Key_Kind
+  {
+    input.prev_keys[key] = input.keys[key]
+  }
+}
+
 is_key_pressed :: proc(key: Key_Kind) -> bool
 {
   return input.keys[key]
@@ -224,7 +218,7 @@ is_key_pressed :: proc(key: Key_Kind) -> bool
 
 is_key_just_pressed :: proc(key: Key_Kind) -> bool
 {
-  return false
+  return input.keys[key] && !input.prev_keys[key]
 }
 
 is_key_released :: proc(key: Key_Kind) -> bool
@@ -234,5 +228,5 @@ is_key_released :: proc(key: Key_Kind) -> bool
 
 is_key_just_released :: proc(key: Key_Kind) -> bool
 {
-  return false
+  return !input.keys[key] && input.prev_keys[key]
 }

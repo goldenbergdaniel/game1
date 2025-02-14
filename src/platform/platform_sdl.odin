@@ -110,8 +110,11 @@ sdl_translate_event :: #force_inline proc(sdl_event: ^sdl.Event) -> Event
     {
 		case .A:			result = Event{kind = .KEY_DOWN, key_kind = .A}
 		case .D:			result = Event{kind = .KEY_DOWN, key_kind = .D}
+		case .K:			result = Event{kind = .KEY_DOWN, key_kind = .K}
+		case .L:			result = Event{kind = .KEY_DOWN, key_kind = .L}
 		case .S:			result = Event{kind = .KEY_DOWN, key_kind = .S}
 		case .W:			result = Event{kind = .KEY_DOWN, key_kind = .W}
+    case .LCTRL: 	result = Event{kind = .KEY_DOWN, key_kind = .LEFT_CTRL}
     case .ESCAPE: result = Event{kind = .KEY_DOWN, key_kind = .ESCAPE}
     case .SPACE:  result = Event{kind = .KEY_DOWN, key_kind = .SPACE}
     }
@@ -120,8 +123,11 @@ sdl_translate_event :: #force_inline proc(sdl_event: ^sdl.Event) -> Event
     {
 		case .A:			result = Event{kind = .KEY_UP, key_kind = .A}
 		case .D:			result = Event{kind = .KEY_UP, key_kind = .D}
+		case .K:			result = Event{kind = .KEY_UP, key_kind = .K}
+		case .L:			result = Event{kind = .KEY_UP, key_kind = .L}
 		case .S:			result = Event{kind = .KEY_UP, key_kind = .S}
 		case .W:			result = Event{kind = .KEY_UP, key_kind = .W}
+    case .LCTRL: 	result = Event{kind = .KEY_UP, key_kind = .LEFT_CTRL}
     case .ESCAPE: result = Event{kind = .KEY_UP, key_kind = .ESCAPE}
     case .SPACE:  result = Event{kind = .KEY_UP, key_kind = .SPACE}
     }

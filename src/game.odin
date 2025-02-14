@@ -1,11 +1,16 @@
 package game
 
+import "base:runtime"
 import "core:fmt"
 import "core:net"
+import "core:os"
+import "core:slice"
 import "core:sync"
 
 import "src:basic/mem"
 import plf "src:platform"
+
+// Game //////////////////////////////////////////////////////////////////////////////////
 
 Game :: struct
 {
@@ -24,14 +29,14 @@ init_game :: proc(gm: ^Game)
   gm.ship_1 = Entity{
     kind = .SHIP,
     active = true,
-    dim = {100, 100},
+    dim = {70, 70},
     color = {0, 0, 1, 1},
   }
 
   gm.ship_2 = Entity{
     kind = .SHIP,
     active = true,
-    dim = {100, 100},
+    dim = {70, 70},
     color = {1, 0, 0, 1},
   }
   
@@ -48,16 +53,6 @@ init_game :: proc(gm: ^Game)
       kind = .ASTEROID,
     }
   }
-}
-
-free_game :: proc(gm: ^Game)
-{
-  mem.destroy_arena(&gm.frame_arena)
-}
-
-copy_game :: proc(new_gm, old_gm: ^Game)
-{
-  new_gm^ = old_gm^
 }
 
 update_game :: proc(gm: ^Game, dt: f32)
@@ -102,17 +97,101 @@ update_game :: proc(gm: ^Game, dt: f32)
   gm.ship_1.pos += gm.ship_1.vel * dt
 
   mem.clear_arena(&gm.frame_arena)
+
+  // - Save/load game ---
+  {
+    SAVE_PATH :: "res/saves/main"
+
+    if plf.is_key_just_pressed(.K) && plf.is_key_pressed(.LEFT_CTRL)
+    {
+      save_file, open_err := os.open(SAVE_PATH, os.O_CREATE | os.O_TRUNC | os.O_RDWR, 0o644)
+      defer os.close(save_file)
+      if open_err == nil
+      {
+        save_game_to_file(save_file, gm)
+      }
+      else
+      {
+        fmt.eprintln("Error opening save file!", open_err)
+      }
+    }
+
+    if plf.is_key_just_pressed(.L) && plf.is_key_pressed(.LEFT_CTRL)
+    {
+      save_file, open_err := os.open(SAVE_PATH, os.O_RDWR)
+      defer os.close(save_file)
+      if open_err == nil
+      {
+        load_game_from_file(save_file, gm)
+      }
+      else
+      {
+        fmt.eprintln("Error opening save file!", open_err)
+      }
+    }
+  }
 }
 
-render_game :: proc(curr_gm, prev_gm: ^Game, alpha: f32)
+render_game :: proc(gm: ^Game)
 {
-  ship_1_pos := (curr_gm.ship_1.pos * alpha) + (prev_gm.ship_1.pos * (1 - alpha))
-  draw_rect(ship_1_pos, curr_gm.ship_1.dim, curr_gm.ship_1.color)
-  // draw_rect(curr_gm.ship_1.pos, curr_gm.ship_1.dim, curr_gm.ship_1.color)
-  draw_rect(curr_gm.ship_2.pos, curr_gm.ship_2.dim, curr_gm.ship_2.color)
+  draw_rect(gm.ship_1.pos, gm.ship_1.dim, gm.ship_1.color)
+  draw_rect(gm.ship_2.pos, gm.ship_2.dim, gm.ship_2.color)
   draw_rect({600, 300}, {100, 100}, {0, 1, 0, 1})
 
   r_flush()
+}
+
+interpolate_games :: proc(curr_gm, prev_gm, res_gm: ^Game, alpha: f32)
+{
+  copy_game(res_gm, curr_gm)
+  res_gm.ship_1.pos = (curr_gm.ship_1.pos * alpha) + (prev_gm.ship_1.pos * (1 - alpha))
+  res_gm.ship_2.pos = (curr_gm.ship_2.pos * alpha) + (prev_gm.ship_2.pos * (1 - alpha))
+}
+
+free_game :: proc(gm: ^Game)
+{
+  mem.destroy_arena(&gm.frame_arena)
+}
+
+copy_game :: proc(new_gm, old_gm: ^Game)
+{
+  new_gm^ = old_gm^
+}
+
+// NOTE(dg): This is a naive approach that assumes too much about Game
+save_game_to_file :: proc(fd: os.Handle, gm: ^Game) -> bool
+{
+  buf := transmute([]byte) runtime.Raw_Slice{gm, size_of(Game)}
+  _, write_err := os.write(fd, buf)
+  if write_err != nil
+  {
+    fmt.eprintln("Error saving game to disk.", write_err)
+    return false
+  }
+
+  fmt.println("Saved game to disk.")
+
+  return true
+}
+
+// NOTE(dg): This is a naive approach that assumes too much about Game
+load_game_from_file :: proc(fd: os.Handle, gm: ^Game) -> bool
+{
+  saved_buf: [size_of(Game)*2]byte
+  saved_len, _ := os.read(fd, saved_buf[:])
+  gm_bytes := saved_buf[:saved_len]
+
+  ok: bool
+  gm^, ok = slice.to_type(gm_bytes, Game)
+  if !ok
+  {
+    fmt.eprintln("Failed to go from []byte to Game!")
+    return false
+  }
+
+  fmt.println("Loaded game from disk.")
+
+  return true
 }
 
 // Entity ////////////////////////////////////////////////////////////////////////////////
