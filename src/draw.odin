@@ -13,12 +13,6 @@ Vertex :: struct
   pos:   v2f,
   color: v4f,
 }
-
-Uniforms :: struct
-{
-  proj: m4x4,
-}
-
 Texture :: struct
 {
   id:     u32,
@@ -43,7 +37,10 @@ Renderer :: struct
   index_count:  u64,
   projection:   m3x3,
   texture:      ^Texture,
-  uniforms:     Uniforms,
+  uniforms: struct
+  {
+    proj: m4x4,
+  },
   bindings:     sg.Bindings,
   pipeline:     sg.Pipeline,
   pass_action:  sg.Pass_Action,
@@ -152,7 +149,8 @@ r_flush :: proc()
   sg.apply_bindings(renderer.bindings)
   
   renderer.uniforms.proj = cast(vm.m4x4) renderer.projection
-  sg.apply_uniforms(r.UB_params, sg.Range{&renderer.uniforms, size_of(Uniforms)})
+  sg.apply_uniforms(r.UB_params, 
+                    sg.Range{&renderer.uniforms, size_of(&renderer.uniforms)})
 
   sg.draw(0, renderer.index_count, 1)
   sg.end_pass()
