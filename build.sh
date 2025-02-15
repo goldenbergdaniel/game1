@@ -35,5 +35,5 @@ popd > /dev/null
 echo [build]
 
 mkdir -p out
-/home/dg/tools/odin_src/odin build src -out:out/game -target:$TARGET $FLAGS
+odin build src -out:out/game -target:$TARGET $FLAGS
 if [[ $MODE == "debug" ]]; then out/game; fi

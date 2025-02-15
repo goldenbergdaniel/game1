@@ -1,11 +1,11 @@
 #+build windows
+#+private
 package platform
 
 import win "core:sys/windows"
 
 import mem "src:basic/mem"
 
-@(private)
 windows_create_window :: proc(
 	title:  string, 
 	width:  int, 
@@ -48,13 +48,11 @@ windows_create_window :: proc(
   return result
 }
 
-@(private)
 windows_release_os_resources :: proc(window: ^Window)
 {
   win.DestroyWindow(cast(win.HWND) window.handle)
 }
 
-@(private)
 windows_poll_event :: proc(window: ^Window, event: ^Event) -> bool
 {
 	result: bool
@@ -69,7 +67,6 @@ windows_poll_event :: proc(window: ^Window, event: ^Event) -> bool
 	return result
 }
 
-@(private)
 windows_pump_events :: proc(window: ^Window)
 {
   msg: win.MSG

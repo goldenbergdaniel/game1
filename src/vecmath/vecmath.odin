@@ -170,10 +170,10 @@ lerp_4f32 :: #force_inline proc "contextless" (curr, target: [4]f32, rate: f32) 
 
 // Matrix ///////////////////////////////////////////////////////////////////////////
 
-Mat3x3 :: matrix[3, 3]f32
-Mat4x4 :: matrix[4, 4]f32
+m3x3 :: matrix[3, 3]f32
+m4x4 :: matrix[4, 4]f32
 
-diag_3x3 :: #force_inline proc "contextless" (val: f32) -> Mat3x3
+diag_3x3 :: #force_inline proc "contextless" (val: f32) -> m3x3
 {
   return {
     val, 0, 0,
@@ -182,7 +182,7 @@ diag_3x3 :: #force_inline proc "contextless" (val: f32) -> Mat3x3
   }
 }
 
-diag_4x4 :: #force_inline proc "contextless" (val: f32) -> Mat4x4
+diag_4x4 :: #force_inline proc "contextless" (val: f32) -> m4x4
 {
   return {
     val, 0, 0, 0,
@@ -197,9 +197,9 @@ transpose :: proc
   transpose_3x3,
 }
 
-transpose_3x3 :: proc "contextless" (m: Mat3x3) -> Mat3x3
+transpose_3x3 :: proc "contextless" (m: m3x3) -> m3x3
 {
-  result: Mat3x3 = m
+  result: m3x3 = m
   result[0, 1] = m[1, 0]
   result[0, 2] = m[2, 0]
   result[1, 0] = m[0, 1]
@@ -215,9 +215,9 @@ translate :: proc
   translate_3x3,
 }
 
-translate_3x3 :: proc "contextless" (v: [2]f32) -> Mat3x3
+translate_3x3 :: proc "contextless" (v: [2]f32) -> m3x3
 {
-  result: Mat3x3 = diag_3x3(1)
+  result: m3x3 = diag_3x3(1)
   result[0, 2] = v.x
   result[1, 2] = v.y
 
@@ -229,9 +229,9 @@ scale :: proc
   scale_3x3,
 }
 
-scale_3x3 :: proc "contextless" (v: [2]f32) -> Mat3x3
+scale_3x3 :: proc "contextless" (v: [2]f32) -> m3x3
 {
-  result: Mat3x3 = diag_3x3(1)
+  result: m3x3 = diag_3x3(1)
   result[0, 0] = v.x
   result[1, 1] = v.y
   
@@ -243,18 +243,18 @@ shear :: proc
   shear_3x3,
 }
 
-shear_3x3 :: proc "contextless" (v: [2]f32) -> Mat3x3
+shear_3x3 :: proc "contextless" (v: [2]f32) -> m3x3
 {
-  result: Mat3x3 = diag_3x3(1)
+  result: m3x3 = diag_3x3(1)
   result[0, 1] = v.x
   result[1, 0] = v.y
   
   return result
 }
 
-rotate_3x3 :: proc "contextless" (rads: f32) -> Mat3x3
+rotate_3x3 :: proc "contextless" (rads: f32) -> m3x3
 {
-  result: Mat3x3 = diag_3x3(1)
+  result: m3x3 = diag_3x3(1)
   result[0, 0] = math.cos(rads)
   result[0, 1] = -math.sin(rads)
   result[1, 0] = math.sin(rads)
@@ -263,9 +263,9 @@ rotate_3x3 :: proc "contextless" (rads: f32) -> Mat3x3
   return result
 }
 
-orthographic_3x3 :: proc "contextless" (left, right, top, bot: f32) -> Mat3x3
+orthographic_3x3 :: proc "contextless" (left, right, top, bot: f32) -> m3x3
 {
-  result: Mat3x3 = diag_3x3(1)
+  result: m3x3 = diag_3x3(1)
   result[0, 0] = 2.0 / (right - left)
   result[1, 1] = 2.0 / (top - bot)
   result[0, 2] = -(right + left) / (right - left)

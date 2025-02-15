@@ -9,8 +9,6 @@ Window :: struct
 {
   handle:       rawptr,
   event_queue:  Event_Queue,
-  width:        int,
-  height:       int,
   should_close: bool,
   draw_ctx: struct #raw_union
   {
@@ -104,8 +102,6 @@ create_window :: #force_inline proc(
   when ODIN_OS == .Windows do result = windows_create_window(title, width, height, arena)
   else                     do result = sdl_create_window(title, width, height, arena)
 
-  result.width = width
-  result.height = height
 	init_event_queue(&result.event_queue, arena)
 
 	return result
@@ -211,22 +207,44 @@ save_prev_input :: proc()
   }
 }
 
-key_pressed :: proc(key: Key_Kind) -> bool
+key_pressed :: #force_inline proc(key: Key_Kind) -> bool
 {
   return input.keys[key]
 }
 
-key_just_pressed :: proc(key: Key_Kind) -> bool
+key_just_pressed :: #force_inline proc(key: Key_Kind) -> bool
 {
   return input.keys[key] && !input.prev_keys[key]
 }
 
-key_released :: proc(key: Key_Kind) -> bool
+key_released :: #force_inline proc(key: Key_Kind) -> bool
 {
   return !input.keys[key]
 }
 
-key_just_released :: proc(key: Key_Kind) -> bool
+key_just_released :: #force_inline proc(key: Key_Kind) -> bool
 {
   return !input.keys[key] && input.prev_keys[key]
+}
+
+window_size :: #force_inline proc(
+  window: ^Window,
+) -> [2]i32
+{
+  result: [2]i32
+
+  when ODIN_OS == .Windows do result = windows_window_size(window)
+	else                     do result = sdl_window_size(window)
+
+  return result
+}
+
+cursor_pos :: #force_inline proc() -> [2]f32
+{
+  result: [2]f32
+
+  when ODIN_OS == .Windows do result = windows_cursor_pos()
+	else                     do result = sdl_cursor_pos()
+
+  return result
 }

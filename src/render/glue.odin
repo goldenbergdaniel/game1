@@ -34,11 +34,11 @@ glue_environment :: #force_inline proc() -> sg.Environment
   return result
 }
 
-glue_swapchain :: #force_inline proc(window: ^plf.Window) -> sg.Swapchain
+glue_swapchain :: #force_inline proc(window: ^plf.Window, size: [2]i32) -> sg.Swapchain
 {
   result: sg.Swapchain
-  result.width = cast(i32) window.width
-  result.height = cast(i32) window.height
+  result.width = size.x
+  result.height = size.y
   result.sample_count = 1
   result.color_format = .RGBA8
   result.depth_format = .RGBA8

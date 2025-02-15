@@ -1,6 +1,5 @@
 package game
 
-import "core:fmt"
 import "core:time"
 
 import "src:basic/mem"

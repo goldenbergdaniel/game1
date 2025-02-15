@@ -7,12 +7,14 @@ import "core:net"
 import "core:os"
 import "core:slice"
 import "core:sync"
+import "core:hash"
 
 import "src:basic/mem"
 import plf "src:platform"
 
 // Game //////////////////////////////////////////////////////////////////////////////////
 
+@(private="file")
 game_frame_arena: mem.Arena
 
 Game :: struct
@@ -97,10 +99,9 @@ update_game :: proc(gm: ^Game, dt: f32)
   }
 
   gm.ship_1.pos += gm.ship_1.vel * dt
+  gm.ship_2.pos += {-50, 50} * dt
 
-  mem.clear_arena(&game_frame_arena)
-
-  // - Save/load game ---
+  // - Save and load game ---
   {
     SAVE_PATH :: "res/saves/main"
 
@@ -132,6 +133,8 @@ update_game :: proc(gm: ^Game, dt: f32)
       }
     }
   }
+
+  mem.clear_arena(&game_frame_arena)
 }
 
 render_game :: proc(gm: ^Game)
@@ -139,6 +142,7 @@ render_game :: proc(gm: ^Game)
   draw_rect(gm.ship_1.pos, gm.ship_1.dim, gm.ship_1.color)
   draw_rect(gm.ship_2.pos, gm.ship_2.dim, gm.ship_2.color)
   draw_rect({WIDTH/2 - 50, HEIGHT/2 - 50}, {100, 100}, {0, 1, 0, 1})
+  draw_tri({100, 100}, {100, 150}, {1, 1, 0, 1})
 
   r_flush()
 }
@@ -187,7 +191,7 @@ load_game_from_file :: proc(fd: os.Handle, gm: ^Game) -> bool
   gm^, ok = slice.to_type(gm_bytes, Game)
   if !ok
   {
-    fmt.eprintln("Failed to go from []byte to Game!")
+    fmt.eprintln("Failed to get Game from bytes!")
     return false
   }
 
@@ -202,10 +206,10 @@ Entity :: struct
 {
   kind:   Entity_Kind,
   active: bool,
-  pos:    [2]f32,
-  vel:    [2]f32,
-  dim:    [2]f32,
-  color:  [4]f32,
+  pos:    v2f,
+  vel:    v2f,
+  dim:    v2f,
+  color:  v4f,
 }
 
 Entity_Kind :: enum

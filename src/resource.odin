@@ -2,6 +2,11 @@ package game
 
 Resources :: struct
 {
+  textures: struct
+  {
+    sprite_atlas: Texture,
+  },
+
   sprite: struct
   {
     ship_1:     Sprite,
