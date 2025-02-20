@@ -43,7 +43,7 @@ gl_init :: proc(window: ^plf.Window)
   // - Create shader program ---
   {
     vs_source := #load("shaders/triangle.vert.glsl")
-    vs := gl.CreateShader(gl.VERTEX_SHADER)
+    vs := gl.CreateShader(gl.VERTEX_SHADER); defer gl.DeleteShader(vs)
     gl.ShaderSource(vs, 1, cast([^]cstring) &vs_source, nil)
     gl.CompileShader(vs)
     when ODIN_DEBUG
@@ -52,7 +52,7 @@ gl_init :: proc(window: ^plf.Window)
     }
     
     fs_source := #load("shaders/triangle.frag.glsl")
-    fs := gl.CreateShader(gl.FRAGMENT_SHADER)
+    fs := gl.CreateShader(gl.FRAGMENT_SHADER); defer gl.DeleteShader(fs)
     gl.ShaderSource(fs, 1, cast([^]cstring) &fs_source, nil)
     gl.CompileShader(fs)
     when ODIN_DEBUG
@@ -66,11 +66,8 @@ gl_init :: proc(window: ^plf.Window)
     gl.LinkProgram(gl_renderer.shader)
     when ODIN_DEBUG
     {
-      // gl_verify_shader(gl_renderer.shader, gl.LINK_STATUS)
+      gl_verify_shader(gl_renderer.shader, gl.LINK_STATUS)
     }
-
-    gl.DeleteShader(vs)
-    gl.DeleteShader(fs)
   }
 
   // - Uniform buffer ---
@@ -112,9 +109,10 @@ gl_flush :: proc()
   window_size := plf.window_size(gl_renderer.window)
 
   gl_renderer.projection = vm.orthographic_3x3(960 - f32(window_size.x), 
-                                            960, 
-                                            540 - f32(window_size.y), 
-                                            540)
+                                               960, 
+                                               540 - f32(window_size.y), 
+                                               540)
+  gl_renderer.uniforms.proj = cast(m4x4f) gl_renderer.projection
 
   gl.Viewport(0, 0, window_size.x, window_size.y)
 
@@ -125,11 +123,10 @@ gl_flush :: proc()
 
   gl.NamedBufferSubData(gl_renderer.ibo,
                         0,
-                        int(gl_renderer.index_count * size_of(u32)),
+                        int(gl_renderer.index_count * size_of(u16)),
                         &gl_renderer.indices[0])
 
   gl.UseProgram(gl_renderer.shader)
-  gl_renderer.uniforms.proj = cast(m4x4f) gl_renderer.projection
   gl.NamedBufferSubData(gl_renderer.ubo,
                         0,
                         size_of(gl_renderer.uniforms),
@@ -139,37 +136,33 @@ gl_flush :: proc()
 
   gl.UseProgram(0)
 
-  gl_renderer.vertex_count = 0
-  gl_renderer.index_count = 0
+  gl_renderer.vertex_count, gl_renderer.index_count = 0, 0
 }
 
 gl_verify_shader :: proc(id, type: u32)
 {
-  if (type == gl.LINK_STATUS)
+  success: i32 = 1
+  if type == gl.LINK_STATUS
   {
     gl.ValidateProgram(id);
+    gl.GetProgramiv(id, type, &success)
+  }
+  else
+  {
+    gl.GetShaderiv(id, type, &success);
   }
 
-  success: i32 = 1;
-  gl.GetShaderiv(id, type, &success);
-
-  if (success != 1)
+  if success != 1
   {
-    length: i32;
-    gl.GetShaderiv(id, gl.INFO_LOG_LENGTH, &length);
-    log: [1000]byte;
-    gl.GetShaderInfoLog(id, length, &length, &log[0]);
+    length: i32
+    gl.GetShaderiv(id, gl.INFO_LOG_LENGTH, &length)
 
-    if (type == gl.COMPILE_STATUS)
-    {
-      fmt.eprintln("[ERROR]: Failed to compile shader!");
-    }
-    else
-    {
-      fmt.eprintln("[ERROR]: Failed to link shaders!");
-    }
+    log: [1000]byte
+    gl.GetShaderInfoLog(id, length, &length, &log[0])
 
-    fmt.eprintln(cast(string) log[:]);
+    fmt.eprintln("[ERROR]: Shader error!")
+    fmt.eprintln(cast(string) log[:])
+
     os.exit(1)
   }
 }
