@@ -26,8 +26,8 @@ SG_Renderer :: struct
   window:       ^plf.Window,
 }
 
-@(private="file")
-renderer: SG_Renderer
+@(private)
+sg_renderer: SG_Renderer
 
 sg_init_renderer :: proc(window: ^plf.Window)
 {
@@ -39,21 +39,21 @@ sg_init_renderer :: proc(window: ^plf.Window)
     environment = glue_environment(),
   })
 
-  renderer.window = window
+  sg_renderer.window = window
 
-  renderer.bindings.vertex_buffers[0] = sg.make_buffer(sg.Buffer_Desc{
+  sg_renderer.bindings.vertex_buffers[0] = sg.make_buffer(sg.Buffer_Desc{
     type = .VERTEXBUFFER,
     usage = .DYNAMIC, 
-    size = u64(size_of(renderer.vertices)),
+    size = u64(size_of(sg_renderer.vertices)),
   })
 
-  renderer.bindings.index_buffer = sg.make_buffer(sg.Buffer_Desc{
+  sg_renderer.bindings.index_buffer = sg.make_buffer(sg.Buffer_Desc{
     type = .INDEXBUFFER,
     usage = .DYNAMIC,
-    size = u64(size_of(renderer.indices)),
+    size = u64(size_of(sg_renderer.indices)),
   })
 
-  renderer.pipeline = sg.make_pipeline(sg.Pipeline_Desc{
+  sg_renderer.pipeline = sg.make_pipeline(sg.Pipeline_Desc{
     primitive_type = .TRIANGLES,
     index_type = .UINT16,
     shader = sg.make_shader(triangle_shader_desc(BACKEND)),
@@ -65,11 +65,11 @@ sg_init_renderer :: proc(window: ^plf.Window)
     },
   })
 
-  renderer.pass_action = sg.Pass_Action{
+  sg_renderer.pass_action = sg.Pass_Action{
     colors = {
       0 = {
         load_action = .CLEAR,
-        clear_value = {0, 0, 0, 1},
+        clear_value = {1, 1, 1, 1},
       },
     },
   }
@@ -77,40 +77,40 @@ sg_init_renderer :: proc(window: ^plf.Window)
 
 sg_flush :: proc()
 {
-  if renderer.vertex_count == 0 do return
+  if sg_renderer.vertex_count == 0 do return
 
-  window_size := plf.window_size(renderer.window)
+  window_size := plf.window_size(sg_renderer.window)
 
-  renderer.projection = vm.orthographic_3x3(960 - f32(window_size.x), 
+  sg_renderer.projection = vm.orthographic_3x3(960 - f32(window_size.x), 
                                             960, 
                                             540 - f32(window_size.y), 
                                             540)
 
   sg.begin_pass(sg.Pass{
-    action = renderer.pass_action,
-    swapchain = glue_swapchain(renderer.window, window_size),
+    action = sg_renderer.pass_action,
+    swapchain = glue_swapchain(sg_renderer.window, window_size),
   })
 
   sg.apply_viewport(0, 0, window_size.x, window_size.y, origin_top_left=true)
 
-  sg.apply_pipeline(renderer.pipeline)
+  sg.apply_pipeline(sg_renderer.pipeline)
 
-  sg.update_buffer(renderer.bindings.vertex_buffers[0], 
-                  sg.Range{&renderer.vertices, renderer.vertex_count * size_of(Vertex)})
+  sg.update_buffer(sg_renderer.bindings.vertex_buffers[0], 
+                  sg.Range{&sg_renderer.vertices, sg_renderer.vertex_count * size_of(Vertex)})
 
-  sg.update_buffer(renderer.bindings.index_buffer,
-                  sg.Range{&renderer.indices, renderer.index_count * size_of(u16)})
+  sg.update_buffer(sg_renderer.bindings.index_buffer,
+                  sg.Range{&sg_renderer.indices, sg_renderer.index_count * size_of(u16)})
   
-  sg.apply_bindings(renderer.bindings)
+  sg.apply_bindings(sg_renderer.bindings)
   
-  renderer.uniforms.proj = cast(m4x4f) renderer.projection
+  sg_renderer.uniforms.proj = cast(m4x4f) sg_renderer.projection
   sg.apply_uniforms(UB_params, 
-                    sg.Range{&renderer.uniforms, size_of(&renderer.uniforms)})
+                    sg.Range{&sg_renderer.uniforms, size_of(sg_renderer.uniforms)})
 
-  sg.draw(0, renderer.index_count, 1)
+  sg.draw(0, sg_renderer.index_count, 1)
   sg.end_pass()
   sg.commit()
 
-  renderer.vertex_count = 0
-  renderer.index_count = 0
+  sg_renderer.vertex_count = 0
+  sg_renderer.index_count = 0
 }

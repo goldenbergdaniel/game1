@@ -140,14 +140,14 @@ update_game :: proc(gm: ^Game, dt: f32)
 
 render_game :: proc(gm: ^Game)
 {
-  r.gl_clear()
+  r.clear()
 
   draw_rect(gm.ship_1.pos, gm.ship_1.dim, gm.ship_1.color)
   draw_rect(gm.ship_2.pos, gm.ship_2.dim, gm.ship_2.color)
   draw_rect({WINDOW_WIDTH/2 - 50, WINDOW_HEIGHT/2 - 50}, {100, 100}, {0, 1, 0, 1})
   draw_tri({100, 100}, {100, 150}, {1, 1, 0, 1})
 
-  r.gl_flush()
+  r.flush()
 }
 
 interpolate_games :: proc(curr_gm, prev_gm, res_gm: ^Game, alpha: f32)

@@ -9,11 +9,11 @@ import gl "ext:opengl"
 import "core:math/linalg/glsl"
 
 @(private="file")
-GL_Renderer :: struct
+GL_gl_renderer :: struct
 {
   vertices:     [40000]Vertex,
   vertex_count: u64,
-  indices:      [60000]u16,
+  indices:      [10000]u16,
   index_count:  u64,
   projection:   m3x3f,
   texture:      ^Texture,
@@ -29,11 +29,11 @@ GL_Renderer :: struct
 }
 
 @(private)
-renderer: GL_Renderer
+gl_renderer: GL_gl_renderer
 
 gl_init_renderer :: proc(window: ^plf.Window)
 {
-  renderer.window = window
+  gl_renderer.window = window
 
   // - Vertex array object ---
   vao: u32
@@ -60,13 +60,13 @@ gl_init_renderer :: proc(window: ^plf.Window)
       gl_verify_shader(fs, gl.COMPILE_STATUS)
     }
 
-    renderer.shader = gl.CreateProgram()
-    gl.AttachShader(renderer.shader, vs)
-    gl.AttachShader(renderer.shader, fs)
-    gl.LinkProgram(renderer.shader)
+    gl_renderer.shader = gl.CreateProgram()
+    gl.AttachShader(gl_renderer.shader, vs)
+    gl.AttachShader(gl_renderer.shader, fs)
+    gl.LinkProgram(gl_renderer.shader)
     when ODIN_DEBUG
     {
-      // gl_verify_shader(renderer.shader, gl.LINK_STATUS)
+      // gl_verify_shader(gl_renderer.shader, gl.LINK_STATUS)
     }
 
     gl.DeleteShader(vs)
@@ -74,29 +74,29 @@ gl_init_renderer :: proc(window: ^plf.Window)
   }
 
   // - Uniform buffer ---
-  gl.CreateBuffers(1, &renderer.ubo)
-  gl.UniformBlockBinding(renderer.shader, 0, 0)
-  gl.BindBufferBase(gl.UNIFORM_BUFFER, 0, renderer.ubo)
-  gl.NamedBufferStorage(renderer.ubo, 
-                        size_of(renderer.uniforms),
-                        &renderer.uniforms, 
+  gl.CreateBuffers(1, &gl_renderer.ubo)
+  gl.UniformBlockBinding(gl_renderer.shader, 0, 0)
+  gl.BindBufferBase(gl.UNIFORM_BUFFER, 0, gl_renderer.ubo)
+  gl.NamedBufferStorage(gl_renderer.ubo, 
+                        size_of(gl_renderer.uniforms),
+                        &gl_renderer.uniforms, 
                         gl.DYNAMIC_STORAGE_BIT)
 
   // - Storage buffer ---
-  gl.CreateBuffers(1, &renderer.ssbo)
-  gl.BindBufferBase(gl.SHADER_STORAGE_BUFFER, 1, renderer.ssbo)
-  gl.NamedBufferStorage(renderer.ssbo, 
-                        size_of(renderer.vertices),
-                        &renderer.vertices[0], 
+  gl.CreateBuffers(1, &gl_renderer.ssbo)
+  gl.BindBufferBase(gl.SHADER_STORAGE_BUFFER, 1, gl_renderer.ssbo)
+  gl.NamedBufferStorage(gl_renderer.ssbo, 
+                        size_of(gl_renderer.vertices),
+                        &gl_renderer.vertices[0], 
                         gl.DYNAMIC_STORAGE_BIT)
   gl.BindBuffer(gl.SHADER_STORAGE_BUFFER, 0)
 
   // - Index buffer ---
-  gl.CreateBuffers(1, &renderer.ibo)
-  gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, renderer.ibo)
-  gl.NamedBufferData(renderer.ibo,
-                     size_of(renderer.indices),
-                     &renderer.indices[0],
+  gl.CreateBuffers(1, &gl_renderer.ibo)
+  gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl_renderer.ibo)
+  gl.NamedBufferData(gl_renderer.ibo,
+                     size_of(gl_renderer.indices),
+                     &gl_renderer.indices[0],
                      gl.DYNAMIC_DRAW)
 }
 
@@ -108,40 +108,40 @@ gl_clear :: proc()
 
 gl_flush :: proc()
 {
-  if renderer.vertex_count == 0 do return
+  if gl_renderer.vertex_count == 0 do return
 
-  window_size := plf.window_size(renderer.window)
+  window_size := plf.window_size(gl_renderer.window)
 
-  renderer.projection = vm.orthographic_3x3(960 - f32(window_size.x), 
+  gl_renderer.projection = vm.orthographic_3x3(960 - f32(window_size.x), 
                                             960, 
                                             540 - f32(window_size.y), 
                                             540)
 
   gl.Viewport(0, 0, window_size.x, window_size.y)
 
-  gl.NamedBufferSubData(renderer.ssbo,
+  gl.NamedBufferSubData(gl_renderer.ssbo,
                         0,
-                        int(renderer.vertex_count * size_of(Vertex)),
-                        &renderer.vertices[0])
+                        int(gl_renderer.vertex_count * size_of(Vertex)),
+                        &gl_renderer.vertices[0])
 
-  gl.NamedBufferSubData(renderer.ibo,
+  gl.NamedBufferSubData(gl_renderer.ibo,
                         0,
-                        int(renderer.index_count * size_of(u32)),
-                        &renderer.indices[0])
+                        int(gl_renderer.index_count * size_of(u32)),
+                        &gl_renderer.indices[0])
 
-  gl.UseProgram(renderer.shader)
-  renderer.uniforms.proj = cast(m4x4f) renderer.projection
-  gl.NamedBufferSubData(renderer.ubo,
+  gl.UseProgram(gl_renderer.shader)
+  gl_renderer.uniforms.proj = cast(m4x4f) gl_renderer.projection
+  gl.NamedBufferSubData(gl_renderer.ubo,
                         0,
-                        size_of(renderer.uniforms),
-                        &renderer.uniforms)
+                        size_of(gl_renderer.uniforms),
+                        &gl_renderer.uniforms)
 
-  gl.DrawElements(gl.TRIANGLES, i32(renderer.index_count), gl.UNSIGNED_SHORT, nil)
+  gl.DrawElements(gl.TRIANGLES, i32(gl_renderer.index_count), gl.UNSIGNED_SHORT, nil)
 
   gl.UseProgram(0)
 
-  renderer.vertex_count = 0
-  renderer.index_count = 0
+  gl_renderer.vertex_count = 0
+  gl_renderer.index_count = 0
 }
 
 gl_verify_shader :: proc(id, type: u32)

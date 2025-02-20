@@ -30,7 +30,7 @@ main :: proc()
   curr_game, prev_game, res_game: Game
   init_game(&curr_game)
 
-  r.gl_init_renderer(&user.window)
+  r.init(&user.window)
 
   elapsed_time, accumulator: f64
   start_tick := time.tick_now()

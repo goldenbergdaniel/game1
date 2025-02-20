@@ -1,5 +1,7 @@
 package render
 
+import plf "src:platform"
+
 v2i   :: [2]i32
 v4i   :: [4]i32
 v2f   :: [2]f32
@@ -22,20 +24,44 @@ Texture :: struct
   height: i32,
 }
 
-// BACKEND :: #config()
+R_BACKEND :: #config(RENDER_BACKEND, "opengl")
 
-// push :: proc()
-// {
+when R_BACKEND == "opengl"
+{
+  @(private="file")
+  renderer := &gl_renderer
+}
+else when R_BACKEND == "sokol"
+{
+  @(private="file")
+  renderer := &sg_renderer
+}
 
-// }
+init :: #force_inline proc(window: ^plf.Window)
+{
+       when R_BACKEND == "opengl" do gl_init_renderer(window)
+  else when R_BACKEND == "sokol"  do sg_init_renderer(window)
+  else                            do panic("Invalid render backend selected!")
+}
 
+clear :: #force_inline proc()
+{
+  when R_BACKEND == "opengl" do gl_clear()
+}
+
+flush :: #force_inline proc()
+{
+       when R_BACKEND == "opengl" do gl_flush()
+  else when R_BACKEND == "sokol"  do sg_flush()
+  else                            do panic("Invalid render backend selected!")
+}
 push_vertex :: proc{push_vertex_vert, push_vertex_vec}
 
 push_vertex_vert :: proc(vertex: Vertex)
 {
   if renderer.vertex_count == len(renderer.vertices)
   {
-    gl_flush()
+    flush()
   }
 
   renderer.vertices[renderer.vertex_count] = Vertex{
