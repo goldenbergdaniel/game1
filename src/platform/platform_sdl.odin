@@ -2,6 +2,7 @@
 #+private
 package platform
 
+import "core:fmt"
 import "core:strings"
 
 import mem "src:basic/mem"
@@ -53,6 +54,7 @@ sdl_create_window :: proc(
 		gl.load_up_to(4, 6, sdl.gl_set_proc_address)
 		gl.Enable(gl.MULTISAMPLE)
 		sdl.GL_SetSwapInterval(1)
+		fmt.println(gl.GetString(gl.VERSION))
 	}
 
 	// window_system_info: sdl.SysWMinfo

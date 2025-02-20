@@ -9,7 +9,7 @@ import gl "ext:opengl"
 import "core:math/linalg/glsl"
 
 @(private="file")
-GL_gl_renderer :: struct
+GL_Renderer :: struct
 {
   vertices:     [40000]Vertex,
   vertex_count: u64,
@@ -29,7 +29,7 @@ GL_gl_renderer :: struct
 }
 
 @(private)
-gl_renderer: GL_gl_renderer
+gl_renderer: GL_Renderer
 
 gl_init :: proc(window: ^plf.Window)
 {
@@ -89,11 +89,10 @@ gl_init :: proc(window: ^plf.Window)
                         size_of(gl_renderer.vertices),
                         &gl_renderer.vertices[0], 
                         gl.DYNAMIC_STORAGE_BIT)
-  gl.BindBuffer(gl.SHADER_STORAGE_BUFFER, 0)
 
   // - Index buffer ---
   gl.CreateBuffers(1, &gl_renderer.ibo)
-  gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl_renderer.ibo)
+  gl.VertexArrayElementBuffer(vao, gl_renderer.ibo)
   gl.NamedBufferData(gl_renderer.ibo,
                      size_of(gl_renderer.indices),
                      &gl_renderer.indices[0],
