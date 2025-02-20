@@ -24,37 +24,32 @@ Texture :: struct
   height: i32,
 }
 
-R_BACKEND :: #config(RENDER_BACKEND, "opengl")
+@(private="file")
+BACKEND :: #config(RENDER_BACKEND, "opengl")
 
-when R_BACKEND == "opengl"
+when BACKEND == "opengl"
 {
   @(private="file")
   renderer := &gl_renderer
 }
-else when R_BACKEND == "sokol"
-{
-  @(private="file")
-  renderer := &sg_renderer
-}
 
 init :: #force_inline proc(window: ^plf.Window)
 {
-       when R_BACKEND == "opengl" do gl_init_renderer(window)
-  else when R_BACKEND == "sokol"  do sg_init_renderer(window)
-  else                            do panic("Invalid render backend selected!")
+  /**/ when BACKEND == "opengl" do gl_init(window)
+  else                          do panic("Invalid render backend selected!")
 }
 
-clear :: #force_inline proc()
+clear :: #force_inline proc(color: v4f)
 {
-  when R_BACKEND == "opengl" do gl_clear()
+  when BACKEND == "opengl" do gl_clear(color)
 }
 
 flush :: #force_inline proc()
 {
-       when R_BACKEND == "opengl" do gl_flush()
-  else when R_BACKEND == "sokol"  do sg_flush()
-  else                            do panic("Invalid render backend selected!")
+  /**/ when BACKEND == "opengl" do gl_flush()
+  else                          do panic("Invalid render backend selected!")
 }
+
 push_vertex :: proc{push_vertex_vert, push_vertex_vec}
 
 push_vertex_vert :: proc(vertex: Vertex)

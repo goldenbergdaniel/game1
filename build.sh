@@ -23,19 +23,6 @@ echo [target:$TARGET]
 echo [mode:$MODE]
 echo [render:$RENDER_BACKEND]
 
-# --- PREPROCESS -------------------------------------------------------------------------
-
-SHADERS=("triangle")
-
-echo [preprocess]
-
-pushd src/render > /dev/null
-  SOKOL_SHDC="../../bin/sokol-shdc-$TARGET"
-  for s in ${SHADERS[@]}; do
-    $SOKOL_SHDC -i shaders/$s.glsl -o $s.gen.odin -l glsl430 -f sokol_odin
-  done
-popd > /dev/null
-
 # --- BUILD ------------------------------------------------------------------------------
 
 echo [build]

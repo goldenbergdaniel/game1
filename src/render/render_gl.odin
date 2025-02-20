@@ -31,7 +31,7 @@ GL_gl_renderer :: struct
 @(private)
 gl_renderer: GL_gl_renderer
 
-gl_init_renderer :: proc(window: ^plf.Window)
+gl_init :: proc(window: ^plf.Window)
 {
   gl_renderer.window = window
 
@@ -42,7 +42,7 @@ gl_init_renderer :: proc(window: ^plf.Window)
 
   // - Create shader program ---
   {
-    vs_source := #load("shaders/triangle.vs")
+    vs_source := #load("shaders/triangle.vert.glsl")
     vs := gl.CreateShader(gl.VERTEX_SHADER)
     gl.ShaderSource(vs, 1, cast([^]cstring) &vs_source, nil)
     gl.CompileShader(vs)
@@ -51,7 +51,7 @@ gl_init_renderer :: proc(window: ^plf.Window)
       gl_verify_shader(vs, gl.COMPILE_STATUS)
     }
     
-    fs_source := #load("shaders/triangle.fs")
+    fs_source := #load("shaders/triangle.frag.glsl")
     fs := gl.CreateShader(gl.FRAGMENT_SHADER)
     gl.ShaderSource(fs, 1, cast([^]cstring) &fs_source, nil)
     gl.CompileShader(fs)
@@ -100,9 +100,9 @@ gl_init_renderer :: proc(window: ^plf.Window)
                      gl.DYNAMIC_DRAW)
 }
 
-gl_clear :: proc()
+gl_clear :: proc(color: v4f)
 {
-  gl.ClearColor(1, 1, 1, 1)
+  gl.ClearColor(color.r, color.g, color.b, color.a)
   gl.Clear(gl.COLOR_BUFFER_BIT);
 }
 

@@ -6,13 +6,22 @@ import "core:math"
 import plf "src:platform"
 import r "src:render"
 import vm "src:vecmath"
-import sg "ext:sokol/gfx"
 
 Sprite :: struct
 {
   uv:    v2i,
   dim:   v2i,
   pivot: v2f,
+}
+
+begin_draw :: #force_inline proc(color: v4f)
+{
+  r.clear(color)
+}
+
+end_draw :: #force_inline proc()
+{
+  r.flush()
 }
 
 draw_tri :: proc(
