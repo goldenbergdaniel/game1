@@ -199,7 +199,7 @@ pop_event :: proc(queue: ^Event_Queue) -> ^Event
   return result
 }
 
-save_prev_input :: proc()
+remember_prev_input :: proc()
 {
   for key in Key_Kind
   {

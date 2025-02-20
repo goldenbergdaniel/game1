@@ -11,6 +11,7 @@ import "core:hash"
 
 import "src:basic/mem"
 import plf "src:platform"
+import r "src:render"
 
 // Game //////////////////////////////////////////////////////////////////////////////////
 
@@ -39,7 +40,7 @@ init_game :: proc(gm: ^Game)
   gm.ship_2 = Entity{
     kind = .SHIP,
     active = true,
-    pos = {WIDTH - 70, 0},
+    pos = {WINDOW_WIDTH - 70, 0},
     dim = {70, 70},
     color = {1, 0, 0, 1},
   }
@@ -63,7 +64,7 @@ update_game :: proc(gm: ^Game, dt: f32)
 {
   if plf.key_pressed(.ESCAPE)
   {
-    g_user.window.should_close = true
+    user.window.should_close = true
   }
 
   SPEED :: 500
@@ -115,7 +116,7 @@ update_game :: proc(gm: ^Game, dt: f32)
       }
       else
       {
-        fmt.eprintln("Error opening save file!", open_err)
+        fmt.eprintln("Error opening file for saving!", open_err)
       }
     }
 
@@ -129,7 +130,7 @@ update_game :: proc(gm: ^Game, dt: f32)
       }
       else
       {
-        fmt.eprintln("Error opening save file!", open_err)
+        fmt.eprintln("Error opening file for loading!", open_err)
       }
     }
   }
@@ -139,12 +140,14 @@ update_game :: proc(gm: ^Game, dt: f32)
 
 render_game :: proc(gm: ^Game)
 {
+  r.gl_clear()
+
   draw_rect(gm.ship_1.pos, gm.ship_1.dim, gm.ship_1.color)
   draw_rect(gm.ship_2.pos, gm.ship_2.dim, gm.ship_2.color)
-  draw_rect({WIDTH/2 - 50, HEIGHT/2 - 50}, {100, 100}, {0, 1, 0, 1})
+  draw_rect({WINDOW_WIDTH/2 - 50, WINDOW_HEIGHT/2 - 50}, {100, 100}, {0, 1, 0, 1})
   draw_tri({100, 100}, {100, 150}, {1, 1, 0, 1})
 
-  r_flush()
+  r.gl_flush()
 }
 
 interpolate_games :: proc(curr_gm, prev_gm, res_gm: ^Game, alpha: f32)

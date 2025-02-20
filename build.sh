@@ -11,7 +11,7 @@ if [[ $2 == "darwin_amd64" || $2 == "darwin_arm64" || $2 == "linux_amd64" ]]; th
 
 FLAGS="-collection:src=src -collection:ext=ext -vet-shadowing -vet-style -vet-cast"
 FLAGS="-extra-linker-flags:\"-fuse-ld=mold\" $3 $FLAGS"
-if [[ $MODE == "debug"   ]]; then FLAGS="-o:none -use-separate-modules $FLAGS"; fi
+if [[ $MODE == "debug"   ]]; then FLAGS="-o:none -debug -use-separate-modules $FLAGS"; fi
 if [[ $MODE == "release" ]]; then FLAGS="-o:speed -no-bounds-check -no-type-assert $FLAGS"; fi
 
 echo [target:$TARGET]

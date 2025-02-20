@@ -1,10 +1,12 @@
 package game
 
+import r "src:render"
+
 Resources :: struct
 {
   textures: struct
   {
-    sprite_atlas: Texture,
+    sprite_atlas: r.Texture,
   },
 
   sprite: struct

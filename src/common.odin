@@ -10,8 +10,8 @@ v2i :: [2]i32
 v3i :: [3]i32
 v4i :: [4]i32
 
-m3x3 :: matrix[3, 3]f32
-m4x4 :: matrix[4, 4]f32
+m3x3f :: matrix[3,3]f32
+m4x4f :: matrix[4,4]f32
 
 print   :: fmt.print
 printf  :: fmt.printf
