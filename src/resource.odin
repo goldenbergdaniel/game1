@@ -32,8 +32,9 @@ init_resources :: proc(arena: ^mem.Arena)
 
   // - Sprites ---
   {
-    res.sprites[.SHIP_1]     = Sprite{coords={0, 0}, dim={16, 16}, pivot={0, 0}}
-    res.sprites[.PROJECTILE] = Sprite{coords={0, 1}, dim={4, 4}, pivot={0.5, 0.5}}
+    res.sprites[.NIL]        = Sprite{coords={0, 0}, dim={16, 16}, pivot={0, 0}}
+    res.sprites[.SHIP_1]     = Sprite{coords={1, 0}, dim={16, 16}, pivot={0, 0}}
+    res.sprites[.PROJECTILE] = Sprite{coords={2, 0}, dim={4, 4}, pivot={0.5, 0.5}}
 
     for &sprite in res.sprites
     {

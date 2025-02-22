@@ -12,6 +12,7 @@ m4x4f :: matrix[4,4]f32
 Vertex :: struct
 {
   pos:   v2f,
+  tint:  v4f,
   color: v4f,
   uv:    v2f,
 }
@@ -66,6 +67,7 @@ push_vertex_vert :: proc(vertex: Vertex)
 
   renderer.vertices[renderer.vertex_count] = Vertex{
     pos = vertex.pos,
+    tint = vertex.tint,
     color = vertex.color,
     uv = vertex.uv,
   }
@@ -73,9 +75,9 @@ push_vertex_vert :: proc(vertex: Vertex)
   renderer.vertex_count += 1
 }
 
-push_vertex_vec :: proc(pos: v2f, color: v4f, uv: v2f)
+push_vertex_vec :: proc(pos: v2f, tint: v4f, color: v4f, uv: v2f)
 {
-  push_vertex_vert(Vertex{pos, color, uv})
+  push_vertex_vert(Vertex{pos, tint, color, uv})
 }
 
 push_tri_indices :: proc()

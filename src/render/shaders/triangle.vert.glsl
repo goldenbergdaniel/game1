@@ -3,6 +3,7 @@
 struct Vertex
 {
   float position[2];
+  float tint[4];
   float color[4];
   float uv[2];
 };
@@ -19,6 +20,7 @@ readonly buffer ssbo
   Vertex data[];
 };
 
+out vec4 fs_tint;
 out vec4 fs_color;
 out vec2 fs_tex_coord;
 
@@ -27,6 +29,16 @@ vec2 get_position()
   return vec2(
     data[gl_VertexID].position[0], 
     data[gl_VertexID].position[1]
+  );
+}
+
+vec4 get_tint()
+{
+  return vec4(
+    data[gl_VertexID].tint[0], 
+    data[gl_VertexID].tint[1], 
+    data[gl_VertexID].tint[2],
+    data[gl_VertexID].tint[3]
   );
 }
 
@@ -51,6 +63,7 @@ vec2 get_uv()
 void main()
 {
   gl_Position = u_proj * vec4(get_position().xy, 1.0, 1.0);
+  fs_tint = get_tint();
   fs_color = get_color();
   fs_tex_coord = get_uv();
 }

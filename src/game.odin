@@ -34,7 +34,8 @@ init_game :: proc(gm: ^Game)
     kind = .SHIP,
     active = true,
     dim = {70, 70},
-    color = {0, 0, 1, 1},
+    tint = {1, 1, 1, 1},
+    color = {0, 0, 1, 0},
   }
 
   gm.ship_2 = Entity{
@@ -42,7 +43,8 @@ init_game :: proc(gm: ^Game)
     active = true,
     pos = {WINDOW_WIDTH - 70, 0},
     dim = {70, 70},
-    color = {1, 0, 0, 1},
+    tint = {1, 1, 1, 1},
+    color = {1, 0, 0, 0},
   }
 
   for &projectile in gm.projectiles
@@ -143,10 +145,25 @@ render_game :: proc(gm: ^Game)
 {
   begin_draw({0.07, 0.07, 0.07, 1})
 
-  draw_rect(gm.ship_1.pos, gm.ship_1.dim, gm.ship_1.color, res.sprites[.SHIP_1])
-  draw_rect(gm.ship_2.pos, gm.ship_2.dim, gm.ship_2.color, res.sprites[.SHIP_1])
-  draw_rect({WINDOW_WIDTH/2 - 50, WINDOW_HEIGHT/2 - 50}, {100, 100}, {0, 1, 0, 1})
-  draw_tri({100, 100}, {100, 150}, {1, 1, 0, 1})
+  draw_rect(pos=gm.ship_1.pos, 
+            dim=gm.ship_1.dim, 
+            tint=gm.ship_1.tint,
+            color=gm.ship_1.color, 
+            sprite=res.sprites[.SHIP_1])
+
+  draw_rect(pos=gm.ship_2.pos, 
+            dim=gm.ship_2.dim, 
+            tint=gm.ship_2.tint,
+            color=gm.ship_2.color, 
+            sprite=res.sprites[.SHIP_1])
+
+  draw_rect(pos={WINDOW_WIDTH/2 - 50, WINDOW_HEIGHT/2 - 50}, 
+            dim={100, 100}, 
+            color={0, 1, 0, 0})
+
+  draw_tri(pos={100, 100}, 
+           dim={100, 150}, 
+           color={1, 1, 0, 0})
 
   end_draw()
 }
@@ -213,6 +230,7 @@ Entity :: struct
   pos:    v2f,
   vel:    v2f,
   dim:    v2f,
+  tint:   v4f,
   color:  v4f,
 }
 
