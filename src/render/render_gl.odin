@@ -1,3 +1,5 @@
+#+build linux
+#+private
 package render
 
 import "core:fmt"
@@ -6,15 +8,13 @@ import "core:os"
 import vm "src:vecmath"
 import plf "src:platform"
 import gl "ext:opengl"
-import "core:math/linalg/glsl"
 
-@(private="file")
 GL_Renderer :: struct
 {
   vertices:     [40000]Vertex,
-  vertex_count: u64,
+  vertex_count: int,
   indices:      [10000]u16,
-  index_count:  u64,
+  index_count:  int,
   projection:   m3x3f,
   texture:      ^Texture,
   uniforms: struct
@@ -23,15 +23,15 @@ GL_Renderer :: struct
   },
   window:       ^plf.Window,
   shader:       u32,
+  textures:     [Texture_ID]u32,
   ubo:          u32,
   ssbo:         u32,
   ibo:          u32,
 }
 
-@(private)
 gl_renderer: GL_Renderer
 
-gl_init :: proc(window: ^plf.Window)
+gl_init :: proc(window: ^plf.Window, textures: ^[Texture_ID]Texture)
 {
   gl_renderer.window = window
 
@@ -40,34 +40,53 @@ gl_init :: proc(window: ^plf.Window)
   gl.GenVertexArrays(1, &vao)
   gl.BindVertexArray(vao)
 
-  // - Create shader program ---
+  // - Textures ---
+  {
+    gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+    gl.Enable(gl.BLEND)
+		gl.Enable(gl.MULTISAMPLE)
+
+    gl.CreateTextures(gl.TEXTURE_2D, 
+                      size_of(gl_renderer.textures), 
+                      raw_data(&gl_renderer.textures))
+
+    for tex, id in gl_renderer.textures
+    {
+      gl.TextureStorage2D(tex, 1, gl.RGBA8, textures[id].width, textures[id].height)
+      gl.TextureSubImage2D(tex, 
+                           level=0, 
+                           xoffset=0, 
+                           yoffset=0, 
+                           width=textures[id].width, 
+                           height=textures[id].height,
+                           format=gl.RGBA,
+                           type=gl.UNSIGNED_BYTE,
+                           pixels=raw_data(textures[id].data))
+      gl.TextureParameteri(tex, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+      gl.TextureParameteri(tex, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+      gl.BindTextureUnit(u32(id), tex)
+    }
+  }
+
+  // - Shaders ---
   {
     vs_source := #load("shaders/triangle.vert.glsl")
     vs := gl.CreateShader(gl.VERTEX_SHADER); defer gl.DeleteShader(vs)
     gl.ShaderSource(vs, 1, cast([^]cstring) &vs_source, nil)
     gl.CompileShader(vs)
-    when ODIN_DEBUG
-    {
-      gl_verify_shader(vs, gl.COMPILE_STATUS)
-    }
+    gl_verify_shader(vs, gl.COMPILE_STATUS)
     
     fs_source := #load("shaders/triangle.frag.glsl")
     fs := gl.CreateShader(gl.FRAGMENT_SHADER); defer gl.DeleteShader(fs)
     gl.ShaderSource(fs, 1, cast([^]cstring) &fs_source, nil)
     gl.CompileShader(fs)
-    when ODIN_DEBUG
-    {
-      gl_verify_shader(fs, gl.COMPILE_STATUS)
-    }
+    gl_verify_shader(fs, gl.COMPILE_STATUS)
 
     gl_renderer.shader = gl.CreateProgram()
     gl.AttachShader(gl_renderer.shader, vs)
     gl.AttachShader(gl_renderer.shader, fs)
     gl.LinkProgram(gl_renderer.shader)
-    when ODIN_DEBUG
-    {
-      gl_verify_shader(gl_renderer.shader, gl.LINK_STATUS)
-    }
+    gl_verify_shader(gl_renderer.shader, gl.LINK_STATUS)
   }
 
   // - Uniform buffer ---
@@ -84,7 +103,7 @@ gl_init :: proc(window: ^plf.Window)
   gl.BindBufferBase(gl.SHADER_STORAGE_BUFFER, 1, gl_renderer.ssbo)
   gl.NamedBufferStorage(gl_renderer.ssbo, 
                         size_of(gl_renderer.vertices),
-                        &gl_renderer.vertices[0], 
+                        raw_data(&gl_renderer.vertices), 
                         gl.DYNAMIC_STORAGE_BIT)
 
   // - Index buffer ---
@@ -92,7 +111,7 @@ gl_init :: proc(window: ^plf.Window)
   gl.VertexArrayElementBuffer(vao, gl_renderer.ibo)
   gl.NamedBufferData(gl_renderer.ibo,
                      size_of(gl_renderer.indices),
-                     &gl_renderer.indices[0],
+                     raw_data(&gl_renderer.indices),
                      gl.DYNAMIC_DRAW)
 }
 
@@ -116,53 +135,70 @@ gl_flush :: proc()
 
   gl.Viewport(0, 0, window_size.x, window_size.y)
 
-  gl.NamedBufferSubData(gl_renderer.ssbo,
-                        0,
-                        int(gl_renderer.vertex_count * size_of(Vertex)),
-                        &gl_renderer.vertices[0])
+  gl.NamedBufferSubData(buffer=gl_renderer.ssbo,
+                        offset=0,
+                        size=gl_renderer.vertex_count * size_of(Vertex),
+                        data=&gl_renderer.vertices[0])
 
-  gl.NamedBufferSubData(gl_renderer.ibo,
-                        0,
-                        int(gl_renderer.index_count * size_of(u16)),
-                        &gl_renderer.indices[0])
+  gl.NamedBufferSubData(buffer=gl_renderer.ibo,
+                        offset=0,
+                        size=gl_renderer.index_count * size_of(u16),
+                        data=&gl_renderer.indices[0])
 
   gl.UseProgram(gl_renderer.shader)
-  gl.NamedBufferSubData(gl_renderer.ubo,
-                        0,
-                        size_of(gl_renderer.uniforms),
-                        &gl_renderer.uniforms)
+
+  u_tex_loc := gl.GetUniformLocation(gl_renderer.shader, "u_tex")
+  gl.Uniform1i(u_tex_loc, i32(Texture_ID.SPRITE_ATLAS))
+  gl.NamedBufferSubData(buffer=gl_renderer.ubo,
+                        offset=0,
+                        size=size_of(gl_renderer.uniforms),
+                        data=&gl_renderer.uniforms)
 
   gl.DrawElements(gl.TRIANGLES, i32(gl_renderer.index_count), gl.UNSIGNED_SHORT, nil)
 
   gl.UseProgram(0)
 
-  gl_renderer.vertex_count, gl_renderer.index_count = 0, 0
+  gl_renderer.vertex_count = 0
+  gl_renderer.index_count = 0
 }
 
 gl_verify_shader :: proc(id, type: u32)
 {
-  success: i32 = 1
-  if type == gl.LINK_STATUS
+  when ODIN_DEBUG
   {
-    gl.ValidateProgram(id);
-    gl.GetProgramiv(id, type, &success)
-  }
-  else
-  {
-    gl.GetShaderiv(id, type, &success);
-  }
-
-  if success != 1
-  {
-    length: i32
-    gl.GetShaderiv(id, gl.INFO_LOG_LENGTH, &length)
-
+    success: i32 = 1
     log: [1000]byte
-    gl.GetShaderInfoLog(id, length, &length, &log[0])
 
-    fmt.eprintln("[ERROR]: Shader error!")
-    fmt.eprintln(cast(string) log[:])
+    if type == gl.COMPILE_STATUS
+    {
+      gl.GetShaderiv(id, type, &success);
+      if success != 1
+      {
+        length: i32
+        gl.GetShaderiv(id, gl.INFO_LOG_LENGTH, &length)
+        gl.GetShaderInfoLog(id, length, &length, &log[0])
 
-    os.exit(1)
+        fmt.eprintln("[ERROR]: Shader compile error!")
+        fmt.eprintln(cast(string) log[:])
+
+        os.exit(1)
+      }
+    }
+    else if type == gl.LINK_STATUS
+    {
+      gl.ValidateProgram(id);
+      gl.GetProgramiv(id, type, &success)
+      if success != 1
+      {
+        length: i32
+        gl.GetProgramiv(id, gl.INFO_LOG_LENGTH, &length)
+        gl.GetProgramInfoLog(id, length, &length, &log[0])
+
+        fmt.eprintln("[ERROR]: Shader link error!")
+        fmt.eprintln(cast(string) log[:length])
+        
+        os.exit(1)
+      }
+    }
   }
 }

@@ -27,10 +27,11 @@ main :: proc()
   user.window = plf.create_window("GAME", WINDOW_WIDTH, WINDOW_HEIGHT, &user.perm_arena)
   defer plf.release_resources(&user.window)
 
+  init_resources(&user.perm_arena)
+  r.init(&user.window, &res.textures)
+
   curr_game, prev_game, res_game: Game
   init_game(&curr_game)
-
-  r.init(&user.window)
 
   elapsed_time, accumulator: f64
   start_tick := time.tick_now()

@@ -44,7 +44,7 @@ init_game :: proc(gm: ^Game)
     dim = {70, 70},
     color = {1, 0, 0, 1},
   }
-  
+
   for &projectile in gm.projectiles
   {
     projectile = Entity{
@@ -108,7 +108,8 @@ update_game :: proc(gm: ^Game, dt: f32)
 
     if plf.key_just_pressed(.K) && plf.key_pressed(.LEFT_CTRL)
     {
-      save_file, open_err := os.open(SAVE_PATH, os.O_CREATE | os.O_TRUNC | os.O_RDWR, 0o644)
+      file_flags := os.O_CREATE | os.O_TRUNC | os.O_RDWR
+      save_file, open_err := os.open(SAVE_PATH, file_flags, 0o644)
       defer os.close(save_file)
       if open_err == nil
       {
@@ -140,10 +141,10 @@ update_game :: proc(gm: ^Game, dt: f32)
 
 render_game :: proc(gm: ^Game)
 {
-  begin_draw({1, 1, 1, 1})
+  begin_draw({0.07, 0.07, 0.07, 1})
 
-  draw_rect(gm.ship_1.pos, gm.ship_1.dim, gm.ship_1.color)
-  draw_rect(gm.ship_2.pos, gm.ship_2.dim, gm.ship_2.color)
+  draw_rect(gm.ship_1.pos, gm.ship_1.dim, gm.ship_1.color, res.sprites[.SHIP_1])
+  draw_rect(gm.ship_2.pos, gm.ship_2.dim, gm.ship_2.color, res.sprites[.SHIP_1])
   draw_rect({WINDOW_WIDTH/2 - 50, WINDOW_HEIGHT/2 - 50}, {100, 100}, {0, 1, 0, 1})
   draw_tri({100, 100}, {100, 150}, {1, 1, 0, 1})
 

@@ -40,7 +40,7 @@ zero :: #force_inline proc "contextless" (data: rawptr, len: int) -> rawptr
 	return data
 }
 
-allocator :: #force_inline proc "contextless" (arena: ^Arena) -> Allocator
+a :: #force_inline proc "contextless" (arena: ^Arena) -> Allocator
 {
 	return Allocator{
 		procedure = virtual.arena_allocator_proc,
@@ -72,7 +72,7 @@ init_static_arena :: proc(
 
 clear_arena :: #force_inline proc(arena: ^Arena)
 {
-	free_all(allocator(arena))
+	free_all(a(arena))
 }
 
 destroy_arena :: #force_inline proc(arena: ^Arena)

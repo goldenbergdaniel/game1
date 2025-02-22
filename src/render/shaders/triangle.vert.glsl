@@ -4,12 +4,13 @@ struct Vertex
 {
   float position[2];
   float color[4];
+  float uv[2];
 };
 
 layout(binding=0)
 uniform ubo
 {
-  mat4 proj;
+  mat4 u_proj;
 };
 
 layout(binding=1) 
@@ -19,6 +20,7 @@ readonly buffer ssbo
 };
 
 out vec4 fs_color;
+out vec2 fs_tex_coord;
 
 vec2 get_position()
 {
@@ -38,8 +40,17 @@ vec4 get_color()
   );
 }
 
+vec2 get_uv()
+{
+  return vec2(
+    data[gl_VertexID].uv[0],
+    data[gl_VertexID].uv[1]
+  );
+}
+
 void main()
 {
-  gl_Position = proj * vec4(get_position().xy, 1.0, 1.0);
+  gl_Position = u_proj * vec4(get_position().xy, 1.0, 1.0);
   fs_color = get_color();
+  fs_tex_coord = get_uv();
 }

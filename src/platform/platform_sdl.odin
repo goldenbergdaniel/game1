@@ -28,10 +28,10 @@ sdl_create_window :: proc(
 	
 	_ = sdl.Init({.VIDEO, .EVENTS})
 
-	window_flags: sdl.WindowFlags
+	window_flags := sdl.WindowFlags{.RESIZABLE}
 	when ODIN_OS == .Linux
 	{
-		window_flags += {.OPENGL, .RESIZABLE}
+		window_flags += {.OPENGL}
 
 		sdl.GL_SetAttribute(.CONTEXT_MAJOR_VERSION, 4)
 		sdl.GL_SetAttribute(.CONTEXT_MINOR_VERSION, 6)
@@ -42,8 +42,12 @@ sdl_create_window :: proc(
 		sdl.GL_SetAttribute(.DOUBLEBUFFER, 1)
 		sdl.GL_SetAttribute(.MULTISAMPLESAMPLES, 2)
 	}
+	else when ODIN_OS == .DARWIN
+	{
+		window_flags += {.METAL}
+	}
 	
-  title_cstr := strings.clone_to_cstring(title, mem.allocator(scratch.arena))
+  title_cstr := strings.clone_to_cstring(title, mem.a(scratch.arena))
 	sdl_window := sdl.CreateWindow(title_cstr, i32(width), i32(height), window_flags)
 
 	when ODIN_OS == .Linux
@@ -52,9 +56,8 @@ sdl_create_window :: proc(
 		sdl.GL_MakeCurrent(sdl_window, gl_ctx)
 
 		gl.load_up_to(4, 6, sdl.gl_set_proc_address)
-		gl.Enable(gl.MULTISAMPLE)
 		sdl.GL_SetSwapInterval(1)
-		fmt.println(gl.GetString(gl.VERSION))
+		// fmt.println(gl.GetString(gl.VERSION))
 	}
 
 	// window_system_info: sdl.SysWMinfo

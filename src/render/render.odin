@@ -13,15 +13,20 @@ Vertex :: struct
 {
   pos:   v2f,
   color: v4f,
+  uv:    v2f,
 }
 
 Texture :: struct
 {
-  id:     u32,
-  slot:   i32,
-  cell:   i32,
+  data:   []byte,
   width:  i32,
   height: i32,
+  cell:   i32,
+}
+
+Texture_ID :: enum
+{
+  SPRITE_ATLAS,
 }
 
 @(private="file")
@@ -33,9 +38,9 @@ when BACKEND == "opengl"
   renderer := &gl_renderer
 }
 
-init :: #force_inline proc(window: ^plf.Window)
+init :: #force_inline proc(window: ^plf.Window, textures: ^[Texture_ID]Texture)
 {
-  /**/ when BACKEND == "opengl" do gl_init(window)
+  /**/ when BACKEND == "opengl" do gl_init(window, textures)
   else                          do panic("Invalid render backend selected!")
 }
 
@@ -62,14 +67,15 @@ push_vertex_vert :: proc(vertex: Vertex)
   renderer.vertices[renderer.vertex_count] = Vertex{
     pos = vertex.pos,
     color = vertex.color,
+    uv = vertex.uv,
   }
 
   renderer.vertex_count += 1
 }
 
-push_vertex_vec :: proc(pos: v2f, color: v4f)
+push_vertex_vec :: proc(pos: v2f, color: v4f, uv: v2f)
 {
-  push_vertex_vert(Vertex{pos, color})
+  push_vertex_vert(Vertex{pos, color, uv})
 }
 
 push_tri_indices :: proc()
@@ -110,33 +116,33 @@ push_rect_indices :: proc()
 
 coords_from_texture :: proc(
   texture: ^Texture,
-  coords:  [2]u16,
+  coords:  v2i,
 ) -> (
   tl, tr, br, bl: v2f,
 )
 {
-  size   := cast(f32) (texture.width * texture.height)
-  cell   := cast(f32) texture.cell
+  cell := cast(f32) texture.cell
+  width := cast(f32) texture.width
   height := cast(f32) texture.height
 
   tl = v2f{
-    (f32(coords.x+0) * size) / cell, 
-    (f32(coords.y+1) * size) / height,
+    (f32(coords.x+0) * cell) / width, 
+    (f32(coords.y+0) * cell) / height,
   }
 
   tr = v2f{
-    (f32(coords.x+1) * size) / cell, 
-    (f32(coords.y+1) * size) / height,
+    (f32(coords.x+1) * cell) / width, 
+    (f32(coords.y+0) * cell) / height,
   }
 
   br = v2f{
-    (f32(coords.x+1) * size) / cell, 
-    (f32(coords.y+0) * size) / height,
+    (f32(coords.x+1) * cell) / width, 
+    (f32(coords.y+1) * cell) / height,
   }
 
   bl = v2f{
-    (f32(coords.x+0) * size) / cell, 
-    (f32(coords.y+0) * size) / height,
+    (f32(coords.x+0) * cell) / width, 
+    (f32(coords.y+1) * cell) / height,
   }
 
   return
