@@ -83,6 +83,10 @@ update_game :: proc(gm: ^Game, dt: f32)
 
   entity_look_at_point(&gm.ship_2, gm.ship_1.pos)
 
+  SPEED :: 500
+  ACC   :: 10
+  FRIC  :: 1.5
+
   if plf.key_pressed(.A) && !plf.key_pressed(.D)
   {
     gm.ship_1.rot += -4 * dt
@@ -95,13 +99,14 @@ update_game :: proc(gm: ^Game, dt: f32)
 
   if plf.key_pressed(.W)
   {
-    gm.ship_1.input_dir.x = math.cos(gm.ship_1.rot - math.PI/2)
-    gm.ship_1.input_dir.y = math.sin(gm.ship_1.rot - math.PI/2)
+    gm.ship_1.vel.x += math.cos(gm.ship_1.rot - math.PI/2)
+    gm.ship_1.vel.y += math.sin(gm.ship_1.rot - math.PI/2)
   }
 
   if !plf.key_pressed(.W)
   {
-    gm.ship_1.input_dir = {}
+    gm.ship_1.vel.x -= math.cos(gm.ship_1.rot - math.PI/2)
+    gm.ship_1.vel.y -= math.sin(gm.ship_1.rot - math.PI/2)
   }
 
   if gm.ship_1.input_dir.x != 0 || gm.ship_1.input_dir.y != 0
@@ -109,36 +114,32 @@ update_game :: proc(gm: ^Game, dt: f32)
     gm.ship_1.input_dir = vm.normalize(gm.ship_1.input_dir)
   }
 
-  SPEED :: 500
-  ACC   :: 10
-  FRIC  :: 1.5
+  // // - X Acceleration ---
+  // if gm.ship_1.input_dir.x != 0
+  // {
+  //   gm.ship_1.vel.x += ACC * dir(gm.ship_1.input_dir.x) * dt
+  //   bound: f32 = SPEED * abs(gm.ship_1.input_dir.x) * dt
+  //   gm.ship_1.vel.x = clamp(gm.ship_1.vel.x, -bound, bound)
+  // }
+  // else
+  // {
+  //   gm.ship_1.vel.x = math.lerp(gm.ship_1.vel.x, 0, FRIC * dt)
+  //   gm.ship_1.vel.x = to_zero(gm.ship_1.vel.x, 0.1)
+  // }
 
-  // - X Acceleration ---
-  if gm.ship_1.input_dir.x != 0
-  {
-    gm.ship_1.vel.x += ACC * dir(gm.ship_1.input_dir.x) * dt
-    bound: f32 = SPEED * abs(gm.ship_1.input_dir.x) * dt
-    gm.ship_1.vel.x = clamp(gm.ship_1.vel.x, -bound, bound)
-  }
-  else
-  {
-    gm.ship_1.vel.x = math.lerp(gm.ship_1.vel.x, 0, FRIC * dt)
-    gm.ship_1.vel.x = to_zero(gm.ship_1.vel.x, 0.1)
-  }
-
-  // - Y Acceleration ---
-  if gm.ship_1.input_dir.y != 0
-  {
-    gm.ship_1.vel.y += ACC * dir(gm.ship_1.input_dir.y) * dt
-    bound: f32 = SPEED * abs(gm.ship_1.input_dir.y) * dt
-    gm.ship_1.vel.y = clamp(gm.ship_1.vel.y, -bound, bound)
-  }
-  else
-  {
-    gm.ship_1.vel.y = math.lerp(gm.ship_1.vel.y, 0, FRIC * dt)
-    bound: f32 = SPEED * abs(gm.ship_1.input_dir.y) * dt
-    gm.ship_1.vel.y = to_zero(gm.ship_1.vel.y, 0.1)
-  }
+  // // - Y Acceleration ---
+  // if gm.ship_1.input_dir.y != 0
+  // {
+  //   gm.ship_1.vel.y += ACC * dir(gm.ship_1.input_dir.y) * dt
+  //   bound: f32 = SPEED * abs(gm.ship_1.input_dir.y) * dt
+  //   gm.ship_1.vel.y = clamp(gm.ship_1.vel.y, -bound, bound)
+  // }
+  // else
+  // {
+  //   gm.ship_1.vel.y = math.lerp(gm.ship_1.vel.y, 0, FRIC * dt)
+  //   bound: f32 = SPEED * abs(gm.ship_1.input_dir.y) * dt
+  //   gm.ship_1.vel.y = to_zero(gm.ship_1.vel.y, 0.1)
+  // }
 
   // gm.ship_1.vel = gm.ship_1.input_dir * SPEED
   gm.ship_1.pos += gm.ship_1.vel
