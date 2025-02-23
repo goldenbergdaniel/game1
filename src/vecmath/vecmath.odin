@@ -1,5 +1,6 @@
 package vecmath
 
+import "base:intrinsics"
 import "core:math"
 
 // Vector ///////////////////////////////////////////////////////////////////////////
@@ -192,27 +193,9 @@ diag_4x4 :: #force_inline proc "contextless" (val: f32) -> m4x4f
   }
 }
 
-transpose :: proc
-{
-  transpose_3x3,
-}
-
 transpose_3x3 :: proc "contextless" (m: m3x3f) -> m3x3f
 {
-  result: m3x3f = m
-  result[0, 1] = m[1, 0]
-  result[0, 2] = m[2, 0]
-  result[1, 0] = m[0, 1]
-  result[1, 2] = m[2, 1]
-  result[2, 0] = m[0, 2]
-  result[2, 1] = m[1, 2]
-
-  return result
-}
-
-translate :: proc
-{
-  translate_3x3,
+  return intrinsics.transpose(m)
 }
 
 translate_3x3 :: proc "contextless" (v: [2]f32) -> m3x3f
@@ -220,13 +203,7 @@ translate_3x3 :: proc "contextless" (v: [2]f32) -> m3x3f
   result: m3x3f = diag_3x3(1)
   result[0, 2] = v.x
   result[1, 2] = v.y
-
   return result
-}
-
-scale :: proc
-{
-  scale_3x3,
 }
 
 scale_3x3 :: proc "contextless" (v: [2]f32) -> m3x3f
@@ -234,13 +211,7 @@ scale_3x3 :: proc "contextless" (v: [2]f32) -> m3x3f
   result: m3x3f = diag_3x3(1)
   result[0, 0] = v.x
   result[1, 1] = v.y
-  
   return result
-}
-
-shear :: proc
-{
-  shear_3x3,
 }
 
 shear_3x3 :: proc "contextless" (v: [2]f32) -> m3x3f
@@ -248,7 +219,6 @@ shear_3x3 :: proc "contextless" (v: [2]f32) -> m3x3f
   result: m3x3f = diag_3x3(1)
   result[0, 1] = v.x
   result[1, 0] = v.y
-  
   return result
 }
 
@@ -259,7 +229,6 @@ rotate_3x3 :: proc "contextless" (rads: f32) -> m3x3f
   result[0, 1] = -math.sin(rads)
   result[1, 0] = math.sin(rads)
   result[1, 1] = math.cos(rads)
-
   return result
 }
 
@@ -271,6 +240,5 @@ orthographic_3x3 :: proc "contextless" (left, right, top, bot: f32) -> m3x3f
   result[0, 2] = -(right + left) / (right - left)
   result[1, 2] = -(top + bot) / (top - bot)
   result[2, 2] = 1.0
-
   return result
 }

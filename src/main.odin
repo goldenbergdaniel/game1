@@ -8,7 +8,7 @@ import r "src:render"
 
 WINDOW_WIDTH  :: 960
 WINDOW_HEIGHT :: 540
-SIM_STEP      :: 1.0/20
+SIM_STEP      :: 1.0/60
 
 User :: struct
 {
@@ -51,12 +51,13 @@ main :: proc()
       update_game(&curr_game, SIM_STEP)
       plf.remember_prev_input()
 
+      curr_game.t += SIM_STEP
       accumulator -= SIM_STEP
     }
 
     alpha := accumulator / SIM_STEP
     interpolate_games(&curr_game, &prev_game, &res_game, f32(alpha))
-    render_game(&res_game)
+    render_game(&res_game, SIM_STEP)
     
     plf.swap_buffers(&user.window)
   }

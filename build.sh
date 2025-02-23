@@ -21,7 +21,7 @@ if [[ $MODE == "release" ]]; then FLAGS="-o:speed -no-bounds-check -no-type-asse
 
 echo [target:$TARGET]
 echo [mode:$MODE]
-echo [render:$RENDER_BACKEND]
+# echo [render:$RENDER_BACKEND]
 
 # --- BUILD ------------------------------------------------------------------------------
 

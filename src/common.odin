@@ -16,3 +16,13 @@ m4x4f :: matrix[4,4]f32
 print   :: fmt.print
 printf  :: fmt.printf
 println :: fmt.println
+
+to_zero :: #force_inline proc "contextless" (a: $T, tol: T) -> T
+{
+  return abs(a) - tol <= 0 ? 0 : a
+}
+
+dir :: #force_inline proc "contextless" (a: $T) -> T
+{
+  return a != 0 ? a / abs(a) : 0
+}
