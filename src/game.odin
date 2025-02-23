@@ -81,38 +81,61 @@ update_game :: proc(gm: ^Game, dt: f32)
   gm.asteroids[0].tint = v4f{color, color, color, 1}
   gm.asteroids[0].rot = gm.t * dt * 5 * math.PI
 
+  // entity_look_at_point(&gm.ship_1, plf.cursor_pos())
   entity_look_at_point(&gm.ship_2, gm.ship_1.pos)
 
   SPEED :: 500
   ACC   :: 10
-  FRIC  :: 1.5
+  FRIC  :: 5
 
   if plf.key_pressed(.A) && !plf.key_pressed(.D)
   {
-    gm.ship_1.rot += -4 * dt
+    gm.ship_1.rot += -2 * dt
   }
 
   if plf.key_pressed(.D) && !plf.key_pressed(.A)
   {
-    gm.ship_1.rot += 4* dt
+    gm.ship_1.rot += 2 * dt
   }
 
   if plf.key_pressed(.W)
   {
-    gm.ship_1.vel.x += math.cos(gm.ship_1.rot - math.PI/2)
-    gm.ship_1.vel.y += math.sin(gm.ship_1.rot - math.PI/2)
+    gm.ship_1.vel.x += math.cos(gm.ship_1.rot - math.PI/2) * ACC
+    gm.ship_1.vel.y += math.sin(gm.ship_1.rot - math.PI/2) * ACC
+
+    gm.ship_1.vel.x = clamp(gm.ship_1.vel.x, -SPEED, SPEED)
+    gm.ship_1.vel.y = clamp(gm.ship_1.vel.y, -SPEED, SPEED)
   }
 
   if !plf.key_pressed(.W)
   {
-    gm.ship_1.vel.x -= math.cos(gm.ship_1.rot - math.PI/2)
-    gm.ship_1.vel.y -= math.sin(gm.ship_1.rot - math.PI/2)
+    if gm.ship_1.vel.x > 0
+    {
+      gm.ship_1.vel.x -= FRIC
+      gm.ship_1.vel.x = max(gm.ship_1.vel.x, 0)
+    }
+    else
+    {
+      gm.ship_1.vel.x += FRIC
+      gm.ship_1.vel.x = min(gm.ship_1.vel.x, 0)
+    }
+
+    if gm.ship_1.vel.y > 0
+    {
+      gm.ship_1.vel.y -= FRIC
+      gm.ship_1.vel.y = max(gm.ship_1.vel.y, 0)
+    }
+    else
+    {
+      gm.ship_1.vel.y += FRIC
+      gm.ship_1.vel.y = min(gm.ship_1.vel.y, 0)
+    }
   }
 
-  if gm.ship_1.input_dir.x != 0 || gm.ship_1.input_dir.y != 0
-  {
-    gm.ship_1.input_dir = vm.normalize(gm.ship_1.input_dir)
-  }
+  // if gm.ship_1.input_dir.x != 0 || gm.ship_1.input_dir.y != 0
+  // {
+  //   gm.ship_1.input_dir = vm.normalize(gm.ship_1.input_dir)
+  // }
 
   // // - X Acceleration ---
   // if gm.ship_1.input_dir.x != 0
@@ -142,7 +165,7 @@ update_game :: proc(gm: ^Game, dt: f32)
   // }
 
   // gm.ship_1.vel = gm.ship_1.input_dir * SPEED
-  gm.ship_1.pos += gm.ship_1.vel
+  gm.ship_1.pos += gm.ship_1.vel * dt
 
   gm.ship_2.pos += {-50, 50} * dt
 

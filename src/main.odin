@@ -51,6 +51,9 @@ main :: proc()
       update_game(&curr_game, SIM_STEP)
       plf.remember_prev_input()
 
+      if frame_time * 1000 > 20 do printf("%0.0f ms\n", frame_time * 1000)
+      // else                        do printf("%0.0f ms\n", frame_time * 1000)
+
       curr_game.t += SIM_STEP
       accumulator -= SIM_STEP
     }
@@ -63,7 +66,7 @@ main :: proc()
   }
 }
 
-should_quit :: proc() -> bool
+should_quit :: #force_inline proc() -> bool
 {
   return user.window.should_close
 }
