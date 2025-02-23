@@ -33,7 +33,7 @@ init_game :: proc(gm: ^Game)
     kind = .SHIP,
     active = true,
     rot = math.PI,
-    dim = {70, 70},
+    dim = {50, 50},
     tint = {1, 1, 1, 1},
     color = {0, 0, 0, 0},
     sprite = .SHIP_1,
@@ -43,7 +43,7 @@ init_game :: proc(gm: ^Game)
     kind = .SHIP,
     active = true,
     pos = {WINDOW_WIDTH - 70, 0},
-    dim = {70, 70},
+    dim = {50, 50},
     tint = {1, 0, 0, 1},
     color = {0, 0, 0, 0},
     sprite = .SHIP_1,
@@ -66,6 +66,7 @@ init_game :: proc(gm: ^Game)
   gm.asteroids[0].pos = {WINDOW_WIDTH/2 - 50, WINDOW_HEIGHT/2 - 50}
   gm.asteroids[0].dim = { 70, 70}
   gm.asteroids[0].sprite = .ASTEROID
+  gm.asteroids[0].tint = {0.57, 0.53, 0.49, 1}
 }
 
 update_game :: proc(gm: ^Game, dt: f32)
@@ -78,27 +79,17 @@ update_game :: proc(gm: ^Game, dt: f32)
   gm.ship_2.tint = v4f{abs(math.sin(gm.t * dt * 40)), 0, 0, 1}
 
   color := abs(math.sin(gm.t * dt * 40))
-  gm.asteroids[0].tint = v4f{color, color, color, 1}
+  // gm.asteroids[0].tint = v4f{color, color, color, 1}
   gm.asteroids[0].rot = gm.t * dt * 5 * math.PI
 
-  // entity_look_at_point(&gm.ship_1, plf.cursor_pos())
+  entity_look_at_point(&gm.ship_1, plf.cursor_pos())
   entity_look_at_point(&gm.ship_2, gm.ship_1.pos)
 
-  SPEED :: 500
-  ACC   :: 10
-  FRIC  :: 5
+  SPEED :: 500.0
+  ACC   :: 10.0
+  FRIC  :: 1.5
 
-  if plf.key_pressed(.A) && !plf.key_pressed(.D)
-  {
-    gm.ship_1.rot += -2 * dt
-  }
-
-  if plf.key_pressed(.D) && !plf.key_pressed(.A)
-  {
-    gm.ship_1.rot += 2 * dt
-  }
-
-  if plf.key_pressed(.W)
+  if plf.key_pressed(.W) && !plf.key_pressed(.S)
   {
     gm.ship_1.vel.x += math.cos(gm.ship_1.rot - math.PI/2) * ACC
     gm.ship_1.vel.y += math.sin(gm.ship_1.rot - math.PI/2) * ACC
@@ -109,60 +100,11 @@ update_game :: proc(gm: ^Game, dt: f32)
 
   if !plf.key_pressed(.W)
   {
-    if gm.ship_1.vel.x > 0
-    {
-      gm.ship_1.vel.x -= FRIC
-      gm.ship_1.vel.x = max(gm.ship_1.vel.x, 0)
-    }
-    else
-    {
-      gm.ship_1.vel.x += FRIC
-      gm.ship_1.vel.x = min(gm.ship_1.vel.x, 0)
-    }
+    friction: f32 = plf.key_pressed(.S) ? FRIC*2 : FRIC
 
-    if gm.ship_1.vel.y > 0
-    {
-      gm.ship_1.vel.y -= FRIC
-      gm.ship_1.vel.y = max(gm.ship_1.vel.y, 0)
-    }
-    else
-    {
-      gm.ship_1.vel.y += FRIC
-      gm.ship_1.vel.y = min(gm.ship_1.vel.y, 0)
-    }
+    gm.ship_1.vel.x = math.lerp(gm.ship_1.vel.x, 0, friction * dt)
+    gm.ship_1.vel.y = math.lerp(gm.ship_1.vel.y, 0, friction * dt)
   }
-
-  // if gm.ship_1.input_dir.x != 0 || gm.ship_1.input_dir.y != 0
-  // {
-  //   gm.ship_1.input_dir = vm.normalize(gm.ship_1.input_dir)
-  // }
-
-  // // - X Acceleration ---
-  // if gm.ship_1.input_dir.x != 0
-  // {
-  //   gm.ship_1.vel.x += ACC * dir(gm.ship_1.input_dir.x) * dt
-  //   bound: f32 = SPEED * abs(gm.ship_1.input_dir.x) * dt
-  //   gm.ship_1.vel.x = clamp(gm.ship_1.vel.x, -bound, bound)
-  // }
-  // else
-  // {
-  //   gm.ship_1.vel.x = math.lerp(gm.ship_1.vel.x, 0, FRIC * dt)
-  //   gm.ship_1.vel.x = to_zero(gm.ship_1.vel.x, 0.1)
-  // }
-
-  // // - Y Acceleration ---
-  // if gm.ship_1.input_dir.y != 0
-  // {
-  //   gm.ship_1.vel.y += ACC * dir(gm.ship_1.input_dir.y) * dt
-  //   bound: f32 = SPEED * abs(gm.ship_1.input_dir.y) * dt
-  //   gm.ship_1.vel.y = clamp(gm.ship_1.vel.y, -bound, bound)
-  // }
-  // else
-  // {
-  //   gm.ship_1.vel.y = math.lerp(gm.ship_1.vel.y, 0, FRIC * dt)
-  //   bound: f32 = SPEED * abs(gm.ship_1.input_dir.y) * dt
-  //   gm.ship_1.vel.y = to_zero(gm.ship_1.vel.y, 0.1)
-  // }
 
   // gm.ship_1.vel = gm.ship_1.input_dir * SPEED
   gm.ship_1.pos += gm.ship_1.vel * dt
