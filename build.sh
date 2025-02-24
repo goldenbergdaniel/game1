@@ -14,10 +14,9 @@ RENDER_BACKEND="opengl"
 FLAGS="-collection:src=src -collection:ext=ext 
        -vet-shadowing -vet-style -vet-cast
        -define=RENDER_BACKEND=$RENDER_BACKEND 
-       -extra-linker-flags:\"-fuse-ld=mold\" 
-       $3 $FLAGS"
-if [[ $MODE == "debug"   ]]; then FLAGS="-o:none -debug -use-separate-modules $FLAGS"; fi
-if [[ $MODE == "release" ]]; then FLAGS="-o:speed -no-bounds-check -no-type-assert $FLAGS"; fi
+       -extra-linker-flags:\"-fuse-ld=mold\" $3"
+if [[ $MODE == "debug"   ]]; then FLAGS="-o:none -debug $FLAGS"; fi
+if [[ $MODE == "release" ]]; then FLAGS="-o:speed -microarch:native -no-bounds-check $FLAGS"; fi
 
 echo [target:$TARGET]
 echo [mode:$MODE]

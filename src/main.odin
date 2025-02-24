@@ -8,7 +8,7 @@ import r "src:render"
 
 WINDOW_WIDTH  :: 960
 WINDOW_HEIGHT :: 540
-SIM_STEP      :: 1.0/60
+SIM_STEP      :: 1.0/20
 
 User :: struct
 {
@@ -52,7 +52,6 @@ main :: proc()
       plf.remember_prev_input()
 
       if frame_time * 1000 > 20 do printf("%0.0f ms\n", frame_time * 1000)
-      // else                        do printf("%0.0f ms\n", frame_time * 1000)
 
       curr_game.t += SIM_STEP
       accumulator -= SIM_STEP

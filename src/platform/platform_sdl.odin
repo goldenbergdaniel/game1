@@ -35,12 +35,11 @@ sdl_create_window :: proc(
 
 		sdl.GL_SetAttribute(.CONTEXT_MAJOR_VERSION, 4)
 		sdl.GL_SetAttribute(.CONTEXT_MINOR_VERSION, 6)
-		// sdl.GL_SetAttribute(.RED_SIZE, 8)
-		// sdl.GL_SetAttribute(.GREEN_SIZE, 8)
-		// sdl.GL_SetAttribute(.BLUE_SIZE, 8)
-    // sdl.GL_SetAttribute(.DEPTH_SIZE, 8)
-		// sdl.GL_SetAttribute(.DOUBLEBUFFER, 1)
-		// sdl.GL_SetAttribute(.MULTISAMPLESAMPLES, 2)
+		sdl.GL_SetAttribute(.RED_SIZE, 8)
+		sdl.GL_SetAttribute(.GREEN_SIZE, 8)
+		sdl.GL_SetAttribute(.BLUE_SIZE, 8)
+		sdl.GL_SetAttribute(.DOUBLEBUFFER, 1)
+		sdl.GL_SetAttribute(.MULTISAMPLESAMPLES, 2)
 	}
 	else when ODIN_OS == .DARWIN
 	{

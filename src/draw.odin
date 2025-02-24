@@ -59,16 +59,14 @@ draw_rect :: proc(
   sprite: Sprite_ID = {},
 )
 {
-  using vm
-  
   sprite_data := res.sprites[sprite]
 
-  xform := diag_3x3(1)
-  xform *= translate_3x3(pos)
-  xform *= translate_3x3(dim * sprite_data.pivot)
-  xform *= rotate_3x3(rot)
-  xform *= translate_3x3(-dim * sprite_data.pivot)
-  xform *= scale_3x3(dim)
+  xform := vm.diag_3x3(1)
+  xform *= vm.translate_3x3(pos)
+  xform *= vm.translate_3x3(dim * sprite_data.pivot)
+  xform *= vm.rotate_3x3(rot)
+  xform *= vm.translate_3x3(-dim * sprite_data.pivot)
+  xform *= vm.scale_3x3(dim)
 
   p1 := xform * v3f{0, 0, 1}
   p2 := xform * v3f{1, 0, 1}

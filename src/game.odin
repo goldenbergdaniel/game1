@@ -18,19 +18,16 @@ game_frame_arena: mem.Arena
 
 Game :: struct
 {
-  t:           f32,
-  ship_1:      Entity,
-  ship_2:      Entity,
-  projectiles: [64]Entity,
-  asteroids:   [16]Entity,  
+  t:        f32,
+  entities: [1024]Entity,
 }
 
 init_game :: proc(gm: ^Game)
 {
   mem.init_growing_arena(&game_frame_arena)
 
-  gm.ship_1 = Entity{
-    kind = .SHIP,
+  gm.entities[0] = Entity{
+    props = {.WRAP_AT_WINDOW_EDGES},
     active = true,
     rot = math.PI,
     dim = {50, 50},
@@ -39,8 +36,8 @@ init_game :: proc(gm: ^Game)
     sprite = .SHIP_1,
   }
 
-  gm.ship_2 = Entity{
-    kind = .SHIP,
+  gm.entities[1] = Entity{
+    props = {.WRAP_AT_WINDOW_EDGES},
     active = true,
     pos = {WINDOW_WIDTH - 70, 0},
     dim = {50, 50},
@@ -49,67 +46,108 @@ init_game :: proc(gm: ^Game)
     sprite = .SHIP_1,
   }
 
-  for &projectile in gm.projectiles
-  {
-    projectile = Entity{
-      kind = .PROJECTILE,
-    }
-  }
-
-  // for &asteroid in gm.asteroids
-  // {
-  //   asteroid = Entity{
-  //     kind = .ASTEROID,
-  //   }
-  // }
-
-  gm.asteroids[0].pos = {WINDOW_WIDTH/2 - 50, WINDOW_HEIGHT/2 - 50}
-  gm.asteroids[0].dim = { 70, 70}
-  gm.asteroids[0].sprite = .ASTEROID
-  gm.asteroids[0].tint = {0.57, 0.53, 0.49, 1}
+  gm.entities[2].active = true
+  gm.entities[2].pos = {WINDOW_WIDTH/2 - 50, WINDOW_HEIGHT/2 - 50}
+  gm.entities[2].dim = { 70, 70}
+  gm.entities[2].sprite = .ASTEROID
+  gm.entities[2].tint = {0.57, 0.53, 0.49, 1}
 }
 
 update_game :: proc(gm: ^Game, dt: f32)
 {
+  player := &gm.entities[0]
+  window_size := plf.window_size(&user.window)
+
   if plf.key_pressed(.ESCAPE)
   {
     user.window.should_close = true
   }
 
-  gm.ship_2.tint = v4f{abs(math.sin(gm.t * dt * 40)), 0, 0, 1}
+  for &en in gm.entities
+  {
+    en.interpolate = true
+  }
+
+  gm.entities[1].tint = v4f{abs(math.sin(gm.t * dt * 40)), 0, 0, 1}
 
   color := abs(math.sin(gm.t * dt * 40))
-  // gm.asteroids[0].tint = v4f{color, color, color, 1}
-  gm.asteroids[0].rot = gm.t * dt * 5 * math.PI
+  gm.entities[2].rot = gm.t * dt * 5 * math.PI
 
-  entity_look_at_point(&gm.ship_1, plf.cursor_pos())
-  entity_look_at_point(&gm.ship_2, gm.ship_1.pos)
+  if !plf.key_pressed(.A) && !plf.key_pressed(.D)
+  {
+    entity_look_at_point(player, plf.cursor_pos())
+  }
+  
+  entity_look_at_point(&gm.entities[1], player.pos)
 
-  SPEED :: 500.0
-  ACC   :: 10.0
-  FRIC  :: 1.5
+  SPEED :: 600.0
+  ACC   :: 400.0
+  DRAG  :: 1.5
+
+  if plf.key_pressed(.A) && !plf.key_pressed(.D)
+  {
+    player.rot += -2 * dt
+  }
+
+  if plf.key_pressed(.D) && !plf.key_pressed(.A)
+  {
+    player.rot += 2 * dt
+  }
 
   if plf.key_pressed(.W) && !plf.key_pressed(.S)
   {
-    gm.ship_1.vel.x += math.cos(gm.ship_1.rot - math.PI/2) * ACC
-    gm.ship_1.vel.y += math.sin(gm.ship_1.rot - math.PI/2) * ACC
+    acc: f32 = plf.key_pressed(.SPACE) ? ACC*2 : ACC
 
-    gm.ship_1.vel.x = clamp(gm.ship_1.vel.x, -SPEED, SPEED)
-    gm.ship_1.vel.y = clamp(gm.ship_1.vel.y, -SPEED, SPEED)
+    player.vel.x += math.cos(player.rot - math.PI/2) * acc * dt
+    player.vel.x = clamp(player.vel.x, -SPEED, SPEED)
+
+    player.vel.y += math.sin(player.rot - math.PI/2) * acc * dt
+    player.vel.y = clamp(player.vel.y, -SPEED, SPEED)
   }
 
   if !plf.key_pressed(.W)
   {
-    friction: f32 = plf.key_pressed(.S) ? FRIC*2 : FRIC
+    drag: f32 = plf.key_pressed(.S) ? DRAG*2 : DRAG
 
-    gm.ship_1.vel.x = math.lerp(gm.ship_1.vel.x, 0, friction * dt)
-    gm.ship_1.vel.y = math.lerp(gm.ship_1.vel.y, 0, friction * dt)
+    player.vel.x = math.lerp(player.vel.x, 0, drag * dt)
+    player.vel.x = to_zero(player.vel.x, 1)
+
+    player.vel.y = math.lerp(player.vel.y, 0, drag * dt)
+    player.vel.y = to_zero(player.vel.y, 1)
   }
 
-  // gm.ship_1.vel = gm.ship_1.input_dir * SPEED
-  gm.ship_1.pos += gm.ship_1.vel * dt
+  player.pos += player.vel * dt
 
-  gm.ship_2.pos += {-50, 50} * dt
+  gm.entities[1].pos += v2f{-50, 50} * dt
+
+  // - Entity wrap at window edges ---
+  for &en in gm.entities
+  {
+    if !en.active do continue
+    if .WRAP_AT_WINDOW_EDGES not_in en.props do continue
+
+    if i32(en.pos.x) > window_size.x
+    {
+      en.pos.x = -en.dim.x
+      en.interpolate = false
+    }
+    else if i32(en.pos.x + en.dim.x) < 0
+    {
+      en.pos.x = cast(f32) window_size.x
+      en.interpolate = false
+    }
+
+    if i32(en.pos.y) > window_size.y
+    {
+      en.pos.y = -en.dim.x
+      en.interpolate = false
+    }
+    else if i32(en.pos.y + en.dim.y) < 0
+    {
+      en.pos.y = cast(f32) window_size.y
+      en.interpolate = false
+    }
+  }
 
   // - Save and load game ---
   {
@@ -152,26 +190,17 @@ render_game :: proc(gm: ^Game, dt: f32)
 {
   begin_draw({0.07, 0.07, 0.07, 1})
 
-  draw_rect(pos=gm.ship_1.pos, 
-            dim=gm.ship_1.dim,
-            rot=gm.ship_1.rot, 
-            tint=gm.ship_1.tint,
-            color=gm.ship_1.color, 
-            sprite=gm.ship_1.sprite)
+  for &en in gm.entities
+  {
+    if !en.active do continue
 
-  draw_rect(pos=gm.ship_2.pos, 
-            dim=gm.ship_2.dim, 
-            rot=gm.ship_2.rot, 
-            tint=gm.ship_2.tint,
-            color=gm.ship_2.color, 
-            sprite=gm.ship_2.sprite)
-
-  draw_rect(pos=gm.asteroids[0].pos, 
-            dim=gm.asteroids[0].dim, 
-            rot=gm.asteroids[0].rot, 
-            tint=gm.asteroids[0].tint,
-            color=gm.asteroids[0].color, 
-            sprite=gm.asteroids[0].sprite)
+    draw_rect(pos=en.pos, 
+              dim=en.dim,
+              rot=en.rot, 
+              tint=en.tint,
+              color=en.color, 
+              sprite=en.sprite)
+  }
 
   end_draw()
 }
@@ -179,10 +208,18 @@ render_game :: proc(gm: ^Game, dt: f32)
 interpolate_games :: proc(curr_gm, prev_gm, res_gm: ^Game, alpha: f32)
 {
   copy_game(res_gm, curr_gm)
-  res_gm.ship_1.pos = (curr_gm.ship_1.pos * alpha) + (prev_gm.ship_1.pos * (1 - alpha))
-  // res_gm.ship_1.rot = (curr_gm.ship_1.rot * alpha) + (prev_gm.ship_1.rot * (1 - alpha))
 
-  res_gm.ship_2.pos = (curr_gm.ship_2.pos * alpha) + (prev_gm.ship_2.pos * (1 - alpha))
+  for i in 0..<len(res_gm.entities)
+  {
+    curr_en := &curr_gm.entities[i]
+    prev_en := &prev_gm.entities[i]
+    
+    if !curr_en.active || !prev_en.active do continue
+    if !curr_en.interpolate || !prev_en.interpolate do continue
+    
+    res_gm.entities[i].pos = (curr_en.pos * alpha) + (prev_en.pos * (1 - alpha))
+    res_gm.entities[i].rot = math.angle_lerp(prev_en.rot, curr_en.rot, alpha)
+  }
 }
 
 free_game :: proc(gm: ^Game)
@@ -198,8 +235,8 @@ copy_game :: proc(new_gm, old_gm: ^Game)
 // NOTE(dg): This is a naive approach that assumes too much about Game
 save_game_to_file :: proc(fd: os.Handle, gm: ^Game) -> bool
 {
-  buf := transmute([]byte) runtime.Raw_Slice{gm, size_of(Game)}
-  _, write_err := os.write(fd, buf)
+  gm_bytes := transmute([]byte) runtime.Raw_Slice{gm, size_of(Game)}
+  _, write_err := os.write(fd, gm_bytes)
   if write_err != nil
   {
     fmt.eprintln("Error saving game to disk.", write_err)
@@ -235,23 +272,22 @@ load_game_from_file :: proc(fd: os.Handle, gm: ^Game) -> bool
 
 Entity :: struct
 {
-  kind:      Entity_Kind,
-  active:    bool,
-  pos:       v2f,
-  vel:       v2f,
-  dim:       v2f,
-  rot:       f32,
-  input_dir: v2f,
-  tint:      v4f,
-  color:     v4f,
-  sprite:    Sprite_ID,
+  props:       bit_set[Entity_Prop],
+  active:      bool,
+  pos:         v2f,
+  vel:         v2f,
+  dim:         v2f,
+  rot:         f32,
+  input_dir:   v2f,
+  tint:        v4f,
+  color:       v4f,
+  sprite:      Sprite_ID,
+  interpolate: bool,
 }
 
-Entity_Kind :: enum
+Entity_Prop :: enum u64
 {
-  SHIP,
-  PROJECTILE,
-  ASTEROID,
+  WRAP_AT_WINDOW_EDGES,
 }
 
 entity_look_at_point :: proc(en: ^Entity, target: v2f)
