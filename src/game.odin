@@ -19,43 +19,47 @@ game_frame_arena: mem.Arena
 Game :: struct
 {
   t:        f32,
-  entities: [1024]Entity,
+  entities: [1024+1]Entity,
 }
+
+sp_entities: [enum{
+  PLAYER,
+}]^Entity 
 
 init_game :: proc(gm: ^Game)
 {
+  // NOTE(dg): What if we're initializing multiple games? This needs to change. 
   mem.init_growing_arena(&game_frame_arena)
 
-  gm.entities[0] = Entity{
-    props = {.WRAP_AT_WINDOW_EDGES},
-    active = true,
-    rot = math.PI,
-    dim = {50, 50},
-    tint = {1, 1, 1, 1},
-    color = {0, 0, 0, 0},
-    sprite = .SHIP_1,
-  }
+  player := alloc_entity(gm)
+  player.flags = {.ACTIVE}
+  player.props = {.WRAP_AT_WINDOW_EDGES}
+  player.dim = {50, 50}
+  player.tint = {1, 1, 1, 1}
+  player.color = {0, 0, 0, 0}
+  player.sprite = .SHIP
+  sp_entities[.PLAYER] = player
 
-  gm.entities[1] = Entity{
-    props = {.WRAP_AT_WINDOW_EDGES},
-    active = true,
-    pos = {WINDOW_WIDTH - 70, 0},
-    dim = {50, 50},
-    tint = {1, 0, 0, 1},
-    color = {0, 0, 0, 0},
-    sprite = .SHIP_1,
-  }
+  enemy := alloc_entity(gm)
+  enemy.flags = {.ACTIVE}
+  enemy.props = {.WRAP_AT_WINDOW_EDGES}
+  enemy.pos = {WINDOW_WIDTH - 70, 0}
+  enemy.dim = {50, 50}
+  enemy.tint = {1, 0, 0, 1}
+  enemy.color = {0, 0, 0, 0}
+  enemy.sprite = .ALIEN
 
-  gm.entities[2].active = true
-  gm.entities[2].pos = {WINDOW_WIDTH/2 - 50, WINDOW_HEIGHT/2 - 50}
-  gm.entities[2].dim = { 70, 70}
-  gm.entities[2].sprite = .ASTEROID
-  gm.entities[2].tint = {0.57, 0.53, 0.49, 1}
+  asteroid := alloc_entity(gm)
+  asteroid.flags = {.ACTIVE}
+  asteroid.pos = {WINDOW_WIDTH/2 - 50, WINDOW_HEIGHT/2 - 50}
+  asteroid.dim = {70, 70}
+  asteroid.sprite = .ASTEROID
+  asteroid.tint = {0.57, 0.53, 0.49, 1}
 }
 
 update_game :: proc(gm: ^Game, dt: f32)
 {
-  player := &gm.entities[0]
+  player := sp_entities[.PLAYER]
   window_size := plf.window_size(&user.window)
 
   if plf.key_pressed(.ESCAPE)
@@ -65,21 +69,21 @@ update_game :: proc(gm: ^Game, dt: f32)
 
   for &en in gm.entities
   {
-    en.interpolate = true
+    if .ACTIVE not_in en.flags do continue
+
+    en.flags += {.INTERPOLATE}
   }
 
-  gm.entities[1].tint = v4f{abs(math.sin(gm.t * dt * 40)), 0, 0, 1}
+  gm.entities[2].tint = v4f{abs(math.sin(gm.t * dt * 40)), 0, 0, 1}
 
   color := abs(math.sin(gm.t * dt * 40))
-  gm.entities[2].rot = gm.t * dt * 5 * math.PI
+  gm.entities[3].rot = gm.t * dt * 5 * math.PI
 
   if !plf.key_pressed(.A) && !plf.key_pressed(.D)
   {
     entity_look_at_point(player, plf.cursor_pos())
   }
   
-  entity_look_at_point(&gm.entities[1], player.pos)
-
   SPEED :: 600.0
   ACC   :: 400.0
   DRAG  :: 1.5
@@ -98,10 +102,10 @@ update_game :: proc(gm: ^Game, dt: f32)
   {
     acc: f32 = plf.key_pressed(.SPACE) ? ACC*2 : ACC
 
-    player.vel.x += math.cos(player.rot - math.PI/2) * acc * dt
+    player.vel.x += math.cos(player.rot) * acc * dt
     player.vel.x = clamp(player.vel.x, -SPEED, SPEED)
 
-    player.vel.y += math.sin(player.rot - math.PI/2) * acc * dt
+    player.vel.y += math.sin(player.rot) * acc * dt
     player.vel.y = clamp(player.vel.y, -SPEED, SPEED)
   }
 
@@ -110,46 +114,56 @@ update_game :: proc(gm: ^Game, dt: f32)
     drag: f32 = plf.key_pressed(.S) ? DRAG*2 : DRAG
 
     player.vel.x = math.lerp(player.vel.x, 0, drag * dt)
-    player.vel.x = to_zero(player.vel.x, 1)
+    player.vel.x = approx(player.vel.x, 0, 1)
 
     player.vel.y = math.lerp(player.vel.y, 0, drag * dt)
-    player.vel.y = to_zero(player.vel.y, 1)
+    player.vel.y = approx(player.vel.y, 0, 1)
   }
 
   player.pos += player.vel * dt
 
-  gm.entities[1].pos += v2f{-50, 50} * dt
+  gm.entities[2].pos += v2f{-50, 50} * dt
 
-  // - Entity wrap at window edges ---
   for &en in gm.entities
   {
-    if !en.active do continue
-    if .WRAP_AT_WINDOW_EDGES not_in en.props do continue
+    if .ACTIVE not_in en.flags do continue
+    
+    // - Entity wrap at window edges ---
+    if .WRAP_AT_WINDOW_EDGES in en.props
+    {
+      if i32(en.pos.x) > window_size.x
+      {
+        en.pos.x = -en.dim.x
+        en.flags -= {.INTERPOLATE}
+      }
+      else if i32(en.pos.x + en.dim.x) < 0
+      {
+        en.pos.x = cast(f32) window_size.x
+        en.flags -= {.INTERPOLATE}
+      }
 
-    if i32(en.pos.x) > window_size.x
-    {
-      en.pos.x = -en.dim.x
-      en.interpolate = false
-    }
-    else if i32(en.pos.x + en.dim.x) < 0
-    {
-      en.pos.x = cast(f32) window_size.x
-      en.interpolate = false
+      if i32(en.pos.y) > window_size.y
+      {
+        en.pos.y = -en.dim.y
+        en.flags -= {.INTERPOLATE}
+      }
+      else if i32(en.pos.y + en.dim.y) < 0
+      {
+        en.pos.y = cast(f32) window_size.y
+        en.flags -= {.INTERPOLATE}
+      }
     }
 
-    if i32(en.pos.y) > window_size.y
+    if .LOOK_AT_TARGET in en.props
     {
-      en.pos.y = -en.dim.x
-      en.interpolate = false
-    }
-    else if i32(en.pos.y + en.dim.y) < 0
-    {
-      en.pos.y = cast(f32) window_size.y
-      en.interpolate = false
+      entity_look_at_point(&en, player.pos)
     }
   }
 
+  println(player.rot)
+
   // - Save and load game ---
+  when false
   {
     SAVE_PATH :: "res/saves/main"
 
@@ -192,14 +206,9 @@ render_game :: proc(gm: ^Game, dt: f32)
 
   for &en in gm.entities
   {
-    if !en.active do continue
+    if .ACTIVE not_in en.flags do continue
 
-    draw_rect(pos=en.pos, 
-              dim=en.dim,
-              rot=en.rot, 
-              tint=en.tint,
-              color=en.color, 
-              sprite=en.sprite)
+    draw_rect(en.pos, en.dim, en.rot, en.tint, en.color, en.sprite)
   }
 
   end_draw()
@@ -213,12 +222,18 @@ interpolate_games :: proc(curr_gm, prev_gm, res_gm: ^Game, alpha: f32)
   {
     curr_en := &curr_gm.entities[i]
     prev_en := &prev_gm.entities[i]
-    
-    if !curr_en.active || !prev_en.active do continue
-    if !curr_en.interpolate || !prev_en.interpolate do continue
-    
+
+    if !entity_has_flags(curr_en, {.ACTIVE, .INTERPOLATE}) ||
+       !entity_has_flags(prev_en, {.ACTIVE, .INTERPOLATE})
+    {
+      continue
+    }
+      
     res_gm.entities[i].pos = (curr_en.pos * alpha) + (prev_en.pos * (1 - alpha))
     res_gm.entities[i].rot = math.angle_lerp(prev_en.rot, curr_en.rot, alpha)
+    
+    // if i == 0 do fmt.printfln("%f = %f <> %f", 
+    //                           res_gm.entities[i].rot, prev_en.rot, curr_en.rot)
   }
 }
 
@@ -232,7 +247,7 @@ copy_game :: proc(new_gm, old_gm: ^Game)
   new_gm^ = old_gm^
 }
 
-// NOTE(dg): This is a naive approach that assumes too much about Game
+// NOTE(dg): This is a naive approach that assumes Game is contiguous.
 save_game_to_file :: proc(fd: os.Handle, gm: ^Game) -> bool
 {
   gm_bytes := transmute([]byte) runtime.Raw_Slice{gm, size_of(Game)}
@@ -248,7 +263,7 @@ save_game_to_file :: proc(fd: os.Handle, gm: ^Game) -> bool
   return true
 }
 
-// NOTE(dg): This is a naive approach that assumes too much about Game
+// NOTE(dg): This is a naive approach that assumes Game is contiguous.
 load_game_from_file :: proc(fd: os.Handle, gm: ^Game) -> bool
 {
   saved_buf: [size_of(Game)*2]byte
@@ -272,26 +287,92 @@ load_game_from_file :: proc(fd: os.Handle, gm: ^Game) -> bool
 
 Entity :: struct
 {
-  props:       bit_set[Entity_Prop],
-  active:      bool,
-  pos:         v2f,
-  vel:         v2f,
-  dim:         v2f,
-  rot:         f32,
-  input_dir:   v2f,
-  tint:        v4f,
-  color:       v4f,
-  sprite:      Sprite_ID,
-  interpolate: bool,
+  idx:       u32,
+  gen:       u32,
+  flags:     bit_set[Entity_Flag],
+  props:     bit_set[Entity_Prop],
+  pos:       v2f,
+  vel:       v2f,
+  dim:       v2f,
+  rot:       f32,
+  input_dir: v2f,
+  tint:      v4f,
+  color:     v4f,
+  sprite:    Sprite_ID,
+}
+
+Entity_Ref :: struct
+{
+  idx: u32,
+  gen: u32,
+}
+
+Entity_Flag :: enum u32
+{
+  ACTIVE,
+  MARKED_FOR_DEATH,
+  INTERPOLATE,
 }
 
 Entity_Prop :: enum u64
 {
   WRAP_AT_WINDOW_EDGES,
+  LOOK_AT_TARGET,
+}
+
+@(rodata)
+NIL_ENTITY: Entity
+
+entity_from_ref :: #force_inline proc(gm: ^Game, idx: u32) -> ^Entity
+{
+  return idx == 0 ? &NIL_ENTITY : &gm.entities[idx]
+}
+
+ref_from_entity :: #force_inline proc(en: ^Entity) -> Entity_Ref
+{
+  return {en.idx, en.gen}
+}
+
+alloc_entity :: proc(gm: ^Game) -> ^Entity
+{
+  result: ^Entity = &NIL_ENTITY
+
+  for &en, i in gm.entities[1:]
+  {
+    if en.idx == 0
+    {
+      en.idx = cast(u32) i + 1
+      en.gen += 1
+      result = &en
+      break
+    }
+  }
+
+  return result
+}
+
+free_entity :: proc(gm: ^Game, en: ^Entity)
+{
+  assert(en != nil)
+
+  gen := en.gen
+  en^ = {}
+  en.gen = gen
+}
+
+entity_has_flags :: #force_inline proc(en: ^Entity, flags: bit_set[Entity_Flag]) -> bool
+{
+  return en.flags & flags == flags
+}
+
+entity_has_props :: #force_inline proc(en: ^Entity, props: bit_set[Entity_Prop]) -> bool
+{
+  return en.props & props == props
 }
 
 entity_look_at_point :: proc(en: ^Entity, target: v2f)
 {
   dd := target - (en.pos + (res.sprites[en.sprite].pivot * en.dim))
-  en.rot = math.atan2(dd.y, dd.x) + math.PI/2
+  en.rot = math.atan2(dd.y, dd.x)
+  if en.rot < 0 do en.rot += math.PI * 2
 }

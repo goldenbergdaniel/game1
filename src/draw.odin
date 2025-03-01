@@ -17,8 +17,8 @@ Sprite :: struct
 Sprite_ID :: enum
 {
   NIL,
-  SHIP_1,
-  SHIP_2,
+  SHIP,
+  ALIEN,
   PROJECTILE,
   ASTEROID,
 }

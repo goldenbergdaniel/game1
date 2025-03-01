@@ -13,7 +13,7 @@ GL_Renderer :: struct
 {
   vertices:     [40000]Vertex,
   vertex_count: int,
-  indices:      [10000]u16,
+  indices:      [60000]u16,
   index_count:  int,
   projection:   m3x3f,
   texture:      ^Texture,

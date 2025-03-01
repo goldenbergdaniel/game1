@@ -51,7 +51,7 @@ main :: proc()
       update_game(&curr_game, SIM_STEP)
       plf.remember_prev_input()
 
-      if frame_time * 1000 > 20 do printf("%0.0f ms\n", frame_time * 1000)
+      if frame_time * 1000 > 20 do printf("%.0f ms\n", frame_time * 1000)
 
       curr_game.t += SIM_STEP
       accumulator -= SIM_STEP
