@@ -38,8 +38,7 @@ init_game :: proc(gm: ^Game)
   player.tint = {1, 1, 1, 1}
   player.color = {0, 0, 0, 0}
   player.sprite = .SHIP
-  player.z_index = 999
-  sp_entities[.PLAYER] = player
+  player.z_layer = .PLAYER
 
   enemy := alloc_entity(gm)
   enemy.flags = {.ACTIVE}
@@ -48,15 +47,18 @@ init_game :: proc(gm: ^Game)
   enemy.dim = {50, 50}
   enemy.tint = {1, 0, 0, 1}
   enemy.color = {0, 0, 0, 0}
-  player.z_index = 1
   enemy.sprite = .ALIEN
+  enemy.z_layer = .ENEMY
 
   asteroid := alloc_entity(gm)
   asteroid.flags = {.ACTIVE}
   asteroid.pos = {WINDOW_WIDTH/2 - 50, WINDOW_HEIGHT/2 - 50}
   asteroid.dim = {100, 100}
-  asteroid.sprite = .ASTEROID_BIG
   asteroid.tint = {0.57, 0.53, 0.49, 1}
+  asteroid.sprite = .ASTEROID_BIG
+  asteroid.z_layer = .DECORATION
+
+  sp_entities[.PLAYER] = player
 }
 
 update_game :: proc(gm: ^Game, dt: f32)
@@ -216,7 +218,14 @@ render_game :: proc(gm: ^Game, dt: f32)
   }
 
   slice.stable_sort_by(targets[:], proc(i, j: ^Entity) -> bool {
-    return i.z_index < j.z_index
+    if i.z_layer == j.z_layer
+    {
+      return i.z_index < j.z_index
+    }
+    else
+    {
+      return i.z_layer < j.z_layer
+    }
   })
 
   begin_draw({0.07, 0.07, 0.07, 1})
@@ -316,6 +325,13 @@ Entity :: struct
   tint:      v4f,
   color:     v4f,
   sprite:    Sprite_ID,
+  z_layer: enum
+  {
+    DECORATION,
+    ENEMY,
+    PLAYER,
+    PROJECTILE,
+  },
   z_index:   i16,
 }
 
