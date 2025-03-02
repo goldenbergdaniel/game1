@@ -24,7 +24,7 @@ Game :: struct
 
 sp_entities: [enum{
   PLAYER,
-}]^Entity 
+}]^Entity
 
 init_game :: proc(gm: ^Game)
 {
@@ -38,6 +38,7 @@ init_game :: proc(gm: ^Game)
   player.tint = {1, 1, 1, 1}
   player.color = {0, 0, 0, 0}
   player.sprite = .SHIP
+  player.z_index = 999
   sp_entities[.PLAYER] = player
 
   enemy := alloc_entity(gm)
@@ -47,13 +48,14 @@ init_game :: proc(gm: ^Game)
   enemy.dim = {50, 50}
   enemy.tint = {1, 0, 0, 1}
   enemy.color = {0, 0, 0, 0}
+  player.z_index = 1
   enemy.sprite = .ALIEN
 
   asteroid := alloc_entity(gm)
   asteroid.flags = {.ACTIVE}
   asteroid.pos = {WINDOW_WIDTH/2 - 50, WINDOW_HEIGHT/2 - 50}
-  asteroid.dim = {70, 70}
-  asteroid.sprite = .ASTEROID
+  asteroid.dim = {100, 100}
+  asteroid.sprite = .ASTEROID_BIG
   asteroid.tint = {0.57, 0.53, 0.49, 1}
 }
 
@@ -69,9 +71,14 @@ update_game :: proc(gm: ^Game, dt: f32)
 
   for &en in gm.entities
   {
-    if .ACTIVE not_in en.flags do continue
+    if en.idx == 0 do continue
 
     en.flags += {.INTERPOLATE}
+
+    if .MARKED_FOR_DEATH in en.flags
+    {
+      free_entity(gm, &en)
+    }
   }
 
   gm.entities[2].tint = v4f{abs(math.sin(gm.t * dt * 40)), 0, 0, 1}
@@ -160,7 +167,7 @@ update_game :: proc(gm: ^Game, dt: f32)
     }
   }
 
-  println(player.rot)
+  // println(player.rot)
 
   // - Save and load game ---
   when false
@@ -202,9 +209,19 @@ update_game :: proc(gm: ^Game, dt: f32)
 
 render_game :: proc(gm: ^Game, dt: f32)
 {
+  targets: [len(gm.entities)]^Entity
+  for i in 0..<len(gm.entities)
+  {
+    targets[i] = &gm.entities[i]
+  }
+
+  slice.stable_sort_by(targets[:], proc(i, j: ^Entity) -> bool {
+    return i.z_index < j.z_index
+  })
+
   begin_draw({0.07, 0.07, 0.07, 1})
 
-  for &en in gm.entities
+  for &en in targets
   {
     if .ACTIVE not_in en.flags do continue
 
@@ -299,6 +316,7 @@ Entity :: struct
   tint:      v4f,
   color:     v4f,
   sprite:    Sprite_ID,
+  z_index:   i16,
 }
 
 Entity_Ref :: struct
@@ -323,9 +341,9 @@ Entity_Prop :: enum u64
 @(rodata)
 NIL_ENTITY: Entity
 
-entity_from_ref :: #force_inline proc(gm: ^Game, idx: u32) -> ^Entity
+entity_from_ref :: #force_inline proc(gm: ^Game, ref: Entity_Ref) -> ^Entity
 {
-  return idx == 0 ? &NIL_ENTITY : &gm.entities[idx]
+  return ref.idx == 0 ? &NIL_ENTITY : &gm.entities[ref.idx]
 }
 
 ref_from_entity :: #force_inline proc(en: ^Entity) -> Entity_Ref
@@ -358,6 +376,12 @@ free_entity :: proc(gm: ^Game, en: ^Entity)
   gen := en.gen
   en^ = {}
   en.gen = gen
+}
+
+kill_entity :: proc(en: ^Entity)
+{
+  en.flags -= {.ACTIVE}
+  en.flags += {.MARKED_FOR_DEATH}
 }
 
 entity_has_flags :: #force_inline proc(en: ^Entity, flags: bit_set[Entity_Flag]) -> bool

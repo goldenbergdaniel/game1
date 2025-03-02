@@ -8,10 +8,10 @@ import vm "src:vecmath"
 
 Sprite :: struct
 {
-  coords:       v2i,
-  dim:          v2i,
-  pivot:        v2f,
-  texture_kind: r.Texture_ID,
+  coords:  v2i,
+  grid:    v2i,
+  pivot:   v2f,
+  texture: r.Texture_ID,
 }
 
 Sprite_ID :: enum
@@ -21,6 +21,7 @@ Sprite_ID :: enum
   ALIEN,
   PROJECTILE,
   ASTEROID,
+  ASTEROID_BIG,
 }
 
 begin_draw :: #force_inline proc(color: v4f)
@@ -41,8 +42,9 @@ draw_tri :: proc(
   sprite: Sprite_ID = .NIL, 
 )
 {
-  texture := &res.textures[res.sprites[sprite].texture_kind]
-  tl, tr, br, bl := r.coords_from_texture(texture, res.sprites[sprite].coords)
+  sprite := &res.sprites[sprite]
+  texture := &res.textures[sprite.texture]
+  tl, tr, br, bl := r.coords_from_texture(texture, sprite.coords, sprite.grid)
 
   r.push_vertex(pos + v2f{0, 0}, tint, color, tl)
   r.push_vertex(pos + v2f{-dim.x/2, dim.y}, tint, color, bl)
@@ -59,13 +61,14 @@ draw_rect :: proc(
   sprite: Sprite_ID = {},
 )
 {
-  sprite_data := res.sprites[sprite]
+  sprite := &res.sprites[sprite]
+  texture := &res.textures[sprite.texture]
 
   xform := vm.diag_3x3(1)
   xform *= vm.translate_3x3(pos)
-  xform *= vm.translate_3x3(dim * sprite_data.pivot)
+  xform *= vm.translate_3x3(dim * sprite.pivot)
   xform *= vm.rotate_3x3(rot)
-  xform *= vm.translate_3x3(-dim * sprite_data.pivot)
+  xform *= vm.translate_3x3(-dim * sprite.pivot)
   xform *= vm.scale_3x3(dim)
 
   p1 := xform * v3f{0, 0, 1}
@@ -73,8 +76,7 @@ draw_rect :: proc(
   p3 := xform * v3f{1, 1, 1}
   p4 := xform * v3f{0, 1, 1}
 
-  texture := &res.textures[sprite_data.texture_kind]
-  tl, tr, br, bl := r.coords_from_texture(texture, sprite_data.coords)
+  tl, tr, br, bl := r.coords_from_texture(texture, sprite.coords, sprite.grid)
 
   r.push_vertex(p1.xy, tint, color, tl)
   r.push_vertex(p2.xy, tint, color, tr)

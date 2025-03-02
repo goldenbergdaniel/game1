@@ -33,14 +33,15 @@ init_resources :: proc(arena: ^mem.Arena)
 
   // - Sprites ---
   {
-    res.sprites[.NIL]      = Sprite{coords={0, 0}, dim={16, 16}, pivot={0, 0}}
-    res.sprites[.SHIP]     = Sprite{coords={1, 0}, dim={16, 16}, pivot={0.5, 0.5}}
-    res.sprites[.ALIEN]    = Sprite{coords={2, 0}, dim={4, 4},   pivot={0.5, 0.5}}
-    res.sprites[.ASTEROID] = Sprite{coords={3, 0}, dim={16, 16}, pivot={0.5, 0.5}}
+    res.sprites[.NIL]          = Sprite{coords={0, 0}, grid={1, 1}, pivot={0, 0}}
+    res.sprites[.SHIP]         = Sprite{coords={1, 0}, grid={1, 1}, pivot={0.5, 0.5}}
+    res.sprites[.ALIEN]        = Sprite{coords={2, 0}, grid={1, 1}, pivot={0.5, 0.5}}
+    res.sprites[.ASTEROID]     = Sprite{coords={3, 0}, grid={1, 1}, pivot={0.5, 0.5}}
+    res.sprites[.ASTEROID_BIG] = Sprite{coords={0, 1}, grid={2, 2}, pivot={0.5, 0.5}}
 
     for &sprite in res.sprites
     {
-      sprite.texture_kind = .SPRITE_ATLAS
+      sprite.texture = .SPRITE_ATLAS
     }
   }
 }

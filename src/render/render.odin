@@ -119,6 +119,7 @@ push_rect_indices :: proc()
 coords_from_texture :: proc(
   texture: ^Texture,
   coords:  v2i,
+  grid:    v2i,
 ) -> (
   tl, tr, br, bl: v2f,
 )
@@ -128,23 +129,23 @@ coords_from_texture :: proc(
   height := cast(f32) texture.height
 
   tl = v2f{
-    (f32(coords.x+0) * cell) / width, 
-    (f32(coords.y+0) * cell) / height,
+    (f32(coords.x) * cell) / width, 
+    (f32(coords.y) * cell) / height,
   }
 
   tr = v2f{
-    (f32(coords.x+1) * cell) / width, 
-    (f32(coords.y+0) * cell) / height,
+    (f32(coords.x+(grid.x)) * cell) / width, 
+    (f32(coords.y) * cell) / height,
   }
 
   br = v2f{
-    (f32(coords.x+1) * cell) / width, 
-    (f32(coords.y+1) * cell) / height,
+    (f32(coords.x+(grid.x)) * cell) / width, 
+    (f32(coords.y+(grid.y)) * cell) / height,
   }
 
   bl = v2f{
-    (f32(coords.x+0) * cell) / width, 
-    (f32(coords.y+1) * cell) / height,
+    (f32(coords.x) * cell) / width, 
+    (f32(coords.y+(grid.y)) * cell) / height,
   }
 
   return
