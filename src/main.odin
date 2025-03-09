@@ -5,14 +5,16 @@ import "core:time"
 import "src:basic/mem"
 import plf "src:platform"
 import r "src:render"
+import vm "src:vecmath"
 
-WINDOW_WIDTH  :: 960
-WINDOW_HEIGHT :: 540
+WINDOW_WIDTH  :: 960.0
+WINDOW_HEIGHT :: 540.0
 SIM_STEP      :: 1.0/20
 
 User :: struct
 {
   window:      plf.Window,
+  viewport:    v4f,
   perm_arena:  mem.Arena,
   frame_arena: mem.Arena,
 }
@@ -39,6 +41,25 @@ main :: proc()
   for !should_quit()
   {
     plf.pump_events(&user.window)
+
+    // - Update viewport ---
+    {
+      window_size := vm.array_cast(plf.window_size(&user.window), f32)
+      ratio := window_size.x / window_size.y
+      if ratio >= WINDOW_WIDTH / WINDOW_HEIGHT
+      {
+        img_width := window_size.x / (ratio * (WINDOW_HEIGHT / WINDOW_WIDTH))
+        user.viewport = {(window_size.x - img_width) / 2, 0, img_width, window_size.y}
+        println(img_width, window_size.x)
+      }
+      else
+      {
+        img_height := window_size.y * (ratio / (WINDOW_WIDTH / WINDOW_HEIGHT))
+        user.viewport = {0, (window_size.y - img_height) / 2, window_size.x, img_height}
+      }
+      
+      r.set_viewport(vm.array_cast(user.viewport, i32))
+    }
 
     curr_time := time.duration_seconds(time.tick_since(start_tick))
     frame_time := curr_time - elapsed_time

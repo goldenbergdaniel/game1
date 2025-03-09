@@ -34,7 +34,7 @@ init_game :: proc(gm: ^Game)
   player := alloc_entity(gm)
   player.flags = {.ACTIVE}
   player.props = {.WRAP_AT_WINDOW_EDGES}
-  player.dim = {50, 50}
+  player.dim = {30, 30}
   player.tint = {1, 1, 1, 1}
   player.color = {0, 0, 0, 0}
   player.sprite = .SHIP
@@ -44,7 +44,7 @@ init_game :: proc(gm: ^Game)
   enemy.flags = {.ACTIVE}
   enemy.props = {.WRAP_AT_WINDOW_EDGES}
   enemy.pos = {WINDOW_WIDTH - 70, 0}
-  enemy.dim = {50, 50}
+  enemy.dim = {30, 30}
   enemy.tint = {1, 0, 0, 1}
   enemy.color = {0, 0, 0, 0}
   enemy.sprite = .ALIEN
@@ -53,7 +53,7 @@ init_game :: proc(gm: ^Game)
   asteroid := alloc_entity(gm)
   asteroid.flags = {.ACTIVE}
   asteroid.pos = {WINDOW_WIDTH/2 - 50, WINDOW_HEIGHT/2 - 50}
-  asteroid.dim = {100, 100}
+  asteroid.dim = {60, 60}
   asteroid.tint = {0.57, 0.53, 0.49, 1}
   asteroid.sprite = .ASTEROID_BIG
   asteroid.z_layer = .DECORATION
@@ -90,7 +90,7 @@ update_game :: proc(gm: ^Game, dt: f32)
 
   if !plf.key_pressed(.A) && !plf.key_pressed(.D)
   {
-    entity_look_at_point(player, plf.cursor_pos())
+    entity_look_at_point(player, screen_to_world_pos(plf.cursor_pos()))
   }
   
   SPEED :: 600.0
@@ -273,7 +273,7 @@ copy_game :: proc(new_gm, old_gm: ^Game)
   new_gm^ = old_gm^
 }
 
-// NOTE(dg): This is a naive approach that assumes Game is contiguous.
+// NOTE(dg): This assumes that Game is contiguous and stores no pointers.
 save_game_to_file :: proc(fd: os.Handle, gm: ^Game) -> bool
 {
   gm_bytes := transmute([]byte) runtime.Raw_Slice{gm, size_of(Game)}
@@ -289,7 +289,7 @@ save_game_to_file :: proc(fd: os.Handle, gm: ^Game) -> bool
   return true
 }
 
-// NOTE(dg): This is a naive approach that assumes Game is contiguous.
+// NOTE(dg): This assumes that Game is contiguous and stores no pointers.
 load_game_from_file :: proc(fd: os.Handle, gm: ^Game) -> bool
 {
   saved_buf: [size_of(Game)*2]byte
@@ -309,6 +309,14 @@ load_game_from_file :: proc(fd: os.Handle, gm: ^Game) -> bool
   return true
 }
 
+screen_to_world_pos :: proc(pos: v2f) -> v2f
+{
+  return {
+    (pos.x - user.viewport.x) * (WINDOW_WIDTH / user.viewport.z),
+    (pos.y - user.viewport.y) * (WINDOW_HEIGHT / user.viewport.w),
+  }
+}
+
 // Entity ////////////////////////////////////////////////////////////////////////////////
 
 Entity :: struct
@@ -325,14 +333,15 @@ Entity :: struct
   tint:      v4f,
   color:     v4f,
   sprite:    Sprite_ID,
-  z_layer: enum
+  z_index:   i16,
+  z_layer:   enum u8
   {
+    NIL,
     DECORATION,
     ENEMY,
     PLAYER,
     PROJECTILE,
   },
-  z_index:   i16,
 }
 
 Entity_Ref :: struct

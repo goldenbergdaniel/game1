@@ -150,3 +150,8 @@ coords_from_texture :: proc(
 
   return
 }
+
+set_viewport :: proc(viewport: v4i)
+{
+  renderer.viewport = viewport
+}

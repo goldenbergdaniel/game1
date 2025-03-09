@@ -16,6 +16,7 @@ GL_Renderer :: struct
   indices:      [60000]u16,
   index_count:  int,
   projection:   m3x3f,
+  viewport:     v4i,
   texture:      ^Texture,
   uniforms: struct
   {
@@ -127,13 +128,13 @@ gl_flush :: proc()
 
   window_size := plf.window_size(gl_renderer.window)
 
-  gl_renderer.projection = vm.orthographic_3x3(960 - f32(window_size.x), 
-                                               960, 
-                                               540 - f32(window_size.y), 
+  gl_renderer.projection = vm.orthographic_3x3(0, 
+                                               960,
+                                               0, 
                                                540)
   gl_renderer.uniforms.proj = cast(m4x4f) gl_renderer.projection
 
-  gl.Viewport(0, 0, window_size.x, window_size.y)
+  gl.Viewport(expand_values(gl_renderer.viewport))
 
   gl.NamedBufferSubData(buffer=gl_renderer.ssbo,
                         offset=0,
