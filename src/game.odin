@@ -140,27 +140,27 @@ update_game :: proc(gm: ^Game, dt: f32)
     // - Entity wrap at window edges ---
     if .WRAP_AT_WINDOW_EDGES in en.props
     {
-      window_in_world_space := screen_to_world_pos(vm.array_cast(window_size, f32))
+      window_in_world_space := v2f{WINDOW_WIDTH, WINDOW_HEIGHT}
 
-      if i32(en.pos.x) > window_size.x
+      if en.pos.x > window_in_world_space.x
       {
         en.pos.x = -en.dim.x
         en.flags -= {.INTERPOLATE}
       }
-      else if i32(en.pos.x + en.dim.x) < 0
+      else if en.pos.x + en.dim.x < 0
       {
-        en.pos.x = cast(f32) window_size.x
+        en.pos.x = window_in_world_space.x
         en.flags -= {.INTERPOLATE}
       }
 
-      if i32(en.pos.y) > window_size.y
+      if en.pos.y > window_in_world_space.y
       {
         en.pos.y = -en.dim.y
         en.flags -= {.INTERPOLATE}
       }
-      else if i32(en.pos.y + en.dim.y) < 0
+      else if en.pos.y + en.dim.y < 0
       {
-        en.pos.y = cast(f32) window_size.y
+        en.pos.y = window_in_world_space.y
         en.flags -= {.INTERPOLATE}
       }
     }
