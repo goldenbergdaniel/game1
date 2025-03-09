@@ -50,7 +50,6 @@ main :: proc()
       {
         img_width := window_size.x / (ratio * (WINDOW_HEIGHT / WINDOW_WIDTH))
         user.viewport = {(window_size.x - img_width) / 2, 0, img_width, window_size.y}
-        println(img_width, window_size.x)
       }
       else
       {

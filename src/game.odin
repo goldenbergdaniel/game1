@@ -13,7 +13,7 @@ import vm "src:vecmath"
 
 // Game //////////////////////////////////////////////////////////////////////////////////
 
-@(private="file")
+@(thread_local, private="file")
 game_frame_arena: mem.Arena
 
 Game :: struct
@@ -28,7 +28,7 @@ sp_entities: [enum{
 
 init_game :: proc(gm: ^Game)
 {
-  // NOTE(dg): What if we're initializing multiple games? This needs to change. 
+  // NOTE(dg): What if multiple games running on same thread? This needs to change. 
   mem.init_growing_arena(&game_frame_arena)
 
   player := alloc_entity(gm)
@@ -140,6 +140,8 @@ update_game :: proc(gm: ^Game, dt: f32)
     // - Entity wrap at window edges ---
     if .WRAP_AT_WINDOW_EDGES in en.props
     {
+      window_in_world_space := screen_to_world_pos(vm.array_cast(window_size, f32))
+
       if i32(en.pos.x) > window_size.x
       {
         en.pos.x = -en.dim.x
