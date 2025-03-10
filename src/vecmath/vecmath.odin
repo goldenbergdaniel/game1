@@ -171,6 +171,11 @@ lerp :: proc
   lerp_4f32,
 }
 
+lerp_1f32 :: #force_inline proc "contextless" (curr, target, rate: f32) -> f32
+{
+  return curr + ((target - curr) * rate)
+}
+
 lerp_2f32 :: #force_inline proc "contextless" (curr, target: [2]f32, rate: f32) -> [2]f32
 {
   return curr + ((target - curr) * rate)
@@ -184,6 +189,31 @@ lerp_3f32 :: #force_inline proc "contextless" (curr, target: [3]f32, rate: f32) 
 lerp_4f32 :: #force_inline proc "contextless" (curr, target: [4]f32, rate: f32) -> [4]f32
 {
   return curr + ((target - curr) * rate)
+}
+
+lerp_angle :: #force_inline proc "contextless" (current, target, t: f32) -> f32
+{
+  result: f32
+
+  current := math.mod(current, math.TAU)
+  target := math.mod(target, math.TAU)
+
+  diff := target - current
+  if diff > math.PI
+  {
+    diff -= math.TAU
+  }
+  else if diff < -math.PI
+  {
+    diff += math.TAU
+  }
+  
+  result = current + diff * t
+
+  // Ensure result stays in [0, 2π)
+  result = math.mod_f32(result + math.TAU, math.TAU)
+  
+  return result;
 }
 
 // Matrix ///////////////////////////////////////////////////////////////////////////

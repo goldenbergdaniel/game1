@@ -1,6 +1,7 @@
 package game
 
 import "core:fmt"
+import "core:math"
 
 v2i :: [2]i32
 v3i :: [3]i32

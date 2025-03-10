@@ -7,9 +7,9 @@ import plf "src:platform"
 import r "src:render"
 import vm "src:vecmath"
 
-WINDOW_WIDTH  :: 960.0
-WINDOW_HEIGHT :: 540.0
-SIM_STEP      :: 1.0/20
+WORLD_WIDTH  :: 960.0
+WORLD_HEIGHT :: 540.0
+SIM_STEP     :: 1.0/20
 
 User :: struct
 {
@@ -26,7 +26,7 @@ main :: proc()
   mem.init_static_arena(&user.perm_arena)
   mem.init_growing_arena(&user.frame_arena)
 
-  user.window = plf.create_window("GAME", WINDOW_WIDTH, WINDOW_HEIGHT, &user.perm_arena)
+  user.window = plf.create_window("GAME", WORLD_WIDTH, WORLD_HEIGHT, &user.perm_arena)
   defer plf.release_resources(&user.window)
 
   init_resources(&user.perm_arena)
@@ -46,14 +46,14 @@ main :: proc()
     {
       window_size := vm.array_cast(plf.window_size(&user.window), f32)
       ratio := window_size.x / window_size.y
-      if ratio >= WINDOW_WIDTH / WINDOW_HEIGHT
+      if ratio >= WORLD_WIDTH / WORLD_HEIGHT
       {
-        img_width := window_size.x / (ratio * (WINDOW_HEIGHT / WINDOW_WIDTH))
+        img_width := window_size.x / (ratio * (WORLD_HEIGHT / WORLD_WIDTH))
         user.viewport = {(window_size.x - img_width) / 2, 0, img_width, window_size.y}
       }
       else
       {
-        img_height := window_size.y * (ratio / (WINDOW_WIDTH / WINDOW_HEIGHT))
+        img_height := window_size.y * (ratio / (WORLD_WIDTH / WORLD_HEIGHT))
         user.viewport = {0, (window_size.y - img_height) / 2, window_size.x, img_height}
       }
       

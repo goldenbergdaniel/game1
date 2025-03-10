@@ -114,7 +114,7 @@ sdl_translate_event :: #force_inline proc(sdl_event: ^sdl.Event) -> Event
 		case .W:			result = Event{kind = .KEY_DOWN, key_kind = .W}
     case .LCTRL: 	result = Event{kind = .KEY_DOWN, key_kind = .LEFT_CTRL}
     case .ESCAPE: result = Event{kind = .KEY_DOWN, key_kind = .ESCAPE}
-    case .SPACE:  result = Event{kind = .KEY_DOWN, key_kind = .SPACE}
+    case .RETURN: result = Event{kind = .KEY_DOWN, key_kind = .ENTER}
     }
 	case .KEY_UP:
     #partial switch sdl_event.key.scancode
@@ -128,15 +128,32 @@ sdl_translate_event :: #force_inline proc(sdl_event: ^sdl.Event) -> Event
     case .LCTRL: 	result = Event{kind = .KEY_UP, key_kind = .LEFT_CTRL}
     case .ESCAPE: result = Event{kind = .KEY_UP, key_kind = .ESCAPE}
     case .SPACE:  result = Event{kind = .KEY_UP, key_kind = .SPACE}
+    case .RETURN: result = Event{kind = .KEY_UP, key_kind = .ENTER}
     }
 	case .MOUSE_BUTTON_DOWN:
-		#partial switch sdl_event.button.type
+		switch sdl_event.button.button
 		{
-			
+		case 1: result = Event{kind = .MOUSE_BTN_DOWN, mouse_btn_kind = .LEFT}
+		case 2: result = Event{kind = .MOUSE_BTN_DOWN, mouse_btn_kind = .MIDDLE}
+		case 3: result = Event{kind = .MOUSE_BTN_DOWN, mouse_btn_kind = .RIGHT}
+		}
+	case .MOUSE_BUTTON_UP:
+		switch sdl_event.button.button
+		{
+		case 1: result = Event{kind = .MOUSE_BTN_UP, mouse_btn_kind = .LEFT}
+		case 2: result = Event{kind = .MOUSE_BTN_UP, mouse_btn_kind = .MIDDLE}
+		case 3: result = Event{kind = .MOUSE_BTN_UP, mouse_btn_kind = .RIGHT}
 		}
 	}
 
 	return result
+}
+
+sdl_window_toggle_fullscreen :: proc(window: ^Window)
+{
+	sdl_window := cast(^sdl.Window) window.handle
+	fs := transmute(b64) (sdl.GetWindowFlags(sdl_window) & sdl.WINDOW_FULLSCREEN)
+	sdl.SetWindowFullscreen(sdl_window, bool(!fs))
 }
 
 sdl_window_size :: proc(window: ^Window) -> [2]i32

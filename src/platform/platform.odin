@@ -47,6 +47,8 @@ Event_Kind :: enum u16
   QUIT,
   KEY_DOWN,
   KEY_UP,
+  MOUSE_BTN_DOWN,
+  MOUSE_BTN_UP,
 }
 
 Key_Kind :: enum u8
@@ -62,6 +64,7 @@ Key_Kind :: enum u8
   LEFT_CTRL,
   ESCAPE,
   SPACE,
+  ENTER,
 }
 
 Mouse_Btn_Kind :: enum u8
@@ -75,9 +78,11 @@ Mouse_Btn_Kind :: enum u8
 
 Input :: struct
 {
-  keys:      [Key_Kind]bool,
-  prev_keys: [Key_Kind]bool,
-  mouse_pos: [2]f32,
+  keys:            [Key_Kind]bool,
+  prev_keys:       [Key_Kind]bool,
+  mouse_btns:      [Mouse_Btn_Kind]bool,
+  prev_mouse_btns: [Mouse_Btn_Kind]bool,
+  mouse_pos:       [2]f32,
 }
 
 @(private)
@@ -155,6 +160,10 @@ pump_events :: #force_inline proc(
       input.keys[event.key_kind] = true
     case .KEY_UP:
       input.keys[event.key_kind] = false
+    case .MOUSE_BTN_DOWN:
+      input.mouse_btns[event.mouse_btn_kind] = true
+    case .MOUSE_BTN_UP:
+      input.mouse_btns[event.mouse_btn_kind] = false
     }
   }
 }
@@ -205,6 +214,11 @@ remember_prev_input :: proc()
   {
     input.prev_keys[key] = input.keys[key]
   }
+
+  for btn in Mouse_Btn_Kind
+  {
+    input.prev_mouse_btns[btn] = input.mouse_btns[btn]
+  }
 }
 
 key_pressed :: #force_inline proc(key: Key_Kind) -> bool
@@ -225,6 +239,32 @@ key_released :: #force_inline proc(key: Key_Kind) -> bool
 key_just_released :: #force_inline proc(key: Key_Kind) -> bool
 {
   return !input.keys[key] && input.prev_keys[key]
+}
+
+mouse_btn_pressed :: #force_inline proc(btn: Mouse_Btn_Kind) -> bool
+{
+  return input.mouse_btns[btn]
+}
+
+mouse_btn_just_pressed :: #force_inline proc(btn: Mouse_Btn_Kind) -> bool
+{
+  return input.mouse_btns[btn] && !input.prev_mouse_btns[btn]
+}
+
+mouse_btn_released :: #force_inline proc(btn: Mouse_Btn_Kind) -> bool
+{
+  return !input.mouse_btns[btn]
+}
+
+mouse_btn_just_released :: #force_inline proc(btn: Mouse_Btn_Kind) -> bool
+{
+  return !input.mouse_btns[btn] && input.prev_mouse_btns[btn]
+}
+
+window_toggle_fullscreen :: proc(window: ^Window)
+{
+  when ODIN_OS == .Windows do return
+  else                     do sdl_window_toggle_fullscreen(window)
 }
 
 window_size :: #force_inline proc(

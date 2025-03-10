@@ -13,13 +13,14 @@ import vm "src:vecmath"
 
 // Game //////////////////////////////////////////////////////////////////////////////////
 
-@(thread_local, private="file")
-game_frame_arena: mem.Arena
+@(thread_local, private="file") game_frame_arena: mem.Arena
+@(thread_local, private="file") game: ^Game
 
 Game :: struct
 {
-  t:        f32,
-  entities: [1024+1]Entity,
+  t:            f32,
+  entities:     [128+1]Entity,
+  entity_count: i32,
 }
 
 sp_entities: [enum{
@@ -33,7 +34,7 @@ init_game :: proc(gm: ^Game)
 
   player := alloc_entity(gm)
   player.flags = {.ACTIVE}
-  player.props = {.WRAP_AT_WINDOW_EDGES}
+  player.props = {.WRAP_AT_WORLD_EDGES}
   player.dim = {30, 30}
   player.tint = {1, 1, 1, 1}
   player.color = {0, 0, 0, 0}
@@ -42,8 +43,8 @@ init_game :: proc(gm: ^Game)
 
   enemy := alloc_entity(gm)
   enemy.flags = {.ACTIVE}
-  enemy.props = {.WRAP_AT_WINDOW_EDGES}
-  enemy.pos = {WINDOW_WIDTH - 70, 0}
+  enemy.props = {.WRAP_AT_WORLD_EDGES}
+  enemy.pos = {WORLD_WIDTH - 70, 0}
   enemy.dim = {30, 30}
   enemy.tint = {1, 0, 0, 1}
   enemy.color = {0, 0, 0, 0}
@@ -52,7 +53,7 @@ init_game :: proc(gm: ^Game)
 
   asteroid := alloc_entity(gm)
   asteroid.flags = {.ACTIVE}
-  asteroid.pos = {WINDOW_WIDTH/2 - 50, WINDOW_HEIGHT/2 - 50}
+  asteroid.pos = {WORLD_WIDTH/2 - 50, WORLD_HEIGHT/2 - 50}
   asteroid.dim = {60, 60}
   asteroid.tint = {0.57, 0.53, 0.49, 1}
   asteroid.sprite = .ASTEROID_BIG
@@ -63,12 +64,19 @@ init_game :: proc(gm: ^Game)
 
 update_game :: proc(gm: ^Game, dt: f32)
 {
+  game = gm
+
   player := sp_entities[.PLAYER]
   window_size := plf.window_size(&user.window)
 
   if plf.key_pressed(.ESCAPE)
   {
     user.window.should_close = true
+  }
+
+  if plf.key_just_pressed(.ENTER) && plf.key_pressed(.LEFT_CTRL)
+  {
+    plf.window_toggle_fullscreen(&user.window)
   }
 
   for &en in gm.entities
@@ -91,6 +99,12 @@ update_game :: proc(gm: ^Game, dt: f32)
   if !plf.key_pressed(.A) && !plf.key_pressed(.D)
   {
     entity_look_at_point(player, screen_to_world_pos(plf.cursor_pos()))
+  }
+
+  if plf.mouse_btn_just_pressed(.LEFT)
+  {
+    proj := spawn_entity_projectile(player.pos + player.vel * dt)
+    proj.vel = {math.cos(player.rot), math.sin(player.rot)} * 500
   }
   
   SPEED :: 600.0
@@ -129,38 +143,41 @@ update_game :: proc(gm: ^Game, dt: f32)
     player.vel.y = approx(player.vel.y, 0, 1)
   }
 
-  player.pos += player.vel * dt
+  gm.entities[2].vel = {-50, 50}
 
-  gm.entities[2].pos += v2f{-50, 50} * dt
+  for &en in gm.entities
+  {
+    if .ACTIVE not_in en.flags do continue
+    
+    en.pos += en.vel * dt
+  }
 
   for &en in gm.entities
   {
     if .ACTIVE not_in en.flags do continue
     
     // - Entity wrap at window edges ---
-    if .WRAP_AT_WINDOW_EDGES in en.props
+    if .WRAP_AT_WORLD_EDGES in en.props
     {
-      window_in_world_space := v2f{WINDOW_WIDTH, WINDOW_HEIGHT}
-
-      if en.pos.x > window_in_world_space.x
+      if en.pos.x > WORLD_WIDTH
       {
         en.pos.x = -en.dim.x
         en.flags -= {.INTERPOLATE}
       }
       else if en.pos.x + en.dim.x < 0
       {
-        en.pos.x = window_in_world_space.x
+        en.pos.x = WORLD_WIDTH
         en.flags -= {.INTERPOLATE}
       }
 
-      if en.pos.y > window_in_world_space.y
+      if en.pos.y > WORLD_HEIGHT
       {
         en.pos.y = -en.dim.y
         en.flags -= {.INTERPOLATE}
       }
       else if en.pos.y + en.dim.y < 0
       {
-        en.pos.y = window_in_world_space.y
+        en.pos.y = WORLD_HEIGHT
         en.flags -= {.INTERPOLATE}
       }
     }
@@ -169,12 +186,23 @@ update_game :: proc(gm: ^Game, dt: f32)
     {
       entity_look_at_point(&en, player.pos)
     }
+
+    if .KILL_AFTER_TIME in en.props
+    {
+      if !en.death_timer.ticking
+      {
+        timer_start(&en.death_timer, 1)
+      }
+
+      if timer_timeout(&en.death_timer)
+      {
+        kill_entity(&en)
+      }
+    }
   }
 
-  // println(player.rot)
-
   // - Save and load game ---
-  when false
+  when true
   {
     SAVE_PATH :: "res/saves/main"
 
@@ -232,7 +260,7 @@ render_game :: proc(gm: ^Game, dt: f32)
 
   begin_draw({0.07, 0.07, 0.07, 1})
 
-  for &en in targets
+  for en in targets
   {
     if .ACTIVE not_in en.flags do continue
 
@@ -244,6 +272,8 @@ render_game :: proc(gm: ^Game, dt: f32)
 
 interpolate_games :: proc(curr_gm, prev_gm, res_gm: ^Game, alpha: f32)
 {
+  @(static) iter := 0;
+
   copy_game(res_gm, curr_gm)
 
   for i in 0..<len(res_gm.entities)
@@ -256,12 +286,13 @@ interpolate_games :: proc(curr_gm, prev_gm, res_gm: ^Game, alpha: f32)
     {
       continue
     }
-      
-    res_gm.entities[i].pos = (curr_en.pos * alpha) + (prev_en.pos * (1 - alpha))
-    res_gm.entities[i].rot = math.angle_lerp(prev_en.rot, curr_en.rot, alpha)
     
-    // if i == 0 do fmt.printfln("%f = %f <> %f", 
-    //                           res_gm.entities[i].rot, prev_en.rot, curr_en.rot)
+    res_gm.entities[i].pos = vm.lerp(prev_en.pos, curr_en.pos, alpha)
+    res_gm.entities[i].rot = vm.lerp_angle(prev_en.rot, curr_en.rot, alpha)
+    // println("  Odin:", math.angle_lerp(prev_en.rot, curr_en.rot, alpha))
+    // println("    AI:", vm.lerp_angle(prev_en.rot, curr_en.rot, alpha))
+    // println("Inputs:", prev_en.rot, curr_en.rot)
+    // println()
   }
 }
 
@@ -314,8 +345,8 @@ load_game_from_file :: proc(fd: os.Handle, gm: ^Game) -> bool
 screen_to_world_pos :: proc(pos: v2f) -> v2f
 {
   return {
-    (pos.x - user.viewport.x) * (WINDOW_WIDTH / user.viewport.z),
-    (pos.y - user.viewport.y) * (WINDOW_HEIGHT / user.viewport.w),
+    (pos.x - user.viewport.x) * (WORLD_WIDTH / user.viewport.z),
+    (pos.y - user.viewport.y) * (WORLD_HEIGHT / user.viewport.w),
   }
 }
 
@@ -344,6 +375,7 @@ Entity :: struct
     PLAYER,
     PROJECTILE,
   },
+  death_timer: Timer,
 }
 
 Entity_Ref :: struct
@@ -361,16 +393,17 @@ Entity_Flag :: enum u32
 
 Entity_Prop :: enum u64
 {
-  WRAP_AT_WINDOW_EDGES,
+  WRAP_AT_WORLD_EDGES,
   LOOK_AT_TARGET,
+  KILL_AFTER_TIME,
 }
 
 @(rodata)
 NIL_ENTITY: Entity
 
-entity_from_ref :: #force_inline proc(gm: ^Game, ref: Entity_Ref) -> ^Entity
+entity_from_ref :: #force_inline proc(ref: Entity_Ref) -> ^Entity
 {
-  return ref.idx == 0 ? &NIL_ENTITY : &gm.entities[ref.idx]
+  return ref.idx == 0 ? &NIL_ENTITY : &game.entities[ref.idx]
 }
 
 ref_from_entity :: #force_inline proc(en: ^Entity) -> Entity_Ref
@@ -380,6 +413,8 @@ ref_from_entity :: #force_inline proc(en: ^Entity) -> Entity_Ref
 
 alloc_entity :: proc(gm: ^Game) -> ^Entity
 {
+  assert(gm.entity_count < len(gm.entities)-1)
+
   result: ^Entity = &NIL_ENTITY
 
   for &en, i in gm.entities[1:]
@@ -389,6 +424,8 @@ alloc_entity :: proc(gm: ^Game) -> ^Entity
       en.idx = cast(u32) i + 1
       en.gen += 1
       result = &en
+      
+      gm.entity_count += 1
       break
     }
   }
@@ -398,11 +435,27 @@ alloc_entity :: proc(gm: ^Game) -> ^Entity
 
 free_entity :: proc(gm: ^Game, en: ^Entity)
 {
-  assert(en != nil)
+  assert(en != nil && en.idx != 0)
 
   gen := en.gen
   en^ = {}
   en.gen = gen
+
+  gm.entity_count -= 1
+}
+
+spawn_entity_projectile :: proc(pos: v2f) -> ^Entity
+{
+  en := alloc_entity(game)
+  en.flags = {.ACTIVE, .INTERPOLATE}
+  en.props = {.KILL_AFTER_TIME}
+  en.pos = pos
+  en.dim = {30, 30}
+  en.tint = {0.18, 0.88, 0.18, 1}
+  en.sprite = .PROJECTILE
+  en.z_layer = .PROJECTILE
+
+  return en
 }
 
 kill_entity :: proc(en: ^Entity)
@@ -425,5 +478,33 @@ entity_look_at_point :: proc(en: ^Entity, target: v2f)
 {
   dd := target - (en.pos + (res.sprites[en.sprite].pivot * en.dim))
   en.rot = math.atan2(dd.y, dd.x)
-  if en.rot < 0 do en.rot += math.PI * 2
+  if en.rot < 0
+  {
+    en.rot += math.TAU
+  }
+}
+
+// Timer /////////////////////////////////////////////////////////////////////////////////
+
+Timer :: struct
+{
+  duration: f32,
+  end_time: f32,
+  ticking:  bool,
+}
+
+timer_start :: proc(timer: ^Timer, duration: f32)
+{
+  timer.end_time = game.t + duration
+  timer.ticking = true
+}
+
+timer_timeout :: proc(timer: ^Timer) -> bool
+{
+  return timer.ticking && game.t >= timer.end_time
+}
+
+timer_remaining :: proc(timer: ^Timer) -> f32
+{
+  return timer.end_time - game.t
 }

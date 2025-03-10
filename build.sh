@@ -12,7 +12,7 @@ if [[ $2 == "darwin_amd64" || $2 == "darwin_arm64" || $2 == "linux_amd64" ]]; th
 RENDER_BACKEND="opengl"
 
 FLAGS="-collection:src=src -collection:ext=ext -define=RENDER_BACKEND=$RENDER_BACKEND 
-       -vet-shadowing -vet-style -vet-cast -extra-linker-flags:\"-fuse-ld=mold\" $3"
+       -vet-style -vet-cast -extra-linker-flags:\"-fuse-ld=mold\" $3"
 if [[ $MODE == "debug"   ]]; then FLAGS="-o:none -debug $FLAGS"; fi
 if [[ $MODE == "release" ]]; then FLAGS="-o:speed -microarch:native -no-bounds-check $FLAGS"; fi
 

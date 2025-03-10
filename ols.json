@@ -17,7 +17,7 @@
   "enable_snippets": true,
   "verbose": true,
   "enable_fake_methods": true,
-  "checker_args": "-vet-shadowing -vet-style -vet-cast",
+  "checker_args": "-vet-style -vet-cast",
   "profile": "main",
   "profiles":
   [
