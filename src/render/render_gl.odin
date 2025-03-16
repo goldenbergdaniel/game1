@@ -128,7 +128,7 @@ gl_flush :: proc()
 
   window_size := plf.window_size(gl_renderer.window)
 
-  gl_renderer.projection = vm.orthographic_3x3(0, 
+  gl_renderer.projection = vm.orthographic_3x3f(0, 
                                                960,
                                                0, 
                                                540)

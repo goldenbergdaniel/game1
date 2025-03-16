@@ -11,6 +11,7 @@ v2f :: [2]f32
 v3f :: [3]f32
 v4f :: [4]f32
 
+m2x2f :: matrix[2,2]f32
 m3x3f :: matrix[3,3]f32
 m4x4f :: matrix[4,4]f32
 

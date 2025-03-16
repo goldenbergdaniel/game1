@@ -9,7 +9,7 @@ import vm "src:vecmath"
 
 WORLD_WIDTH  :: 960.0
 WORLD_HEIGHT :: 540.0
-SIM_STEP     :: 1.0/20
+SIM_STEP     :: 1.0/30
 
 User :: struct
 {

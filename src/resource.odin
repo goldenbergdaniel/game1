@@ -33,12 +33,13 @@ init_resources :: proc(arena: ^mem.Arena)
 
   // - Sprites ---
   {
-    res.sprites[.NIL]          = Sprite{coords={0, 0}, grid={1, 1}, pivot={0, 0}}
-    res.sprites[.SHIP]         = Sprite{coords={1, 0}, grid={1, 1}, pivot={0.5, 0.5}}
-    res.sprites[.ALIEN]        = Sprite{coords={2, 0}, grid={1, 1}, pivot={0.5, 0.5}}
-    res.sprites[.ASTEROID]     = Sprite{coords={3, 0}, grid={1, 1}, pivot={0.5, 0.5}}
-    res.sprites[.PROJECTILE]   = Sprite{coords={5, 0}, grid={1, 1}, pivot={0.5, 0.5}}
-    res.sprites[.ASTEROID_BIG] = Sprite{coords={0, 1}, grid={2, 2}, pivot={0.5, 0.5}}
+    res.sprites[.NIL]          = {coords={0, 0}, grid={1, 1}, pivot={0.5, 0.5}}
+    res.sprites[.SHIP]         = {coords={1, 0}, grid={1, 1}, pivot={0.5, 0.5}}
+    res.sprites[.ALIEN]        = {coords={2, 0}, grid={1, 1}, pivot={0.5, 0.5}}
+    res.sprites[.ASTEROID]     = {coords={3, 0}, grid={1, 1}, pivot={0.5, 0.5}}
+    res.sprites[.PROJECTILE]   = {coords={5, 0}, grid={1, 1}, pivot={0.5, 0.5}}
+    res.sprites[.ASTEROID_BIG] = {coords={0, 1}, grid={2, 2}, pivot={0.5, 0.5}}
+    res.sprites[.CIRCLE]       = {coords={2, 1}, grid={1, 1}, pivot={0.5, 0.5}}
 
     for &sprite in res.sprites
     {

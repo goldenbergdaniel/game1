@@ -13,8 +13,11 @@ import vm "src:vecmath"
 
 // Game //////////////////////////////////////////////////////////////////////////////////
 
-@(thread_local, private="file") game_frame_arena: mem.Arena
-@(thread_local, private="file") game: ^Game
+@(thread_local, private="file")
+game: ^Game
+
+@(thread_local, private="file")
+game_frame_arena: mem.Arena
 
 Game :: struct
 {
@@ -35,30 +38,33 @@ init_game :: proc(gm: ^Game)
   player := alloc_entity(gm)
   player.flags = {.ACTIVE}
   player.props = {.WRAP_AT_WORLD_EDGES}
-  player.dim = {30, 30}
+  player.dim = {32, 32}
   player.tint = {1, 1, 1, 1}
   player.color = {0, 0, 0, 0}
   player.sprite = .SHIP
   player.z_layer = .PLAYER
+  player.collider.kind = .POLYGON
 
   enemy := alloc_entity(gm)
   enemy.flags = {.ACTIVE}
   enemy.props = {.WRAP_AT_WORLD_EDGES}
   enemy.pos = {WORLD_WIDTH - 70, 0}
-  enemy.dim = {30, 30}
+  enemy.dim = {32, 32}
   enemy.tint = {1, 0, 0, 1}
   enemy.color = {0, 0, 0, 0}
   enemy.sprite = .ALIEN
+  enemy.radius = 16
   enemy.z_layer = .ENEMY
+  enemy.collider.kind = .POLYGON
 
   asteroid := alloc_entity(gm)
   asteroid.flags = {.ACTIVE}
-  asteroid.pos = {WORLD_WIDTH/2 - 50, WORLD_HEIGHT/2 - 50}
-  asteroid.dim = {60, 60}
+  asteroid.pos = {WORLD_WIDTH/2, WORLD_HEIGHT/2}
+  asteroid.dim = {64, 64}
   asteroid.tint = {0.57, 0.53, 0.49, 1}
   asteroid.sprite = .ASTEROID_BIG
   asteroid.z_layer = .DECORATION
-
+  
   sp_entities[.PLAYER] = player
 }
 
@@ -68,6 +74,7 @@ update_game :: proc(gm: ^Game, dt: f32)
 
   player := sp_entities[.PLAYER]
   window_size := plf.window_size(&user.window)
+  cursor_pos := screen_to_world_pos(plf.cursor_pos())
 
   if plf.key_pressed(.ESCAPE)
   {
@@ -91,21 +98,10 @@ update_game :: proc(gm: ^Game, dt: f32)
     }
   }
 
-  gm.entities[2].tint = v4f{abs(math.sin(gm.t * dt * 40)), 0, 0, 1}
+  // gm.entities[2].tint = v4f{abs(math.sin(gm.t * dt * 40)), 0, 0, 1}
 
   color := abs(math.sin(gm.t * dt * 40))
   gm.entities[3].rot = gm.t * dt * 5 * math.PI
-
-  if !plf.key_pressed(.A) && !plf.key_pressed(.D)
-  {
-    entity_look_at_point(player, screen_to_world_pos(plf.cursor_pos()))
-  }
-
-  if plf.mouse_btn_just_pressed(.LEFT)
-  {
-    proj := spawn_entity_projectile(player.pos + player.vel * dt)
-    proj.vel = {math.cos(player.rot), math.sin(player.rot)} * 500
-  }
   
   SPEED :: 600.0
   ACC   :: 400.0
@@ -119,6 +115,11 @@ update_game :: proc(gm: ^Game, dt: f32)
   if plf.key_pressed(.D) && !plf.key_pressed(.A)
   {
     player.rot += 2 * dt
+  }
+
+  if !plf.key_pressed(.A) && !plf.key_pressed(.D)
+  {
+    // entity_look_at_point(player, cursor_pos())
   }
 
   if plf.key_pressed(.W) && !plf.key_pressed(.S)
@@ -143,13 +144,43 @@ update_game :: proc(gm: ^Game, dt: f32)
     player.vel.y = approx(player.vel.y, 0, 1)
   }
 
-  gm.entities[2].vel = {-50, 50}
+  // - Player attack ---
+  {
+    if !player.attack_timer.ticking
+    {
+      timer_start(&player.attack_timer, 0.1)
+    }
+
+    if plf.mouse_btn_pressed(.LEFT) && timer_timeout(&player.attack_timer)
+    {
+      player.attack_timer.ticking = false
+
+      proj := spawn_entity_projectile(player.pos + player.vel * dt)
+      proj.vel = {math.cos(player.rot), math.sin(player.rot)} * 500
+    }
+  }
+
+  gm.entities[2].pos = cursor_pos
+  // gm.entities[2].vel = {-50, 50}
 
   for &en in gm.entities
   {
     if .ACTIVE not_in en.flags do continue
     
     en.pos += en.vel * dt
+  }
+
+
+  // - Collision detection ---
+  {
+    if entity_collision(player, &gm.entities[2])
+    {
+      player.tint = {0, 1, 0, 1}
+    }
+    else
+    {
+      player.tint = {1, 1, 1, 1}
+    }
   }
 
   for &en in gm.entities
@@ -191,7 +222,7 @@ update_game :: proc(gm: ^Game, dt: f32)
     {
       if !en.death_timer.ticking
       {
-        timer_start(&en.death_timer, 1)
+        timer_start(&en.death_timer, 2.0)
       }
 
       if timer_timeout(&en.death_timer)
@@ -354,20 +385,22 @@ screen_to_world_pos :: proc(pos: v2f) -> v2f
 
 Entity :: struct
 {
-  idx:       u32,
-  gen:       u32,
-  flags:     bit_set[Entity_Flag],
-  props:     bit_set[Entity_Prop],
-  pos:       v2f,
-  vel:       v2f,
-  dim:       v2f,
-  rot:       f32,
-  input_dir: v2f,
-  tint:      v4f,
-  color:     v4f,
-  sprite:    Sprite_ID,
-  z_index:   i16,
-  z_layer:   enum u8
+  idx:          u32,
+  gen:          u32,
+  flags:        bit_set[Entity_Flag],
+  props:        bit_set[Entity_Prop],
+  pos:          v2f,
+  vel:          v2f,
+  dim:          v2f,
+  radius:       f32,
+  rot:          f32,
+  input_dir:    v2f,
+  tint:         v4f,
+  color:        v4f,
+  sprite:       Sprite_ID,
+  collider:     Collider,
+  z_index:      i16,
+  z_layer:      enum u8
   {
     NIL,
     DECORATION,
@@ -375,7 +408,8 @@ Entity :: struct
     PLAYER,
     PROJECTILE,
   },
-  death_timer: Timer,
+  attack_timer: Timer,
+  death_timer:  Timer,
 }
 
 Entity_Ref :: struct
@@ -484,6 +518,58 @@ entity_look_at_point :: proc(en: ^Entity, target: v2f)
   }
 }
 
+pos_tl_from_entity :: proc(en: ^Entity) -> v2f
+{
+  local_pos := vm.rotation_2x2f(en.rot) * v2f{-en.dim.x * 0.5, -en.dim.y * 0.5}
+  return local_pos + en.pos
+}
+
+pos_tr_from_entity :: proc(en: ^Entity) -> v2f
+{
+  local_pos := vm.rotation_2x2f(en.rot) * v2f{+en.dim.x * 0.5, -en.dim.y * 0.5}
+  return local_pos + en.pos
+}
+
+pos_br_from_entity :: proc(en: ^Entity) -> v2f
+{
+  local_pos := vm.rotation_2x2f(en.rot) * v2f{+en.dim.x * 0.5, +en.dim.y * 0.5}
+  return local_pos + en.pos
+}
+
+pos_bl_from_entity :: proc(en: ^Entity) -> v2f
+{
+  local_pos := vm.rotation_2x2f(en.rot) * v2f{-en.dim.x * 0.5, +en.dim.y * 0.5}
+  return local_pos + en.pos
+}
+
+entity_collision :: proc(en_a, en_b: ^Entity) -> bool
+{
+  result: bool
+
+  if en_a.collider.kind == .NIL || en_b.collider.kind == .NIL
+  {
+    result = false
+  }
+  else if en_a.collider.kind == .CIRCLE && en_b.collider.kind == .CIRCLE
+  {
+    result = circle_circle_overlap(en_a, en_b)
+  }
+  else if en_a.collider.kind == .POLYGON && en_b.collider.kind == .POLYGON
+  {
+    result = polygon_polygon_overlap(en_a, en_b)
+  }
+  else if en_a.collider.kind == .POLYGON && en_b.collider.kind == .CIRCLE
+  {
+    result = circle_polygon_overlap(en_a, en_b)
+  }
+  else if en_a.collider.kind == .CIRCLE && en_b.collider.kind == .POLYGON
+  {
+    result = circle_polygon_overlap(en_b, en_a)
+  }
+
+  return result
+}
+
 // Timer /////////////////////////////////////////////////////////////////////////////////
 
 Timer :: struct
@@ -507,4 +593,133 @@ timer_timeout :: proc(timer: ^Timer) -> bool
 timer_remaining :: proc(timer: ^Timer) -> f32
 {
   return timer.end_time - game.t
+}
+
+// Collider //////////////////////////////////////////////////////////////////////////////
+
+Collider :: struct
+{
+  origin:     v2f,
+  radius:     f32,
+  vertices:   [8]v2f,
+  vertex_cnt: u8, 
+  kind:       enum u8 {NIL, CIRCLE, POLYGON},
+}
+
+bounds_overlap :: #force_inline proc "contextless" (a, b: [2]f32) -> bool
+{
+  return a[0] <= b[1] && a[1] >= b[0]
+}
+
+circle_circle_overlap :: proc(en_a, en_b: ^Entity) -> bool
+{
+  return vm.distance(en_a.pos, en_b.pos) <= en_a.radius + en_b.radius
+}
+
+polygon_polygon_overlap :: proc(en_a, en_b: ^Entity) -> bool
+{
+  verts_a: [4]v2f = {
+    pos_tl_from_entity(en_a),
+    pos_tr_from_entity(en_a),
+    pos_br_from_entity(en_a),
+    pos_bl_from_entity(en_a),
+  }
+
+  verts_b: [4]v2f = {
+    pos_tl_from_entity(en_b),
+    pos_tr_from_entity(en_b),
+    pos_br_from_entity(en_b),
+    pos_bl_from_entity(en_b),
+  }
+
+  // - Entity A ---
+  for i in 0..<4
+  {
+    j := (i + 1) % 4
+    proj_axis := vm.normal(verts_a[i], verts_a[j])
+    
+    min_pa := max(f32); max_pa := min(f32)
+    for k in 0..<4
+    {
+      p := vm.dot(verts_a[k], proj_axis)
+      min_pa = min(min_pa, p)
+      max_pa = max(max_pa, p)
+    }
+
+    min_pb := max(f32); max_pb := min(f32)
+    for k in 0..<4
+    {
+      p := vm.dot(verts_b[k], proj_axis)
+      min_pb = min(min_pb, p)
+      max_pb = max(max_pb, p)
+    }
+
+    if !bounds_overlap({min_pa, max_pa}, {min_pb, max_pb}) do return false
+  }
+
+  // - Entity B ---
+  for i in 0..<4
+  {
+    j := (i + 1) % 4
+    proj_axis := vm.normal(verts_b[i], verts_b[j])
+    
+    min_pa := max(f32); max_pa := min(f32)
+    for k in 0..<4
+    {
+      p := vm.dot(verts_a[k], proj_axis)
+      min_pa = min(min_pa, p)
+      max_pa = max(max_pa, p)
+    }
+
+    min_pb := max(f32); max_pb := min(f32)
+    for k in 0..<4
+    {
+      p := vm.dot(verts_b[k], proj_axis)
+      min_pb = min(min_pb, p)
+      max_pb = max(max_pb, p)
+    }
+
+    if !bounds_overlap({min_pa, max_pa}, {min_pb, max_pb}) do return false
+  }
+
+  return true
+}
+
+circle_polygon_overlap :: proc(en_a, en_b: ^Entity) -> bool
+{
+  polygon := en_a
+  circle  := en_b
+
+  verts: [4]v2f = {
+    pos_tl_from_entity(polygon),
+    pos_tr_from_entity(polygon),
+    pos_br_from_entity(polygon),
+    pos_bl_from_entity(polygon),
+  }
+
+  for i in 0..<4
+  {
+    j := (i + 1) % 4
+    edge := verts[j] - verts[i]
+
+    proj := vm.dot(circle.pos - verts[i], edge) / vm.magnitude_squared(edge)
+    edge_point: v2f
+    if proj <= 0
+    {
+      edge_point = verts[i]
+    }
+    else if proj >= 1
+    {
+      edge_point = verts[j]
+    }
+    else
+    {
+      edge_point = verts[i] + edge * proj
+    }
+    
+    dist_to_circle := vm.distance(edge_point, circle.pos)
+    if dist_to_circle <= circle.radius do return true
+  }
+
+  return false
 }
