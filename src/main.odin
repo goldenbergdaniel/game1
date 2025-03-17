@@ -57,7 +57,7 @@ main :: proc()
         user.viewport = {0, (window_size.y - img_height) / 2, window_size.x, img_height}
       }
       
-      r.set_viewport(vm.array_cast(user.viewport, i32))
+      // r.set_viewport(vm.array_cast(user.viewport, i32))
     }
 
     curr_time := time.duration_seconds(time.tick_since(start_tick))
@@ -77,9 +77,9 @@ main :: proc()
       accumulator -= SIM_STEP
     }
 
-    alpha := accumulator / SIM_STEP
-    interpolate_games(&curr_game, &prev_game, &res_game, f32(alpha))
-    render_game(&res_game, SIM_STEP)
+  //   alpha := accumulator / SIM_STEP
+  //   interpolate_games(&curr_game, &prev_game, &res_game, f32(alpha))
+  //   render_game(&res_game, SIM_STEP)
     
     plf.swap_buffers(&user.window)
   }

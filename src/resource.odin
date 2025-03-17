@@ -20,7 +20,7 @@ init_resources :: proc(arena: ^mem.Arena)
     img: ^qoi.Image
     err: qoi.Error
 
-    img, err = qoi.load_from_file("res/textures/sprites.qoi", allocator=mem.a(arena))
+    img, err = qoi.load_from_file("res/textures/sprite_map.qoi", allocator=mem.a(arena))
     assert(err == nil)
 
     res.textures[.SPRITE_ATLAS] = r.Texture{
