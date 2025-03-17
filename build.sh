@@ -7,10 +7,10 @@ PACKAGE="game"
 if [[ $1 == "game" || $1 == "metagen" ]] then PACKAGE=$1; fi
 
 MODE="debug"
-if [[ $2 == "debug" || $2 == "release" ]]; then MODE=$1; fi
+if [[ $2 == "debug" || $2 == "release" ]]; then MODE=$2; fi
 
 TARGET="linux_amd64"
-if [[ $3 == "darwin_amd64" || $3 == "darwin_arm64" || $3 == "linux_amd64" ]]; then TARGET=$2; fi
+if [[ $3 == "darwin_amd64" || $3 == "darwin_arm64" || $3 == "linux_amd64" ]]; then TARGET=$3; fi
 
 RENDER_BACKEND="opengl"
 

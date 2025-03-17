@@ -18,7 +18,7 @@ GL_Renderer :: struct
   projection:   m3x3f,
   viewport:     v4i,
   texture:      ^Texture,
-  uniforms: struct
+  uniforms:     struct
   {
     proj:       m4x4f,
   },
@@ -48,7 +48,7 @@ gl_init :: proc(window: ^plf.Window, textures: ^[Texture_ID]Texture)
 		gl.Enable(gl.MULTISAMPLE)
 
     gl.CreateTextures(gl.TEXTURE_2D, 
-                      size_of(gl_renderer.textures), 
+                      len(gl_renderer.textures), 
                       raw_data(&gl_renderer.textures))
 
     for tex, id in gl_renderer.textures
