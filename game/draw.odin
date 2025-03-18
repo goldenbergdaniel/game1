@@ -20,6 +20,7 @@ Sprite_ID :: enum
   SHIP,
   ALIEN,
   ASTEROID,
+  FOOTBALL,
   PROJECTILE,
   ASTEROID_BIG,
   CIRCLE,

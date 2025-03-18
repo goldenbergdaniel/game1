@@ -14,9 +14,10 @@ TEX_Y    :: 8
 
 Collider_Map_Entry :: struct
 {
-  vertices: [6][2]f32,
-  origin:   [2]f32,
-  kind:     type_of(game.Collider{}.kind),
+  vertices:     [6][2]int,
+  vertex_count: int,
+  origin:       [2]int,
+  kind:         type_of(game.Collider{}.kind),
 }
 
 Color :: [4]u8
@@ -36,11 +37,11 @@ main :: proc()
 generate_collider_map :: proc()
 {
   color_map.allocator = context.allocator
-  color_map[Color{255, 0, 0, 255}] = 0
+  color_map[Color{255, 0, 0, 255}]   = 0
   color_map[Color{255, 255, 0, 255}] = 1
-  color_map[Color{0, 255, 0, 255}] = 2
+  color_map[Color{0, 255, 0, 255}]   = 2
   color_map[Color{0, 255, 255, 255}] = 3
-  color_map[Color{0, 0, 255, 255}] = 4
+  color_map[Color{0, 0, 255, 255}]   = 4
   color_map[Color{255, 0, 255, 255}] = 5
   
   gen_buffer: strings.Builder = strings.builder_make()
@@ -77,9 +78,32 @@ collider_map_from_bitmap :: proc(data: []byte)
     {
       vertex_idx := color_map[color]
       collider_map[sprite].vertices[vertex_idx] = {
-        f32(pixel_idx % TEX_CELL),
-        f32((pixel_idx / (TEX_CELL * TEX_Y)) % TEX_CELL),
+        pixel_idx % TEX_CELL + 1,
+        (pixel_idx / (TEX_CELL * TEX_Y)) % TEX_CELL + 1,
       }
+    }
+  }
+
+  for &entry in collider_map
+  {
+    for &vert in entry.vertices
+    {
+      if vert != {0, 0}
+      {
+        entry.vertex_count += 1
+      }
+
+      vert -= 1
+    }
+
+    if entry.vertex_count == 1
+    {
+      entry.kind = .CIRCLE
+      entry.origin = entry.vertices[0]
+    }
+    else
+    {
+      entry.kind = .POLYGON
     }
   }
 
@@ -103,9 +127,10 @@ write_collider_map_entry_struct :: proc(buf: ^strings.Builder)
   STRING :: `
 Collider_Map_Entry :: struct
 {
-  vertices: [6][2]f32,
-  origin:   [2]f32,
-  kind:     type_of(Collider{}.kind),
+  vertices:     [6][2]int,
+  vertex_count: int,
+  origin:       [2]int,
+  kind:         type_of(Collider{}.kind),
 }
 
 `
