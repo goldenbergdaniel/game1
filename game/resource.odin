@@ -21,19 +21,9 @@ init_resources :: proc(arena: ^mem.Arena)
     err: qoi.Error
 
     img, err = qoi.load_from_file("res/textures/sprite_map.qoi", allocator=mem.a(arena))
-    assert(err == nil)
+    if err != nil do panic("Error opening texture file.")
 
     res.textures[.SPRITE_MAP] = r.Texture{
-      data = img.pixels.buf[:],
-      width = cast(i32) img.width,
-      height = cast(i32) img.height,
-      cell = 16,
-    }
-
-    img, err = qoi.load_from_file("res/textures/collider_map.qoi", allocator=mem.a(arena))
-    assert(err == nil)
-
-    res.textures[.COLLIDER_MAP] = r.Texture{
       data = img.pixels.buf[:],
       width = cast(i32) img.width,
       height = cast(i32) img.height,

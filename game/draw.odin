@@ -19,8 +19,8 @@ Sprite_ID :: enum
   NIL,
   SHIP,
   ALIEN,
-  PROJECTILE,
   ASTEROID,
+  PROJECTILE,
   ASTEROID_BIG,
   CIRCLE,
 }

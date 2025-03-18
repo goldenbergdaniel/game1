@@ -28,7 +28,6 @@ Texture :: struct
 Texture_ID :: enum
 {
   SPRITE_MAP,
-  COLLIDER_MAP,
 }
 
 @(private="file")

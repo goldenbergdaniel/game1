@@ -19,8 +19,6 @@ game: ^Game
 @(thread_local, private="file")
 game_frame_arena: mem.Arena
 
-// @(const) hello: int
-
 Game :: struct
 {
   t:            f32,
@@ -100,7 +98,10 @@ update_game :: proc(gm: ^Game, dt: f32)
     }
   }
 
-  gm.entities[2].tint = v4f{abs(math.sin(gm.t * dt * 40)), 0, 0, 1}
+  if gm.entities[2].gen == 0
+  {
+    gm.entities[2].tint = v4f{abs(math.sin(gm.t * dt * 40)), 0, 0, 1}
+  }
 
   color := abs(math.sin(gm.t * dt * 40))
   gm.entities[3].rot = gm.t * dt * 5 * math.PI
@@ -157,12 +158,15 @@ update_game :: proc(gm: ^Game, dt: f32)
     {
       player.attack_timer.ticking = false
 
-      proj := spawn_entity_projectile(player.pos + player.vel * dt)
+      proj := spawn_entity_weapon(player.pos + player.vel * dt)
       proj.vel = {math.cos(player.rot), math.sin(player.rot)} * 500
     }
   }
 
-  gm.entities[2].vel = {-50, 50}
+  if gm.entities[2].gen == 0
+  {
+    gm.entities[2].vel = {-50, 50}
+  }
 
   for &en in gm.entities
   {
@@ -474,7 +478,6 @@ alloc_entity :: proc(gm: ^Game) -> ^Entity
     if en.idx == 0
     {
       en.idx = cast(u32) i + 1
-      en.gen += 1
       result = &en
       
       gm.entity_count += 1
@@ -491,12 +494,12 @@ free_entity :: proc(gm: ^Game, en: ^Entity)
 
   gen := en.gen
   en^ = {}
-  en.gen = gen
+  en.gen = gen + 1
 
   gm.entity_count -= 1
 }
 
-spawn_entity_projectile :: proc(pos: v2f) -> ^Entity
+spawn_entity_weapon :: proc(pos: v2f) -> ^Entity
 {
   en := alloc_entity(game)
   en.flags = {.ACTIVE, .INTERPOLATE}

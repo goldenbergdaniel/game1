@@ -26,12 +26,12 @@ echo [mode:$MODE]
 # --- PREPROCESS -------------------------------------------------------------------------
 
 # echo [proprocess]
-out/metagen 2> /dev/null || true
+if [[ $PACKAGE == "game" ]]; then out/metagen; fi
 
 # --- BUILD ------------------------------------------------------------------------------
 
 # echo [build]
 
 mkdir -p out
-odin build $PACKAGE -out:out/game -target:$TARGET $FLAGS
-if [[ $MODE == "debug" ]]; then out/game; fi
+odin build $PACKAGE -out:out/$PACKAGE -target:$TARGET $FLAGS
+if [[ $MODE == "debug" ]]; then out/$PACKAGE; fi

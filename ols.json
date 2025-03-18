@@ -3,7 +3,7 @@
   "collections": [
     {
       "name": "src",
-      "path": "src"
+      "path": "game"
     },
     {
       "name": "ext",
@@ -23,7 +23,7 @@
   [
     {
       "name": "main", 
-      "checker_path": ["src", "src/render", "src/platform", "src/vecmath"]
+      "checker_path": ["game", "game/render", "game/platform", "game/vecmath", "metagen"]
     }
   ]
 }
