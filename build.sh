@@ -1,37 +1,52 @@
 #!/bin/bash
 set -e
 
-# --- CONFIGURE --------------------------------------------------------------------------
+# --- CONFIGURATION ----------------------------------------------------------------------
 
-PACKAGE="game"
-if [[ $1 == "game" || $1 == "metagen" ]] then PACKAGE=$1; fi
+PACKAGE="all"
+if [[ $1 != "" ]]; then PACKAGE=$1; fi
+if [[ $PACKAGE != "game" && $PACKAGE != "metagen" && $PACKAGE != "all" ]] then 
+  echo "Failed to build. '$PACKAGE' is not valid package."
+  exit 1
+fi
 
 MODE="debug"
-if [[ $2 == "debug" || $2 == "release" ]]; then MODE=$2; fi
+if [[ $2 != "" ]]; then MODE=$2; fi
+if [[ $MODE != "debug" && $MODE != "release" ]]; then
+  echo "Failed to build. '$MODE' is not valid mode."
+  exit 1
+fi
 
 TARGET="linux_amd64"
-if [[ $3 == "darwin_amd64" || $3 == "darwin_arm64" || $3 == "linux_amd64" ]]; then TARGET=$3; fi
+if [[ $3 != "" ]]; then TARGET=$3; fi
+if [[ $TARGET != "darwin_amd64" && $TARGET != "darwin_arm64" && $TARGET != "linux_amd64" ]]; then
+  echo "Failed to build. '$TARGET' is not valid target."
+  exit 1
+fi
 
-RENDER_BACKEND="opengl"
+FLAGS="-collection:src=game -collection:ext=ext -vet-style -vet-cast -extra-linker-flags:\"-fuse-ld=mold\" $4"
 
-FLAGS="-collection:src=game -collection:ext=ext -define=RENDER_BACKEND=$RENDER_BACKEND 
-       -vet-style -vet-cast -extra-linker-flags:\"-fuse-ld=mold\" $4"
-if [[ $MODE == "debug"   ]]; then FLAGS="-o:none -debug $FLAGS"; fi
-if [[ $MODE == "release" ]]; then FLAGS="-o:speed -microarch:native -no-bounds-check $FLAGS"; fi
+mkdir -p out
 
-echo [package:$PACKAGE]
 echo [target:$TARGET]
 echo [mode:$MODE]
 
-# --- PREPROCESS -------------------------------------------------------------------------
+# --- METAGEN ----------------------------------------------------------------------------
 
-# echo [proprocess]
-if [[ $PACKAGE == "game" ]]; then out/metagen; fi
+echo [metagen]
 
-# --- BUILD ------------------------------------------------------------------------------
+if [[ $PACKAGE == "all" || $PACKAGE == "metagen" ]]; then
+  odin run metagen -out:out/metagen -target:$TARGET $FLAGS
+fi
 
-# echo [build]
+# --- GAME -------------------------------------------------------------------------------
 
-mkdir -p out
-odin build $PACKAGE -out:out/$PACKAGE -target:$TARGET $FLAGS
-if [[ $MODE == "debug" ]]; then out/$PACKAGE; fi
+if [[ $MODE == "debug"   ]]; then FLAGS="-o:none -debug $FLAGS"; fi
+if [[ $MODE == "release" ]]; then FLAGS="-o:speed -microarch:native -no-bounds-check $FLAGS"; fi
+
+echo [game]
+
+if [[ $PACKAGE == "all" || $PACKAGE == "game" ]]; then
+  odin build game -out:out/game -target:$TARGET $FLAGS
+  if [[ $MODE == "debug" ]]; then out/game; fi
+fi
