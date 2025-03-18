@@ -12,15 +12,15 @@ TEX_CELL :: 16
 TEX_X    :: 8
 TEX_Y    :: 8
 
+Color :: [4]u8
+
 Collider_Map_Entry :: struct
 {
-  vertices:     [6][2]int,
+  vertices:     [6][2]f32,
   vertex_count: int,
-  origin:       [2]int,
+  origin:       [2]f32,
   kind:         type_of(game.Collider{}.kind),
 }
-
-Color :: [4]u8
 
 perm_arena: mem.Arena
 collider_map: [game.Sprite_ID]Collider_Map_Entry
@@ -59,7 +59,7 @@ generate_collider_map :: proc()
   output_file, open_err := os.open("game/game.gen.odin", file_flags, 0o644)
   if open_err != nil do panic("Metagen: Error creating generated file.")
 
-  os.write(output_file, transmute([]byte) strings.to_string(gen_buffer))
+  os.write(output_file, gen_buffer.buf[:])
 }
 
 // TODO(dg): This will not work for sprites larger than 16x16. Fix it!
@@ -69,7 +69,7 @@ collider_map_from_bitmap :: proc(data: []byte)
   {
     pixel_idx := i / 4
     
-    cell_idx := (pixel_idx / TEX_CELL) % (TEX_X)
+    cell_idx := (pixel_idx / TEX_CELL) % TEX_X
     cell_idx += (pixel_idx / (TEX_CELL * TEX_CELL * TEX_Y)) * TEX_X
     sprite := cast(game.Sprite_ID) (cell_idx % int(max(game.Sprite_ID)))
 
@@ -78,8 +78,8 @@ collider_map_from_bitmap :: proc(data: []byte)
     {
       vertex_idx := color_map[color]
       collider_map[sprite].vertices[vertex_idx] = {
-        pixel_idx % TEX_CELL + 1,
-        (pixel_idx / (TEX_CELL * TEX_Y)) % TEX_CELL + 1,
+        f32(pixel_idx % TEX_CELL) + 1,
+        f32((pixel_idx / (TEX_CELL * TEX_Y)) % TEX_CELL) + 1,
       }
     }
   }
@@ -88,12 +88,12 @@ collider_map_from_bitmap :: proc(data: []byte)
   {
     for &vert in entry.vertices
     {
-      if vert != {0, 0}
+      vert -= 1
+      if vert != {-1, -1}
       {
         entry.vertex_count += 1
+        vert += 0.5
       }
-
-      vert -= 1
     }
 
     if entry.vertex_count == 1
@@ -107,7 +107,7 @@ collider_map_from_bitmap :: proc(data: []byte)
     }
   }
 
-  color_from_data :: proc(pixels: []byte) -> Color
+  color_from_data :: #force_inline proc(pixels: []byte) -> Color
   {
     return {pixels[0], pixels[1], pixels[2], pixels[3]}
   }
@@ -127,9 +127,9 @@ write_collider_map_entry_struct :: proc(buf: ^strings.Builder)
   STRING :: `
 Collider_Map_Entry :: struct
 {
-  vertices:     [6][2]int,
+  vertices:     [6]v2f,
   vertex_count: int,
-  origin:       [2]int,
+  origin:       v2f,
   kind:         type_of(Collider{}.kind),
 }
 
