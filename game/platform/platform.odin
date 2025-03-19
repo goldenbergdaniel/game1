@@ -53,24 +53,33 @@ Event_Kind :: enum u16
 
 Key_Kind :: enum u8
 {
-  NONE,
-
+  NIL,
   A,
   D,
   K,
   L,
   S,
   W,
+  S0,
+  S1,
+  S2,
+  S3,
+  S4,
+  S5,
+  S6,
+  S7,
+  S8,
+  S9,
   LEFT_CTRL,
   ESCAPE,
   SPACE,
   ENTER,
+  BACKSPACE,
 }
 
 Mouse_Btn_Kind :: enum u8
 {
-  NONE,
-
+  NIL,
   LEFT,
   RIGHT,
   MIDDLE,

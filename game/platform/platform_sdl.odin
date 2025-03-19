@@ -106,30 +106,52 @@ sdl_translate_event :: #force_inline proc(sdl_event: ^sdl.Event) -> Event
   case .KEY_DOWN:
     #partial switch sdl_event.key.scancode
     {
-		case .A:			result = Event{kind = .KEY_DOWN, key_kind = .A}
-		case .D:			result = Event{kind = .KEY_DOWN, key_kind = .D}
-		case .K:			result = Event{kind = .KEY_DOWN, key_kind = .K}
-		case .L:			result = Event{kind = .KEY_DOWN, key_kind = .L}
-		case .S:			result = Event{kind = .KEY_DOWN, key_kind = .S}
-		case .W:			result = Event{kind = .KEY_DOWN, key_kind = .W}
-    case .LCTRL: 	result = Event{kind = .KEY_DOWN, key_kind = .LEFT_CTRL}
-    case .ESCAPE: result = Event{kind = .KEY_DOWN, key_kind = .ESCAPE}
-    case .SPACE:  result = Event{kind = .KEY_DOWN, key_kind = .SPACE}
-    case .RETURN: result = Event{kind = .KEY_DOWN, key_kind = .ENTER}
+		case .A:				 result = Event{kind = .KEY_DOWN, key_kind = .A}
+		case .D:				 result = Event{kind = .KEY_DOWN, key_kind = .D}
+		case .K:				 result = Event{kind = .KEY_DOWN, key_kind = .K}
+		case .L:				 result = Event{kind = .KEY_DOWN, key_kind = .L}
+		case .S:				 result = Event{kind = .KEY_DOWN, key_kind = .S}
+		case .W:				 result = Event{kind = .KEY_DOWN, key_kind = .W}
+		case ._0:				 result = Event{kind = .KEY_DOWN, key_kind = .S0}
+		case ._1:				 result = Event{kind = .KEY_DOWN, key_kind = .S1}
+		case ._2:				 result = Event{kind = .KEY_DOWN, key_kind = .S2}
+		case ._3:				 result = Event{kind = .KEY_DOWN, key_kind = .S3}
+		case ._4:				 result = Event{kind = .KEY_DOWN, key_kind = .S4}
+		case ._5:				 result = Event{kind = .KEY_DOWN, key_kind = .S5}
+		case ._6:				 result = Event{kind = .KEY_DOWN, key_kind = .S6}
+		case ._7:				 result = Event{kind = .KEY_DOWN, key_kind = .S7}
+		case ._8:				 result = Event{kind = .KEY_DOWN, key_kind = .S8}
+		case ._9:				 result = Event{kind = .KEY_DOWN, key_kind = .S9}
+    case .LCTRL: 		 result = Event{kind = .KEY_DOWN, key_kind = .LEFT_CTRL}
+    case .ESCAPE: 	 result = Event{kind = .KEY_DOWN, key_kind = .ESCAPE}
+    case .SPACE:  	 result = Event{kind = .KEY_DOWN, key_kind = .SPACE}
+    case .RETURN: 	 result = Event{kind = .KEY_DOWN, key_kind = .ENTER}
+  	case .BACKSPACE: result = Event{kind = .KEY_DOWN, key_kind = .BACKSPACE}
     }
 	case .KEY_UP:
     #partial switch sdl_event.key.scancode
     {
-		case .A:			result = Event{kind = .KEY_UP, key_kind = .A}
-		case .D:			result = Event{kind = .KEY_UP, key_kind = .D}
-		case .K:			result = Event{kind = .KEY_UP, key_kind = .K}
-		case .L:			result = Event{kind = .KEY_UP, key_kind = .L}
-		case .S:			result = Event{kind = .KEY_UP, key_kind = .S}
-		case .W:			result = Event{kind = .KEY_UP, key_kind = .W}
-    case .LCTRL: 	result = Event{kind = .KEY_UP, key_kind = .LEFT_CTRL}
-    case .ESCAPE: result = Event{kind = .KEY_UP, key_kind = .ESCAPE}
-    case .SPACE:  result = Event{kind = .KEY_UP, key_kind = .SPACE}
-    case .RETURN: result = Event{kind = .KEY_UP, key_kind = .ENTER}
+		case .A:				 result = Event{kind = .KEY_UP, key_kind = .A}
+		case .D:				 result = Event{kind = .KEY_UP, key_kind = .D}
+		case .K:				 result = Event{kind = .KEY_UP, key_kind = .K}
+		case .L:				 result = Event{kind = .KEY_UP, key_kind = .L}
+		case .S:				 result = Event{kind = .KEY_UP, key_kind = .S}
+		case .W:				 result = Event{kind = .KEY_UP, key_kind = .W}
+		case ._0:				 result = Event{kind = .KEY_UP, key_kind = .S0}
+		case ._1:				 result = Event{kind = .KEY_UP, key_kind = .S1}
+		case ._2:				 result = Event{kind = .KEY_UP, key_kind = .S2}
+		case ._3:				 result = Event{kind = .KEY_UP, key_kind = .S3}
+		case ._4:				 result = Event{kind = .KEY_UP, key_kind = .S4}
+		case ._5:				 result = Event{kind = .KEY_UP, key_kind = .S5}
+		case ._6:				 result = Event{kind = .KEY_UP, key_kind = .S6}
+		case ._7:				 result = Event{kind = .KEY_UP, key_kind = .S7}
+		case ._8:				 result = Event{kind = .KEY_UP, key_kind = .S8}
+		case ._9:				 result = Event{kind = .KEY_UP, key_kind = .S9}
+    case .LCTRL: 		 result = Event{kind = .KEY_UP, key_kind = .LEFT_CTRL}
+    case .ESCAPE: 	 result = Event{kind = .KEY_UP, key_kind = .ESCAPE}
+    case .SPACE:  	 result = Event{kind = .KEY_UP, key_kind = .SPACE}
+    case .RETURN: 	 result = Event{kind = .KEY_UP, key_kind = .ENTER}
+  	case .BACKSPACE: result = Event{kind = .KEY_UP, key_kind = .BACKSPACE}
     }
 	case .MOUSE_BUTTON_DOWN:
 		switch sdl_event.button.button

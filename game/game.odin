@@ -15,10 +15,12 @@ import "ext:basic/mem"
 
 @(thread_local, private="file")
 global_game_frame_arena: mem.Arena
+global_debug: bool
 
 Game :: struct
 {
   t:                  f32,
+  t_mult:             f32,
   entities:           [128+1]Entity,
   entities_cnt:       int,
   debug_entities:     [128]Debug_Entity,
@@ -46,6 +48,8 @@ init_game :: proc(gm: ^Game)
 {
   // NOTE(dg): What if multiple games running on same thread? This needs to change. 
   mem.init_growing_arena(&global_game_frame_arena)
+
+  gm.t_mult = 1
 
   player := alloc_entity(gm)
   player.flags = {.ACTIVE}
@@ -83,7 +87,7 @@ init_game :: proc(gm: ^Game)
 update_game :: proc(gm: ^Game, dt: f32)
 {
   set_current_game(gm)
-
+  
   player := sp_entities[.PLAYER]
   window_size := plf.window_size(&user.window)
   cursor_pos := screen_to_world_pos(plf.cursor_pos())
@@ -108,7 +112,7 @@ update_game :: proc(gm: ^Game, dt: f32)
     }
   }
 
-  // - Window management keybinds ---
+  // - Global keybinds ---
   {
     if plf.key_pressed(.ESCAPE)
     {
@@ -120,19 +124,44 @@ update_game :: proc(gm: ^Game, dt: f32)
       plf.window_toggle_fullscreen(&user.window)
     }
 
-    if plf.key_pressed(.SPACE)
+    if plf.key_just_pressed(.BACKSPACE)
     {
-      debug_circle(cursor_pos, radius=16)
+      global_debug = !global_debug
+      println("Set debug render to", global_debug)
+    }
+
+    if plf.key_just_pressed(.S1) && plf.key_pressed(.LEFT_CTRL)
+    {
+      gm.t_mult = 1
+      println("Set time multiplier to", 1.0)
+    }
+
+    if plf.key_just_pressed(.S2) && plf.key_pressed(.LEFT_CTRL)
+    {
+      gm.t_mult = 0.5
+      println("Set time multiplier to", 0.5)
+    }
+
+    if plf.key_just_pressed(.S3) && plf.key_pressed(.LEFT_CTRL)
+    {
+      gm.t_mult = 0.25
+      println("Set time multiplier to", 0.25)
+    }
+
+    if plf.key_just_pressed(.S4) && plf.key_pressed(.LEFT_CTRL)
+    {
+      gm.t_mult = 2
+      println("Set time multiplier to", 2.0)
     }
   }
 
-  if gm.entities[2].gen == 0
-  {
-    gm.entities[2].tint = v4f{abs(math.sin(gm.t * dt * 40)), 0, 0, 1}
-  }
+  // if gm.entities[2].gen == 0
+  // {
+  //   gm.entities[2].tint = v4f{abs(math.sin(gm.t * dt * 40)), 0, 0, 1}
+  // }
 
   color := abs(math.sin(gm.t * dt * 40))
-  gm.entities[3].rot = gm.t * dt * 5 * math.PI
+  gm.entities[3].rot += 2 * math.PI * dt
   
   // - Player movement ---
   {
@@ -204,6 +233,14 @@ update_game :: proc(gm: ^Game, dt: f32)
     if .ACTIVE not_in en.flags do continue
     
     en.pos += en.vel * dt
+  }
+
+  // - Update colliders ---
+  for &en in gm.entities
+  {
+    if .ACTIVE not_in en.flags || en.collider.kind == .NIL do continue
+
+    update_entity_collider(&en)
   }
 
   // - Collision detection ---
@@ -346,11 +383,14 @@ render_game :: proc(gm: ^Game, dt: f32)
     draw_rect(en.pos, en.dim, en.rot, en.tint, en.color, en.sprite)
   }
 
-  for den in gm.debug_entities
+  if global_debug
   {
-    if .ACTIVE not_in den.flags do continue
+    for den in gm.debug_entities
+    {
+      if .ACTIVE not_in den.flags do continue
 
-    draw_rect(den.pos, den.dim, den.rot, den.tint, den.color, den.sprite)
+      draw_rect(den.pos, den.dim, den.rot, den.tint, den.color, den.sprite)
+    }
   }
 
   end_draw()
@@ -381,19 +421,22 @@ interpolate_games :: proc(curr_gm, prev_gm, res_gm: ^Game, alpha: f32)
   }
 
   // - Interpolate debug entities ---
-  for i in 0..<len(res_gm.debug_entities)
+  if global_debug
   {
-    curr_den := &curr_gm.debug_entities[i]
-    prev_den := &prev_gm.debug_entities[i]
-
-    if !entity_has_flags(cast(^Entity) curr_den, {.ACTIVE, .INTERPOLATE}) ||
-       !entity_has_flags(cast(^Entity) prev_den, {.ACTIVE, .INTERPOLATE})
+    for i in 0..<len(res_gm.debug_entities)
     {
-      continue
-    }
+      curr_den := &curr_gm.debug_entities[i]
+      prev_den := &prev_gm.debug_entities[i]
 
-    res_gm.debug_entities[i].pos = vm.lerp(prev_den.pos, curr_den.pos, alpha)
-    res_gm.debug_entities[i].rot = vm.lerp_angle(prev_den.rot, curr_den.rot, alpha)
+      if !entity_has_flags(curr_den, {.ACTIVE, .INTERPOLATE}) ||
+         !entity_has_flags(prev_den, {.ACTIVE, .INTERPOLATE})
+      {
+        continue
+      }
+
+      res_gm.debug_entities[i].pos = vm.lerp(prev_den.pos, curr_den.pos, alpha)
+      res_gm.debug_entities[i].rot = vm.lerp_angle(prev_den.rot, curr_den.rot, alpha)
+    }
   }
 }
 
@@ -581,17 +624,17 @@ kill_entity :: proc(en: ^Entity)
   en.flags += {.MARKED_FOR_DEATH}
 }
 
-entity_has_flags :: #force_inline proc(en: ^Entity, flags: bit_set[Entity_Flag]) -> bool
+entity_has_flags :: #force_inline proc(en: ^$E/Entity, flags: bit_set[Entity_Flag]) -> bool
 {
   return en.flags & flags == flags
 }
 
-entity_has_props :: #force_inline proc(en: ^Entity, props: bit_set[Entity_Prop]) -> bool
+entity_has_props :: #force_inline proc(en: ^$E/Entity, props: bit_set[Entity_Prop]) -> bool
 {
   return en.props & props == props
 }
 
-entity_look_at_point :: proc(en: ^Entity, target: v2f)
+entity_look_at_point :: proc(en: ^$E/Entity, target: v2f)
 {
   dd := target - (en.pos + (res.sprites[en.sprite].pivot * en.dim))
   en.rot = math.atan2(dd.y, dd.x)
@@ -625,6 +668,35 @@ pos_bl_from_entity :: proc(en: ^Entity) -> v2f
   return local_pos + en.pos
 }
 
+entity_collider_vertex_pos :: proc(en: ^Entity, v: v2f) -> v2f
+{
+  local_pos := vm.rotation_2x2f(en.rot) * v * 2
+  return pos_tl_from_entity(en) + local_pos
+}
+
+local_xform_from_entity :: proc(en: ^Entity) -> m3x3f
+{
+  result := vm.scale_3x3f({2, 2})
+  result = vm.rotation_3x3f(en.rot) * result
+  result = vm.translation_3x3f(pos_tl_from_entity(en)) * result
+  return result
+}
+
+update_entity_collider :: proc(en: ^Entity)
+{
+  en.collider.vertices_cnt = cast(u8) collider_map[en.sprite].vertex_count
+  for i in 0..<en.collider.vertices_cnt
+  {
+    v := local_xform_from_entity(en) * vm.v3f(collider_map[en.sprite].vertices[i], 1)
+    en.collider.vertices[i] = v.xy
+  }
+
+  for vert in en.collider.vertices[:en.collider.vertices_cnt]
+  {
+    debug_circle(vert, 4, color={0, 1, 0, 0}, alpha=0.75)
+  }
+}
+
 entity_collision :: proc(en_a, en_b: ^Entity) -> bool
 {
   result: bool
@@ -638,49 +710,17 @@ entity_collision :: proc(en_a, en_b: ^Entity) -> bool
     result = circle_circle_overlap(&en_a.collider, &en_b.collider)
   }
   else if en_a.collider.kind == .POLYGON && en_b.collider.kind == .POLYGON
-  {
-    en_a.collider.vertices_cnt = 4
-    en_a.collider.vertices = {
-      0 = pos_tl_from_entity(en_a),
-      1 = pos_tr_from_entity(en_a),
-      2 = pos_br_from_entity(en_a),
-      3 = pos_bl_from_entity(en_a),
-    }
-
-    en_b.collider.vertices_cnt = 4
-    en_b.collider.vertices = {
-      0 = pos_tl_from_entity(en_b),
-      1 = pos_tr_from_entity(en_b),
-      2 = pos_br_from_entity(en_b),
-      3 = pos_bl_from_entity(en_b),
-    }
-    
+  { 
     result = polygon_polygon_overlap(&en_a.collider, &en_b.collider)
   }
   else if en_a.collider.kind == .CIRCLE && en_b.collider.kind == .POLYGON
   {
     en_a.collider.origin = en_a.pos
 
-    en_b.collider.vertices_cnt = 4
-    en_b.collider.vertices = {
-      0 = pos_tl_from_entity(en_b),
-      1 = pos_tr_from_entity(en_b),
-      2 = pos_br_from_entity(en_b),
-      3 = pos_bl_from_entity(en_b),
-    }
-
     result = circle_polygon_overlap(&en_a.collider, &en_b.collider)
   }
   else if en_a.collider.kind == .POLYGON && en_b.collider.kind == .CIRCLE
   {
-    en_a.collider.vertices_cnt = 4
-    en_a.collider.vertices = {
-      0 = pos_tl_from_entity(en_a),
-      1 = pos_tr_from_entity(en_a),
-      2 = pos_br_from_entity(en_a),
-      3 = pos_bl_from_entity(en_a),
-    }
-
     en_b.collider.origin = en_b.pos
 
     result = circle_polygon_overlap(&en_b.collider, &en_a.collider)
@@ -738,6 +778,7 @@ debug_circle :: proc(
   pos:    v2f,
   radius: f32, 
   color:  v4f = {0, 1, 0, 0},
+  alpha:  f32 = 0.5,
 ) -> ^Debug_Entity
 {
   gm := get_current_game()
@@ -746,7 +787,7 @@ debug_circle :: proc(
   result.pos = pos
   result.dim = {radius, radius}
   result.color = color
-  result.tint = {1, 1, 1, 0.5}
+  result.tint = {1, 1, 1, alpha}
   result.sprite = .CIRCLE
 
   return result

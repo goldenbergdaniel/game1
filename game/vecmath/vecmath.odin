@@ -5,6 +5,16 @@ import "core:math"
 
 // Vector ///////////////////////////////////////////////////////////////////////////
 
+v3f :: #force_inline proc "contextless" (v: [2]f32, z: f32) -> [3]f32
+{
+  return {v.x, v.y, z}
+}
+
+v4f :: #force_inline proc "contextless" (v: [3]f32, w: f32) -> [4]f32
+{
+  return {v.x, v.y, v.z, w}
+}
+
 @(require_results)
 array_cast :: #force_inline proc "contextless" (
   arr: $A/[$N]$T, 
@@ -31,18 +41,18 @@ dot :: #force_inline proc "contextless" (
 
 cross :: proc
 {
-  cross_2f32,
-  cross_3f32,
+  cross_2f,
+  cross_3f,
 }
 
 @(require_results)
-cross_2f32 :: #force_inline proc "contextless" (a, b: [2]f32) -> f32
+cross_2f :: #force_inline proc "contextless" (a, b: [2]f32) -> f32
 {
   return a.x * b.y + a.y * b.x
 }
 
 @(require_results)
-cross_3f32 :: #force_inline proc "contextless" (a, b: [3]f32) -> [3]f32
+cross_3f :: #force_inline proc "contextless" (a, b: [3]f32) -> [3]f32
 {
   return {
     (a.y * b.z) - (a.z * b.y), 

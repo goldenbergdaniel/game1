@@ -68,12 +68,12 @@ main :: proc()
     for accumulator >= SIM_STEP
     {
       copy_game(&prev_game, &curr_game)
-      update_game(&curr_game, SIM_STEP)
+      update_game(&curr_game, SIM_STEP * curr_game.t_mult)
       plf.remember_prev_input()
 
-      if frame_time * 1000 > 20 do printf("%.0f ms\n", frame_time * 1000)
+      // if frame_time * 1000 > 20 do printf("%.0f ms\n", frame_time * 1000)
 
-      curr_game.t += SIM_STEP
+      curr_game.t += SIM_STEP * curr_game.t_mult
       accumulator -= SIM_STEP
     }
 
