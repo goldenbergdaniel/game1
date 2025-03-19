@@ -55,7 +55,7 @@ sdl_create_window :: proc(
 		sdl.GL_MakeCurrent(sdl_window, gl_ctx)
 
 		gl.load_up_to(4, 6, sdl.gl_set_proc_address)
-		sdl.GL_SetSwapInterval(0)
+		sdl.GL_SetSwapInterval(1)
 		// fmt.println(gl.GetString(gl.VERSION))
 	}
 
@@ -114,6 +114,7 @@ sdl_translate_event :: #force_inline proc(sdl_event: ^sdl.Event) -> Event
 		case .W:			result = Event{kind = .KEY_DOWN, key_kind = .W}
     case .LCTRL: 	result = Event{kind = .KEY_DOWN, key_kind = .LEFT_CTRL}
     case .ESCAPE: result = Event{kind = .KEY_DOWN, key_kind = .ESCAPE}
+    case .SPACE:  result = Event{kind = .KEY_DOWN, key_kind = .SPACE}
     case .RETURN: result = Event{kind = .KEY_DOWN, key_kind = .ENTER}
     }
 	case .KEY_UP:

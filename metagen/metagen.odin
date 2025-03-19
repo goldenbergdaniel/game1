@@ -22,6 +22,17 @@ Collider_Map_Entry :: struct
   kind:         type_of(game.Collider{}.kind),
 }
 
+COLLIDER_MAP_ENTRY_STRUCT_STR :: `
+Collider_Map_Entry :: struct
+{
+  vertices:     [6]v2f,
+  vertex_count: int,
+  origin:       v2f,
+  kind:         type_of(Collider{}.kind),
+}
+
+`
+
 perm_arena: mem.Arena
 collider_map: [game.Sprite_ID]Collider_Map_Entry
 color_map: map[Color]int
@@ -45,19 +56,50 @@ generate_collider_map :: proc()
   color_map[Color{255, 0, 255, 255}] = 5
   
   gen_buffer: strings.Builder = strings.builder_make()
-  write_package_and_imports(&gen_buffer)
+  
+  // - Write package, imports, and structs ---
+  {
+    PACKAGE_AND_IMPORTS_STR :: "// NOTE: Machine generated. Do not edit.\npackage game\n"
+
+    strings.write_string(&gen_buffer, PACKAGE_AND_IMPORTS_STR)
+    strings.write_string(&gen_buffer, COLLIDER_MAP_ENTRY_STRUCT_STR)
+  }
 
   tex, qoi_err := qoi.load_from_file("res/textures/collider_map.qoi")
-  if qoi_err != nil do panic("Metagen: Error opening texture file.")
+  if qoi_err != nil
+  {
+    fmt.eprintln("Metagen: Error opening texture file.")
+    os.exit(1)
+  }
 
   collider_map_from_bitmap(tex.pixels.buf[:])
 
-  write_collider_map_entry_struct(&gen_buffer)
-  write_collider_map_map(&gen_buffer)
+  // - Write collider map entries ---
+  {
+    scratch := mem.begin_temp(mem.get_scratch())
+    defer mem.end_temp(scratch)
+    context.temp_allocator = mem.a(scratch.arena)
+    
+    strings.write_string(&gen_buffer, "collider_map: [Sprite_ID]Collider_Map_Entry = {\n")
+
+    for entry, sprite_id in collider_map
+    {
+      enum_str := fmt.tprintf("  .%s = ", sprite_id)
+      strings.write_string(&gen_buffer, enum_str)
+      entry_str := fmt.tprintf("%w,\n", entry)
+      strings.write_string(&gen_buffer, entry_str)
+    }
+
+    strings.write_string(&gen_buffer, "}\n")
+  }
 
   file_flags := os.O_CREATE | os.O_TRUNC | os.O_RDWR
-  output_file, open_err := os.open("game/game.gen.odin", file_flags, 0o644)
-  if open_err != nil do panic("Metagen: Error creating generated file.")
+  output_file, open_err := os.open("game/game.meta.odin", file_flags, 0o644)
+  if open_err != nil
+  {
+    fmt.eprintln("Metagen: Error creating generated Odin file.")
+    os.exit(1)
+  }
 
   os.write(output_file, gen_buffer.buf[:])
 }
@@ -111,48 +153,4 @@ collider_map_from_bitmap :: proc(data: []byte)
   {
     return {pixels[0], pixels[1], pixels[2], pixels[3]}
   }
-}
-
-write_package_and_imports :: proc(buf: ^strings.Builder)
-{
-  STRING :: `// NOTE(dg): Machine generated. Do not edit.
-package game
-`
-
-  strings.write_string(buf, STRING)
-}
-
-write_collider_map_entry_struct :: proc(buf: ^strings.Builder)
-{
-  STRING :: `
-Collider_Map_Entry :: struct
-{
-  vertices:     [6]v2f,
-  vertex_count: int,
-  origin:       v2f,
-  kind:         type_of(Collider{}.kind),
-}
-
-`
-
-  strings.write_string(buf, STRING)
-}
-
-write_collider_map_map :: proc(buf: ^strings.Builder)
-{
-  scratch := mem.begin_temp(mem.get_scratch())
-  defer mem.end_temp(scratch)
-  context.temp_allocator = mem.a(scratch.arena)
-  
-  strings.write_string(buf, "collider_map: [Sprite_ID]Collider_Map_Entry = {\n")
-
-  for entry, sprite_id in collider_map
-  {
-    enum_str := fmt.tprintf("  .%s = ", sprite_id)
-    strings.write_string(buf, enum_str)
-    entry_str := fmt.tprintf("%w,\n", entry)
-    strings.write_string(buf, entry_str)
-  }
-
-  strings.write_string(buf, "}\n")
 }

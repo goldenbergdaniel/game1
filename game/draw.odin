@@ -16,14 +16,15 @@ Sprite :: struct
 
 Sprite_ID :: enum
 {
-  NIL,
+  SQUARE,
+  CIRCLE,
   SHIP,
   ALIEN,
-  ASTEROID,
   FOOTBALL,
+  ASTEROID,
   PROJECTILE,
+  LASER,
   ASTEROID_BIG,
-  CIRCLE,
 }
 
 begin_draw :: #force_inline proc(color: v4f)

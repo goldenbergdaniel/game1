@@ -2,6 +2,13 @@ package render
 
 import plf "src:platform"
 
+when ODIN_OS == .Darwin  do BACKEND :: "metal"
+when ODIN_OS == .Linux   do BACKEND :: "opengl"
+when ODIN_OS == .Windows do BACKEND :: "dx11"
+
+@(private="file")
+BACKEND :: #config(RENDER_BACKEND, "opengl")
+
 v2i   :: [2]i32
 v4i   :: [4]i32
 v2f   :: [2]f32
@@ -29,9 +36,6 @@ Texture_ID :: enum
 {
   SPRITE_MAP,
 }
-
-@(private="file")
-BACKEND :: #config(RENDER_BACKEND, "opengl")
 
 when BACKEND == "opengl"
 {
