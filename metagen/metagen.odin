@@ -112,8 +112,8 @@ collider_map_from_bitmap :: proc(data: []byte)
     pixel_idx := i / 4
     
     cell_idx := (pixel_idx / TEX_CELL) % TEX_X
-    cell_idx += (pixel_idx / (TEX_CELL * TEX_CELL * TEX_Y)) * TEX_X
-    sprite := cast(game.Sprite_ID) (cell_idx % int(max(game.Sprite_ID)))
+    cell_idx += (pixel_idx / (TEX_CELL * TEX_CELL * TEX_X)) * TEX_X
+    sprite := cast(game.Sprite_ID) (cell_idx % (int(max(game.Sprite_ID)) + 1))
 
     color := color_from_data(data[i:i+4])
     if color in color_map

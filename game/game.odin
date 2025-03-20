@@ -11,17 +11,26 @@ import r "src:render"
 import vm "src:vecmath"
 import "ext:basic/mem"
 
-// Game //////////////////////////////////////////////////////////////////////////////////
-
 @(thread_local, private="file")
 global_game_frame_arena: mem.Arena
+
+@(thread_local, private="file")
 global_debug: bool
+
+@(thread_local, private="file")
+sp_entities: [enum{
+  PLAYER,
+}]^Entity
+
+// Game //////////////////////////////////////////////////////////////////////////////////
+
+GAME_MAX_ENTITY_COUNT :: 128 + 1
 
 Game :: struct
 {
   t:                  f32,
   t_mult:             f32,
-  entities:           [128+1]Entity,
+  entities:           [GAME_MAX_ENTITY_COUNT]Entity,
   entities_cnt:       int,
   debug_entities:     [128]Debug_Entity,
   debug_entities_pos: int,
@@ -40,10 +49,6 @@ set_current_game :: #force_inline proc(gm: ^Game)
   _current_game = gm
 }
 
-sp_entities: [enum{
-  PLAYER,
-}]^Entity
-
 init_game :: proc(gm: ^Game)
 {
   // NOTE(dg): What if multiple games running on same thread? This needs to change. 
@@ -54,7 +59,7 @@ init_game :: proc(gm: ^Game)
   player := alloc_entity(gm)
   player.flags = {.ACTIVE}
   player.props = {.WRAP_AT_WORLD_EDGES}
-  player.dim = {32, 32}
+  player.scale = {2, 2}
   player.tint = {1, 1, 1, 1}
   player.color = {0, 0, 0, 0}
   player.sprite = .SHIP
@@ -65,7 +70,7 @@ init_game :: proc(gm: ^Game)
   enemy.flags = {.ACTIVE}
   enemy.props = {.WRAP_AT_WORLD_EDGES}
   enemy.pos = {WORLD_WIDTH - 70, 0}
-  enemy.dim = {32, 32}
+  enemy.scale = {2, 2}
   enemy.tint = {1, 0, 0, 1}
   enemy.color = {0, 0, 0, 0}
   enemy.sprite = .ALIEN
@@ -76,7 +81,7 @@ init_game :: proc(gm: ^Game)
   asteroid := alloc_entity(gm)
   asteroid.flags = {.ACTIVE}
   asteroid.pos = {WORLD_WIDTH/2, WORLD_HEIGHT/2}
-  asteroid.dim = {64, 64}
+  asteroid.scale = {2, 2}
   asteroid.tint = {0.57, 0.53, 0.49, 1}
   asteroid.sprite = .ASTEROID_BIG
   asteroid.z_layer = .DECORATION
@@ -119,36 +124,36 @@ update_game :: proc(gm: ^Game, dt: f32)
       user.window.should_close = true
     }
 
-    if plf.key_just_pressed(.ENTER) && plf.key_pressed(.LEFT_CTRL)
+    if plf.key_just_pressed(.ENTER) && plf.key_pressed(.L_CTRL)
     {
       plf.window_toggle_fullscreen(&user.window)
     }
 
-    if plf.key_just_pressed(.BACKSPACE)
+    if plf.key_just_pressed(.TAB) && plf.key_pressed(.L_CTRL)
     {
       global_debug = !global_debug
       println("Set debug render to", global_debug)
     }
 
-    if plf.key_just_pressed(.S1) && plf.key_pressed(.LEFT_CTRL)
+    if plf.key_just_pressed(.S_1) && plf.key_pressed(.L_CTRL)
     {
       gm.t_mult = 1
       println("Set time multiplier to", 1.0)
     }
 
-    if plf.key_just_pressed(.S2) && plf.key_pressed(.LEFT_CTRL)
+    if plf.key_just_pressed(.S_2) && plf.key_pressed(.L_CTRL)
     {
       gm.t_mult = 0.5
       println("Set time multiplier to", 0.5)
     }
 
-    if plf.key_just_pressed(.S3) && plf.key_pressed(.LEFT_CTRL)
+    if plf.key_just_pressed(.S_3) && plf.key_pressed(.L_CTRL)
     {
       gm.t_mult = 0.25
       println("Set time multiplier to", 0.25)
     }
 
-    if plf.key_just_pressed(.S4) && plf.key_pressed(.LEFT_CTRL)
+    if plf.key_just_pressed(.S_4) && plf.key_pressed(.L_CTRL)
     {
       gm.t_mult = 2
       println("Set time multiplier to", 2.0)
@@ -257,9 +262,11 @@ update_game :: proc(gm: ^Game, dt: f32)
         continue
       }
 
-      if entity_collision(&en_a, &en_b)
+      if entity_collision(&en_a, &en_b) && !get_entities_collided_cache(en_a.idx, en_b.idx)
       {
-        if en_a.weapon_kind != .NIL || en_a.weapon_kind != .NIL
+        set_entities_collided_cache(en_a.idx, en_b.idx)
+
+        if en_a.weapon_kind != .NIL || en_b.weapon_kind != .NIL
         {
           kill_entity(&en_a)
           kill_entity(&en_b)
@@ -277,10 +284,10 @@ update_game :: proc(gm: ^Game, dt: f32)
     {
       if en.pos.x > WORLD_WIDTH
       {
-        en.pos.x = -en.dim.x
+        en.pos.x = -en.scale.x
         en.flags -= {.INTERPOLATE}
       }
-      else if en.pos.x + en.dim.x < 0
+      else if en.pos.x + en.scale.x < 0
       {
         en.pos.x = WORLD_WIDTH
         en.flags -= {.INTERPOLATE}
@@ -288,10 +295,10 @@ update_game :: proc(gm: ^Game, dt: f32)
 
       if en.pos.y > WORLD_HEIGHT
       {
-        en.pos.y = -en.dim.y
+        en.pos.y = -en.scale.y
         en.flags -= {.INTERPOLATE}
       }
-      else if en.pos.y + en.dim.y < 0
+      else if en.pos.y + en.scale.y < 0
       {
         en.pos.y = WORLD_HEIGHT
         en.flags -= {.INTERPOLATE}
@@ -322,7 +329,7 @@ update_game :: proc(gm: ^Game, dt: f32)
   {
     SAVE_PATH :: "res/saves/main"
 
-    if plf.key_just_pressed(.K) && plf.key_pressed(.LEFT_CTRL)
+    if plf.key_just_pressed(.K) && plf.key_pressed(.L_CTRL)
     {
       file_flags := os.O_CREATE | os.O_TRUNC | os.O_RDWR
       save_file, open_err := os.open(SAVE_PATH, file_flags, 0o644)
@@ -337,7 +344,7 @@ update_game :: proc(gm: ^Game, dt: f32)
       }
     }
 
-    if plf.key_just_pressed(.L) && plf.key_pressed(.LEFT_CTRL)
+    if plf.key_just_pressed(.L) && plf.key_pressed(.L_CTRL)
     {
       save_file, open_err := os.open(SAVE_PATH, os.O_RDWR)
       defer os.close(save_file)
@@ -350,7 +357,9 @@ update_game :: proc(gm: ^Game, dt: f32)
         fmt.eprintln("Error opening file for loading!", open_err)
       }
     }
-  }
+  } 
+
+  reset_entity_collision_cache()
 
   mem.clear_arena(&global_game_frame_arena)
 }
@@ -380,7 +389,7 @@ render_game :: proc(gm: ^Game, dt: f32)
   {
     if .ACTIVE not_in en.flags do continue
 
-    draw_rect(en.pos, en.dim, en.rot, en.tint, en.color, en.sprite)
+    draw_rect(en.pos, en.scale, en.rot, en.tint, en.color, en.sprite)
   }
 
   if global_debug
@@ -389,7 +398,7 @@ render_game :: proc(gm: ^Game, dt: f32)
     {
       if .ACTIVE not_in den.flags do continue
 
-      draw_rect(den.pos, den.dim, den.rot, den.tint, den.color, den.sprite)
+      draw_rect(den.pos, den.scale, den.rot, den.tint, den.color, den.sprite)
     }
   }
 
@@ -504,7 +513,7 @@ Entity :: struct
   props:        bit_set[Entity_Prop],
   pos:          v2f,
   vel:          v2f,
-  dim:          v2f,
+  scale:        v2f,
   radius:       f32,
   rot:          f32,
   input_dir:    v2f,
@@ -606,7 +615,7 @@ spawn_entity_weapon :: proc(pos: v2f) -> ^Entity
   en.flags = {.ACTIVE, .INTERPOLATE}
   en.props = {.KILL_AFTER_TIME}
   en.pos = pos
-  en.dim = {30, 30}
+  en.scale = {2, 2}
   en.tint = {0.18, 0.88, 0.18, 1}
   en.sprite = .PROJECTILE
   en.col_layer = .PLAYER
@@ -636,7 +645,7 @@ entity_has_props :: #force_inline proc(en: ^$E/Entity, props: bit_set[Entity_Pro
 
 entity_look_at_point :: proc(en: ^$E/Entity, target: v2f)
 {
-  dd := target - (en.pos + (res.sprites[en.sprite].pivot * en.dim))
+  dd := target - en.pos
   en.rot = math.atan2(dd.y, dd.x)
   if en.rot < 0
   {
@@ -646,26 +655,39 @@ entity_look_at_point :: proc(en: ^$E/Entity, target: v2f)
 
 pos_tl_from_entity :: proc(en: ^Entity) -> v2f
 {
-  local_pos := vm.rotation_2x2f(en.rot) * v2f{-en.dim.x * 0.5, -en.dim.y * 0.5}
+  pivot := res.sprites[en.sprite].pivot
+  dim := dim_from_entity(en)
+  local_pos := vm.rotation_2x2f(en.rot) * (v2f{-dim.x, -dim.y} * pivot)
   return local_pos + en.pos
 }
 
 pos_tr_from_entity :: proc(en: ^Entity) -> v2f
 {
-  local_pos := vm.rotation_2x2f(en.rot) * v2f{+en.dim.x * 0.5, -en.dim.y * 0.5}
+  pivot := res.sprites[en.sprite].pivot
+  dim := dim_from_entity(en)
+  local_pos := vm.rotation_2x2f(en.rot) * (v2f{+dim.x, -dim.y} * pivot)
   return local_pos + en.pos
 }
 
 pos_br_from_entity :: proc(en: ^Entity) -> v2f
 {
-  local_pos := vm.rotation_2x2f(en.rot) * v2f{+en.dim.x * 0.5, +en.dim.y * 0.5}
+  pivot := res.sprites[en.sprite].pivot
+  dim := dim_from_entity(en)
+  local_pos := vm.rotation_2x2f(en.rot) * (v2f{+dim.x, +dim.y} * pivot)
   return local_pos + en.pos
 }
 
 pos_bl_from_entity :: proc(en: ^Entity) -> v2f
 {
-  local_pos := vm.rotation_2x2f(en.rot) * v2f{-en.dim.x * 0.5, +en.dim.y * 0.5}
+  pivot := res.sprites[en.sprite].pivot
+  dim := dim_from_entity(en)
+  local_pos := vm.rotation_2x2f(en.rot) * (v2f{-dim.x, +dim.y} * pivot)
   return local_pos + en.pos
+}
+
+dim_from_entity :: proc(en: ^Entity) -> v2f
+{
+  return en.scale * {16, 16}
 }
 
 entity_collider_vertex_pos :: proc(en: ^Entity, v: v2f) -> v2f
@@ -676,7 +698,7 @@ entity_collider_vertex_pos :: proc(en: ^Entity, v: v2f) -> v2f
 
 local_xform_from_entity :: proc(en: ^Entity) -> m3x3f
 {
-  result := vm.scale_3x3f({2, 2})
+  result := vm.scale_3x3f(en.scale)
   result = vm.rotation_3x3f(en.rot) * result
   result = vm.translation_3x3f(pos_tl_from_entity(en)) * result
   return result
@@ -684,16 +706,26 @@ local_xform_from_entity :: proc(en: ^Entity) -> m3x3f
 
 update_entity_collider :: proc(en: ^Entity)
 {
-  en.collider.vertices_cnt = cast(u8) collider_map[en.sprite].vertex_count
-  for i in 0..<en.collider.vertices_cnt
+  if en.collider.kind == .POLYGON
   {
-    v := local_xform_from_entity(en) * vm.v3f(collider_map[en.sprite].vertices[i], 1)
-    en.collider.vertices[i] = v.xy
-  }
+    en.collider.vertices_cnt = cast(u8) collider_map[en.sprite].vertex_count
+    for i in 0..<en.collider.vertices_cnt
+    {
+      v := local_xform_from_entity(en) * vm.v3f(collider_map[en.sprite].vertices[i], 1)
+      en.collider.vertices[i] = v.xy
+    }
 
-  for vert in en.collider.vertices[:en.collider.vertices_cnt]
+    for vert in en.collider.vertices[:en.collider.vertices_cnt]
+    {
+      debug_circle(vert, 8, color={0, 1, 0, 0}, alpha=0.75)
+    }
+  }
+  else if en.collider.kind == .CIRCLE
   {
-    debug_circle(vert, 4, color={0, 1, 0, 0}, alpha=0.75)
+    origin := local_xform_from_entity(en) * vm.v3f(collider_map[en.sprite].origin, 1)
+    en.collider.origin = origin.xy
+
+    debug_circle(en.collider.origin, en.collider.radius, alpha=0.25)
   }
 }
 
@@ -715,18 +747,34 @@ entity_collision :: proc(en_a, en_b: ^Entity) -> bool
   }
   else if en_a.collider.kind == .CIRCLE && en_b.collider.kind == .POLYGON
   {
-    en_a.collider.origin = en_a.pos
-
     result = circle_polygon_overlap(&en_a.collider, &en_b.collider)
   }
   else if en_a.collider.kind == .POLYGON && en_b.collider.kind == .CIRCLE
   {
-    en_b.collider.origin = en_b.pos
-
     result = circle_polygon_overlap(&en_b.collider, &en_a.collider)
   }
 
   return result
+}
+
+@(thread_local, private="file")
+_entity_collision_cache: [GAME_MAX_ENTITY_COUNT][GAME_MAX_ENTITY_COUNT]bool
+
+get_entities_collided_cache :: proc(a, b: u32) -> bool
+{
+  return _entity_collision_cache[a][b] &&
+         _entity_collision_cache[b][a]
+}
+
+set_entities_collided_cache :: proc(a, b: u32)
+{
+  _entity_collision_cache[a][b] = true
+  _entity_collision_cache[b][a] = true
+}
+
+reset_entity_collision_cache :: proc()
+{
+  mem.set(&_entity_collision_cache, 0, GAME_MAX_ENTITY_COUNT*GAME_MAX_ENTITY_COUNT)
 }
 
 // Debug_Entity //////////////////////////////////////////////////////////////////////////
@@ -757,19 +805,20 @@ pop_debug_entity :: proc(den: ^Debug_Entity)
 }
 
 debug_rect :: proc(
-  pos:   v2f,
-  dim:   v2f = {16, 16}, 
-  color: v4f = {1, 1, 1, 1},
+  pos:    v2f,
+  scale:  v2f, 
+  color:  v4f = {1, 1, 1, 1},
+  sprite: Sprite_ID = .SQUARE,
 ) -> ^Debug_Entity
 {
   gm := get_current_game()
 
   result := push_debug_entity()
   result.pos = pos
-  result.dim = dim
+  result.scale = scale
   result.color = color
   result.tint = {1, 1, 1, 1}
-  result.sprite = .SQUARE
+  result.sprite = sprite
 
   return result
 }
@@ -785,7 +834,7 @@ debug_circle :: proc(
 
   result := push_debug_entity()
   result.pos = pos
-  result.dim = {radius, radius}
+  result.scale = {radius/16, radius/16}
   result.color = color
   result.tint = {1, 1, 1, alpha}
   result.sprite = .CIRCLE

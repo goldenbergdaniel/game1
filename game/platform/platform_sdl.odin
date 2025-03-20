@@ -95,7 +95,7 @@ sdl_pump_events :: proc()
 	sdl.PumpEvents()
 }
 
-sdl_translate_event :: #force_inline proc(sdl_event: ^sdl.Event) -> Event
+sdl_translate_event :: proc(sdl_event: ^sdl.Event) -> Event
 {
 	result: Event
 
@@ -107,51 +107,103 @@ sdl_translate_event :: #force_inline proc(sdl_event: ^sdl.Event) -> Event
     #partial switch sdl_event.key.scancode
     {
 		case .A:				 result = Event{kind = .KEY_DOWN, key_kind = .A}
+		case .B:				 result = Event{kind = .KEY_DOWN, key_kind = .B}
+		case .C:				 result = Event{kind = .KEY_DOWN, key_kind = .C}
 		case .D:				 result = Event{kind = .KEY_DOWN, key_kind = .D}
+		case .E:				 result = Event{kind = .KEY_DOWN, key_kind = .E}
+		case .F:				 result = Event{kind = .KEY_DOWN, key_kind = .F}
+		case .G:				 result = Event{kind = .KEY_DOWN, key_kind = .G}
+		case .H:				 result = Event{kind = .KEY_DOWN, key_kind = .H}
+		case .I:				 result = Event{kind = .KEY_DOWN, key_kind = .I}
+		case .J:				 result = Event{kind = .KEY_DOWN, key_kind = .J}
 		case .K:				 result = Event{kind = .KEY_DOWN, key_kind = .K}
 		case .L:				 result = Event{kind = .KEY_DOWN, key_kind = .L}
+		case .M:				 result = Event{kind = .KEY_DOWN, key_kind = .M}
+		case .N:				 result = Event{kind = .KEY_DOWN, key_kind = .N}
+		case .O:				 result = Event{kind = .KEY_DOWN, key_kind = .O}
+		case .P:				 result = Event{kind = .KEY_DOWN, key_kind = .P}
+		case .Q:				 result = Event{kind = .KEY_DOWN, key_kind = .Q}
+		case .R:				 result = Event{kind = .KEY_DOWN, key_kind = .R}
 		case .S:				 result = Event{kind = .KEY_DOWN, key_kind = .S}
+		case .T:				 result = Event{kind = .KEY_DOWN, key_kind = .T}
+		case .U:				 result = Event{kind = .KEY_DOWN, key_kind = .U}
+		case .V:				 result = Event{kind = .KEY_DOWN, key_kind = .V}
 		case .W:				 result = Event{kind = .KEY_DOWN, key_kind = .W}
-		case ._0:				 result = Event{kind = .KEY_DOWN, key_kind = .S0}
-		case ._1:				 result = Event{kind = .KEY_DOWN, key_kind = .S1}
-		case ._2:				 result = Event{kind = .KEY_DOWN, key_kind = .S2}
-		case ._3:				 result = Event{kind = .KEY_DOWN, key_kind = .S3}
-		case ._4:				 result = Event{kind = .KEY_DOWN, key_kind = .S4}
-		case ._5:				 result = Event{kind = .KEY_DOWN, key_kind = .S5}
-		case ._6:				 result = Event{kind = .KEY_DOWN, key_kind = .S6}
-		case ._7:				 result = Event{kind = .KEY_DOWN, key_kind = .S7}
-		case ._8:				 result = Event{kind = .KEY_DOWN, key_kind = .S8}
-		case ._9:				 result = Event{kind = .KEY_DOWN, key_kind = .S9}
-    case .LCTRL: 		 result = Event{kind = .KEY_DOWN, key_kind = .LEFT_CTRL}
-    case .ESCAPE: 	 result = Event{kind = .KEY_DOWN, key_kind = .ESCAPE}
+		case .X:				 result = Event{kind = .KEY_DOWN, key_kind = .X}
+		case .Y:				 result = Event{kind = .KEY_DOWN, key_kind = .Y}
+		case .Z:				 result = Event{kind = .KEY_DOWN, key_kind = .Z}
+		case ._0:				 result = Event{kind = .KEY_DOWN, key_kind = .S_0}
+		case ._1:				 result = Event{kind = .KEY_DOWN, key_kind = .S_1}
+		case ._2:				 result = Event{kind = .KEY_DOWN, key_kind = .S_2}
+		case ._3:				 result = Event{kind = .KEY_DOWN, key_kind = .S_3}
+		case ._4:				 result = Event{kind = .KEY_DOWN, key_kind = .S_4}
+		case ._5:				 result = Event{kind = .KEY_DOWN, key_kind = .S_5}
+		case ._6:				 result = Event{kind = .KEY_DOWN, key_kind = .S_6}
+		case ._7:				 result = Event{kind = .KEY_DOWN, key_kind = .S_7}
+		case ._8:				 result = Event{kind = .KEY_DOWN, key_kind = .S_8}
+		case ._9:				 result = Event{kind = .KEY_DOWN, key_kind = .S_9}
+    case .LALT: 		 result = Event{kind = .KEY_DOWN, key_kind = .L_ALT}
+    case .RALT: 		 result = Event{kind = .KEY_DOWN, key_kind = .R_ALT}
+    case .LCTRL: 		 result = Event{kind = .KEY_DOWN, key_kind = .L_CTRL}
+    case .RCTRL: 		 result = Event{kind = .KEY_DOWN, key_kind = .R_CTRL}
+    case .LSHIFT: 	 result = Event{kind = .KEY_DOWN, key_kind = .L_SHIFT}
+    case .RSHIFT: 	 result = Event{kind = .KEY_DOWN, key_kind = .R_SHIFT}
     case .SPACE:  	 result = Event{kind = .KEY_DOWN, key_kind = .SPACE}
+		case .TAB:			 result = Event{kind = .KEY_DOWN, key_kind = .TAB}
     case .RETURN: 	 result = Event{kind = .KEY_DOWN, key_kind = .ENTER}
   	case .BACKSPACE: result = Event{kind = .KEY_DOWN, key_kind = .BACKSPACE}
+    case .ESCAPE: 	 result = Event{kind = .KEY_DOWN, key_kind = .ESCAPE}
     }
 	case .KEY_UP:
     #partial switch sdl_event.key.scancode
     {
 		case .A:				 result = Event{kind = .KEY_UP, key_kind = .A}
+		case .B:				 result = Event{kind = .KEY_UP, key_kind = .B}
+		case .C:				 result = Event{kind = .KEY_UP, key_kind = .C}
 		case .D:				 result = Event{kind = .KEY_UP, key_kind = .D}
+		case .E:				 result = Event{kind = .KEY_UP, key_kind = .E}
+		case .F:				 result = Event{kind = .KEY_UP, key_kind = .F}
+		case .G:				 result = Event{kind = .KEY_UP, key_kind = .G}
+		case .H:				 result = Event{kind = .KEY_UP, key_kind = .H}
+		case .I:				 result = Event{kind = .KEY_UP, key_kind = .I}
+		case .J:				 result = Event{kind = .KEY_UP, key_kind = .J}
 		case .K:				 result = Event{kind = .KEY_UP, key_kind = .K}
 		case .L:				 result = Event{kind = .KEY_UP, key_kind = .L}
+		case .M:				 result = Event{kind = .KEY_UP, key_kind = .M}
+		case .N:				 result = Event{kind = .KEY_UP, key_kind = .N}
+		case .O:				 result = Event{kind = .KEY_UP, key_kind = .O}
+		case .P:				 result = Event{kind = .KEY_UP, key_kind = .P}
+		case .Q:				 result = Event{kind = .KEY_UP, key_kind = .Q}
+		case .R:				 result = Event{kind = .KEY_UP, key_kind = .R}
 		case .S:				 result = Event{kind = .KEY_UP, key_kind = .S}
+		case .T:				 result = Event{kind = .KEY_UP, key_kind = .T}
+		case .U:				 result = Event{kind = .KEY_UP, key_kind = .U}
+		case .V:				 result = Event{kind = .KEY_UP, key_kind = .V}
 		case .W:				 result = Event{kind = .KEY_UP, key_kind = .W}
-		case ._0:				 result = Event{kind = .KEY_UP, key_kind = .S0}
-		case ._1:				 result = Event{kind = .KEY_UP, key_kind = .S1}
-		case ._2:				 result = Event{kind = .KEY_UP, key_kind = .S2}
-		case ._3:				 result = Event{kind = .KEY_UP, key_kind = .S3}
-		case ._4:				 result = Event{kind = .KEY_UP, key_kind = .S4}
-		case ._5:				 result = Event{kind = .KEY_UP, key_kind = .S5}
-		case ._6:				 result = Event{kind = .KEY_UP, key_kind = .S6}
-		case ._7:				 result = Event{kind = .KEY_UP, key_kind = .S7}
-		case ._8:				 result = Event{kind = .KEY_UP, key_kind = .S8}
-		case ._9:				 result = Event{kind = .KEY_UP, key_kind = .S9}
-    case .LCTRL: 		 result = Event{kind = .KEY_UP, key_kind = .LEFT_CTRL}
-    case .ESCAPE: 	 result = Event{kind = .KEY_UP, key_kind = .ESCAPE}
+		case .X:				 result = Event{kind = .KEY_UP, key_kind = .X}
+		case .Y:				 result = Event{kind = .KEY_UP, key_kind = .Y}
+		case .Z:				 result = Event{kind = .KEY_UP, key_kind = .Z}
+		case ._0:				 result = Event{kind = .KEY_UP, key_kind = .S_0}
+		case ._1:				 result = Event{kind = .KEY_UP, key_kind = .S_1}
+		case ._2:				 result = Event{kind = .KEY_UP, key_kind = .S_2}
+		case ._3:				 result = Event{kind = .KEY_UP, key_kind = .S_3}
+		case ._4:				 result = Event{kind = .KEY_UP, key_kind = .S_4}
+		case ._5:				 result = Event{kind = .KEY_UP, key_kind = .S_5}
+		case ._6:				 result = Event{kind = .KEY_UP, key_kind = .S_6}
+		case ._7:				 result = Event{kind = .KEY_UP, key_kind = .S_7}
+		case ._8:				 result = Event{kind = .KEY_UP, key_kind = .S_8}
+		case ._9:				 result = Event{kind = .KEY_UP, key_kind = .S_9}
+    case .LALT: 		 result = Event{kind = .KEY_UP, key_kind = .L_ALT}
+    case .RALT: 		 result = Event{kind = .KEY_UP, key_kind = .R_ALT}
+    case .LCTRL: 		 result = Event{kind = .KEY_UP, key_kind = .L_CTRL}
+    case .RCTRL: 		 result = Event{kind = .KEY_UP, key_kind = .R_CTRL}
+		case .LSHIFT: 	 result = Event{kind = .KEY_UP, key_kind = .L_SHIFT}
+    case .RSHIFT: 	 result = Event{kind = .KEY_UP, key_kind = .R_SHIFT}
     case .SPACE:  	 result = Event{kind = .KEY_UP, key_kind = .SPACE}
+		case .TAB:			 result = Event{kind = .KEY_UP, key_kind = .TAB}
     case .RETURN: 	 result = Event{kind = .KEY_UP, key_kind = .ENTER}
   	case .BACKSPACE: result = Event{kind = .KEY_UP, key_kind = .BACKSPACE}
+    case .ESCAPE: 	 result = Event{kind = .KEY_UP, key_kind = .ESCAPE}
     }
 	case .MOUSE_BUTTON_DOWN:
 		switch sdl_event.button.button

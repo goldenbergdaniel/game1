@@ -39,7 +39,7 @@ end_draw :: #force_inline proc()
 
 draw_rect :: proc(
   pos:    v2f,
-  dim:    v2f,
+  scl:    v2f,
   rot:    f32 = 0,
   tint:   v4f = {1, 1, 1, 1},
   color:  v4f = {0, 0, 0, 0},
@@ -47,10 +47,10 @@ draw_rect :: proc(
 )
 {
   sprite_res := &res.sprites[sprite]
-  texture := &res.textures[sprite_res.texture]
+  texture_res := &res.textures[sprite_res.texture]
+  dim := scl * vm.array_cast(sprite_res.grid * 16, f32)
 
-  xform := vm.ident_3x3f(1)
-  xform *= vm.translation_3x3f(pos - dim * sprite_res.pivot)
+  xform := vm.translation_3x3f(pos - dim * sprite_res.pivot)
   xform *= vm.translation_3x3f(dim * sprite_res.pivot)
   xform *= vm.rotation_3x3f(rot)
   xform *= vm.translation_3x3f(-dim * sprite_res.pivot)
@@ -61,7 +61,7 @@ draw_rect :: proc(
   p3 := xform * v3f{1, 1, 1}
   p4 := xform * v3f{0, 1, 1}
 
-  tl, tr, br, bl := r.coords_from_texture(texture, sprite_res.coords, sprite_res.grid)
+  tl, tr, br, bl := r.coords_from_texture(texture_res, sprite_res.coords, sprite_res.grid)
 
   r.push_vertex(p1.xy, tint, color, tl)
   r.push_vertex(p2.xy, tint, color, tr)
