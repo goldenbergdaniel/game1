@@ -34,6 +34,7 @@ Game :: struct
   entities_cnt:       int,
   debug_entities:     [128]Debug_Entity,
   debug_entities_pos: int,
+  enemy_to_spawn_idx: int,
 }
 
 @(thread_local, private="file")
@@ -65,18 +66,6 @@ init_game :: proc(gm: ^Game)
   player.sprite = .SHIP
   player.z_layer = .PLAYER
   player.collider.kind = .POLYGON
-
-  enemy := alloc_entity(gm)
-  enemy.flags = {.ACTIVE}
-  enemy.props = {.WRAP_AT_WORLD_EDGES}
-  enemy.pos = {WORLD_WIDTH - 70, 0}
-  enemy.scale = {2, 2}
-  enemy.tint = {1, 0, 0, 1}
-  enemy.color = {0, 0, 0, 0}
-  enemy.sprite = .ALIEN
-  enemy.z_layer = .ENEMY
-  enemy.col_layer = .ENEMY
-  enemy.collider.kind = .POLYGON
 
   asteroid := alloc_entity(gm)
   asteroid.flags = {.ACTIVE}
@@ -160,13 +149,41 @@ update_game :: proc(gm: ^Game, dt: f32)
     }
   }
 
-  // if gm.entities[2].gen == 0
-  // {
-  //   gm.entities[2].tint = v4f{abs(math.sin(gm.t * dt * 40)), 0, 0, 1}
-  // }
+  // - Enemy spawning ---
+  spawn_loop: for
+  {
+    desc: Enemy_Spawn_Desc
+    if gm.enemy_to_spawn_idx < len(res.enemy_spawns)
+    {
+      desc = res.enemy_spawns[gm.enemy_to_spawn_idx]
+    }
 
-  color := abs(math.sin(gm.t * dt * 40))
-  gm.entities[3].rot += 2 * math.PI * dt
+    if desc.kind != .NIL && gm.t >= desc.time
+    {
+      enemy := spawn_enemy_entity(desc.pos)
+      enemy.vel = {-50, 50}
+
+      gm.enemy_to_spawn_idx += 1
+
+      // Peak next enemy to see if it spawns at the same time
+      if gm.enemy_to_spawn_idx < len(res.enemy_spawns)
+      {
+        if res.enemy_spawns[gm.enemy_to_spawn_idx].time == desc.time
+        {
+          continue spawn_loop
+        }
+      }
+    }
+
+    break spawn_loop
+  }
+
+  if gm.entities[3].idx != 0 && gm.entities[3].gen == 0
+  {
+    gm.entities[3].tint = v4f{abs(math.sin(gm.t)), 0, 0, 1}
+  }
+
+  gm.entities[2].rot += 0.5 * math.PI * dt
   
   // - Player movement ---
   {
@@ -223,14 +240,10 @@ update_game :: proc(gm: ^Game, dt: f32)
     {
       player.attack_timer.ticking = false
 
-      proj := spawn_entity_weapon(player.pos + player.vel * dt)
+      proj := spawn_weapon_entity(player.pos + player.vel * dt)
       proj.vel = {math.cos(player.rot), math.sin(player.rot)} * 500
+      proj.rot = player.rot
     }
-  }
-
-  if gm.entities[2].gen == 0
-  {
-    gm.entities[2].vel = {-50, 50}
   }
 
   for &en in gm.entities
@@ -549,6 +562,12 @@ Entity_Prop :: enum u64
   KILL_AFTER_TIME,
 }
 
+Enemy_Kind :: enum
+{
+  NIL,
+  ALIEN,
+}
+
 Weapon_Kind :: enum
 {
   NIL,
@@ -607,7 +626,26 @@ free_entity :: proc(gm: ^Game, en: ^Entity)
   gm.entities_cnt -= 1
 }
 
-spawn_entity_weapon :: proc(pos: v2f) -> ^Entity
+spawn_enemy_entity :: proc(pos: v2f) -> ^Entity
+{
+  gm := get_current_game()
+
+  en := alloc_entity(gm)
+  en.flags = {.ACTIVE}
+  en.props = {.WRAP_AT_WORLD_EDGES}
+  en.pos = pos
+  en.scale = {2, 2}
+  en.tint = {1, 0, 0, 1}
+  en.color = {0, 0, 0, 0}
+  en.sprite = .ALIEN
+  en.z_layer = .ENEMY
+  en.col_layer = .ENEMY
+  en.collider.kind = .POLYGON
+
+  return en
+}
+
+spawn_weapon_entity :: proc(pos: v2f) -> ^Entity
 {
   gm := get_current_game()
 
@@ -617,10 +655,11 @@ spawn_entity_weapon :: proc(pos: v2f) -> ^Entity
   en.pos = pos
   en.scale = {2, 2}
   en.tint = {0.18, 0.88, 0.18, 1}
-  en.sprite = .PROJECTILE
+  en.sprite = .LASER
   en.col_layer = .PLAYER
-  en.collider.kind = .CIRCLE
-  en.collider.radius = 4
+  en.collider.kind = collider_map[en.sprite].kind
+  // en.collider.kind = .CIRCLE
+  // en.collider.radius = 4
   en.z_layer = .PROJECTILE
   en.weapon_kind = .LASER
 
@@ -629,7 +668,7 @@ spawn_entity_weapon :: proc(pos: v2f) -> ^Entity
 
 kill_entity :: proc(en: ^Entity)
 {
-  en.flags -= {.ACTIVE}
+  // en.flags -= {.ACTIVE}
   en.flags += {.MARKED_FOR_DEATH}
 }
 

@@ -43,7 +43,7 @@ draw_rect :: proc(
   rot:    f32 = 0,
   tint:   v4f = {1, 1, 1, 1},
   color:  v4f = {0, 0, 0, 0},
-  sprite: Sprite_ID = {},
+  sprite: Sprite_ID = .SQUARE,
 )
 {
   sprite_res := &res.sprites[sprite]

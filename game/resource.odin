@@ -8,8 +8,16 @@ import vm "src:vecmath"
 
 Resources :: struct
 {
-  textures: [r.Texture_ID]r.Texture,
-  sprites:  [Sprite_ID]Sprite,
+  textures:     [r.Texture_ID]r.Texture,
+  sprites:      [Sprite_ID]Sprite,
+  enemy_spawns: [4]Enemy_Spawn_Desc,
+}
+
+Enemy_Spawn_Desc :: struct
+{
+  kind: Enemy_Kind,
+  time: f32,
+  pos:  v2f,
 }
 
 res: Resources
@@ -41,7 +49,7 @@ init_resources :: proc(arena: ^mem.Arena)
     res.sprites[.FOOTBALL]     = {coords={4, 0}, grid={1, 1}, pivot={7, 7}}
     res.sprites[.ASTEROID]     = {coords={5, 0}, grid={1, 1}, pivot={7, 7}}
     res.sprites[.PROJECTILE]   = {coords={6, 0}, grid={1, 1}, pivot={7, 8}}
-    res.sprites[.LASER]        = {coords={7, 0}, grid={1, 1}, pivot={7, 7}}
+    res.sprites[.LASER]        = {coords={7, 0}, grid={1, 1}, pivot={7, 8}}
     res.sprites[.ASTEROID_BIG] = {coords={0, 1}, grid={2, 2}, pivot={15, 17}}
 
     for &sprite in res.sprites
@@ -49,5 +57,13 @@ init_resources :: proc(arena: ^mem.Arena)
       sprite.texture = .SPRITE_MAP
       sprite.pivot /= vm.array_cast(sprite.grid, f32) * 15
     }
+  }
+
+  // - Enemy spawns ---
+  {
+    res.enemy_spawns[0] = {kind=.ALIEN, time=1.0, pos={WORLD_WIDTH, 0}}
+    res.enemy_spawns[1] = {kind=.ALIEN, time=3.0, pos={WORLD_WIDTH, 0}}
+    res.enemy_spawns[2] = {kind=.ALIEN, time=3.0, pos={WORLD_WIDTH-100, 0}}
+    res.enemy_spawns[3] = {kind=.ALIEN, time=8.0, pos={WORLD_WIDTH, 0}}
   }
 }
