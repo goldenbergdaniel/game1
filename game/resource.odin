@@ -1,23 +1,29 @@
 package game
 
 import "core:image/qoi"
-
 import "ext:basic/mem"
-import r "src:render"
-import vm "src:vecmath"
+
+import r "render"
+import vm "vecmath"
 
 Resources :: struct
 {
   textures:     [r.Texture_ID]r.Texture,
   sprites:      [Sprite_ID]Sprite,
-  enemy_spawns: [4]Enemy_Spawn_Desc,
+  enemies:      [Enemy_Kind]Enemy_Desc,
+  enemy_spawns: [1]Enemy_Spawn_Desc,
+}
+
+Enemy_Desc :: struct
+{
+  props: bit_set[Entity_Prop],
 }
 
 Enemy_Spawn_Desc :: struct
 {
   kind: Enemy_Kind,
   time: f32,
-  pos:  v2f,
+  pos:  v2f32,
 }
 
 res: Resources
@@ -62,8 +68,8 @@ init_resources :: proc(arena: ^mem.Arena)
   // - Enemy spawns ---
   {
     res.enemy_spawns[0] = {kind=.ALIEN, time=1.0, pos={WORLD_WIDTH, 0}}
-    res.enemy_spawns[1] = {kind=.ALIEN, time=3.0, pos={WORLD_WIDTH, 0}}
-    res.enemy_spawns[2] = {kind=.ALIEN, time=3.0, pos={WORLD_WIDTH-100, 0}}
-    res.enemy_spawns[3] = {kind=.ALIEN, time=8.0, pos={WORLD_WIDTH, 0}}
+    // res.enemy_spawns[1] = {kind=.ALIEN, time=3.0, pos={WORLD_WIDTH, 0}}
+    // res.enemy_spawns[2] = {kind=.ALIEN, time=3.0, pos={WORLD_WIDTH-100, 0}}
+    // res.enemy_spawns[3] = {kind=.ALIEN, time=8.0, pos={WORLD_WIDTH, 0}}
   }
 }

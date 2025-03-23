@@ -3,7 +3,6 @@
 package platform
 
 import win "core:sys/windows"
-
 import mem "ext:basic/mem"
 
 windows_create_window :: proc(

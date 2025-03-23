@@ -1,6 +1,6 @@
 package render
 
-import plf "src:platform"
+import plf "../platform"
 
 when ODIN_OS == .Darwin  do BACKEND :: "metal"
 when ODIN_OS == .Linux   do BACKEND :: "opengl"
@@ -9,19 +9,19 @@ when ODIN_OS == .Windows do BACKEND :: "dx11"
 @(private="file")
 BACKEND :: #config(RENDER_BACKEND, "opengl")
 
-v2i   :: [2]i32
-v4i   :: [4]i32
-v2f   :: [2]f32
-v4f   :: [4]f32
-m3x3f :: matrix[3,3]f32
-m4x4f :: matrix[4,4]f32
+v2i32   :: [2]i32
+v4i32   :: [4]i32
+v2f32   :: [2]f32
+v4f32   :: [4]f32
+m3x3f32 :: matrix[3,3]f32
+m4x4f32 :: matrix[4,4]f32
 
 Vertex :: struct
 {
-  pos:   v2f,
-  tint:  v4f,
-  color: v4f,
-  uv:    v2f,
+  pos:   v2f32,
+  tint:  v4f32,
+  color: v4f32,
+  uv:    v2f32,
 }
 
 Texture :: struct
@@ -49,7 +49,7 @@ init :: #force_inline proc(window: ^plf.Window, textures: ^[Texture_ID]Texture)
   else                          do panic("Invalid render backend selected!")
 }
 
-clear :: #force_inline proc(color: v4f)
+clear :: #force_inline proc(color: v4f32)
 {
   when BACKEND == "opengl" do gl_clear(color)
 }
@@ -79,7 +79,7 @@ push_vertex_vert :: proc(vertex: Vertex)
   renderer.vertex_count += 1
 }
 
-push_vertex_vec :: proc(pos: v2f, tint: v4f, color: v4f, uv: v2f)
+push_vertex_vec :: proc(pos: v2f32, tint: v4f32, color: v4f32, uv: v2f32)
 {
   push_vertex_vert(Vertex{pos, tint, color, uv})
 }
@@ -122,32 +122,32 @@ push_rect_indices :: proc()
 
 coords_from_texture :: proc(
   texture: ^Texture,
-  coords:  v2i,
-  grid:    v2i,
+  coords:  v2i32,
+  grid:    v2i32,
 ) -> (
-  tl, tr, br, bl: v2f,
+  tl, tr, br, bl: v2f32,
 )
 {
   cell := cast(f32) texture.cell
   width := cast(f32) texture.width
   height := cast(f32) texture.height
 
-  tl = v2f{
+  tl = v2f32{
     (f32(coords.x) * cell) / width, 
     (f32(coords.y) * cell) / height,
   }
 
-  tr = v2f{
+  tr = v2f32{
     (f32(coords.x+(grid.x)) * cell) / width, 
     (f32(coords.y) * cell) / height,
   }
 
-  br = v2f{
+  br = v2f32{
     (f32(coords.x+(grid.x)) * cell) / width, 
     (f32(coords.y+(grid.y)) * cell) / height,
   }
 
-  bl = v2f{
+  bl = v2f32{
     (f32(coords.x) * cell) / width, 
     (f32(coords.y+(grid.y)) * cell) / height,
   }
@@ -155,7 +155,7 @@ coords_from_texture :: proc(
   return
 }
 
-set_viewport :: proc(viewport: v4i)
+set_viewport :: proc(viewport: v4i32)
 {
   renderer.viewport = viewport
 }

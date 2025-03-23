@@ -4,7 +4,6 @@ package platform
 
 import "core:fmt"
 import "core:strings"
-
 import mem "ext:basic/mem"
 import gl  "ext:opengl"
 import sdl "ext:sdl3"

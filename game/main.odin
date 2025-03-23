@@ -1,20 +1,20 @@
 package game
 
 import "core:time"
-
 import "ext:basic/mem"
-import plf "src:platform"
-import r "src:render"
-import vm "src:vecmath"
+
+import plf "platform"
+import r "render"
+import vm "vecmath"
 
 WORLD_WIDTH  :: 960.0
 WORLD_HEIGHT :: 540.0
-SIM_STEP     :: 1.0/30
+SIM_STEP     :: 1.0/60
 
 User :: struct
 {
   window:      plf.Window,
-  viewport:    v4f,
+  viewport:    v4f32,
   perm_arena:  mem.Arena,
   frame_arena: mem.Arena,
 }

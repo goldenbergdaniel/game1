@@ -3,9 +3,9 @@ package game
 
 Collider_Map_Entry :: struct
 {
-  vertices:     [6]v2f,
+  vertices:     [6]v2f32,
   vertex_count: int,
-  origin:       v2f,
+  origin:       v2f32,
   kind:         type_of(Collider{}.kind),
 }
 

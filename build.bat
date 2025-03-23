@@ -1,45 +1,5 @@
 @echo off
 setlocal
 
-set SHADER_SOURCES=triangle
-
-@REM --- CONFIGURE ------------------------------------------------------------------
-
-set MODE=debug
-if not "%1%"=="" (
-  set MODE=%1%
-)
-
-set TARGET=windows_amd64
-if not "%2%"=="" (
-  set TARGET=%2%
-)
-
-set COMMON=-collection:src=src -collection:ext=ext -define:USE_SDL=true
-
-if "%MODE%"=="dev"     set FLAGS=-o:none -use-separate-modules
-if "%MODE%"=="debug"   set FLAGS=-o:none -debug
-if "%MODE%"=="release" set FLAGS=-o:speed -no-bounds-check -no-type-assert -subsystem:window
-
-echo [target:%TARGET%]
-echo [mode:%MODE%]
-
-@REM --- PREPROCESS -----------------------------------------------------------------
-
-echo [preprocess]
-
-pushd src\draw
-  set SOKOL_SHDC=..\..\bin\sokol-shdc-%TARGET%.exe
-  if not exist generated mkdir generated
-  for %%s in (%SHADER_SOURCES%) do (
-    %SOKOL_SHDC% -i shaders/%%s.glsl -o generated\%%s.odin -l glsl430:hlsl4:metal_macos -f sokol_odin
-  )
-popd
-
-@REM --- BUILD ----------------------------------------------------------------------
-
-echo [build]
-
-if not exist out mkdir out
-odin build src -out:out/game/exe -target:%TARGET% %COMMON% %FLAGS%
-if "%MDOE%"=="dev" out/game.exe
+odin run . -out:out/build -collection:src=game -collection:ext=ext -o:none -- %1%
+rm out/build

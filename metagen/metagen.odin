@@ -1,12 +1,12 @@
 package metagen
 
 import "core:fmt"
+import "core:image/qoi"
 import "core:os"
 import "core:strings"
-import "core:image/qoi"
+import "ext:basic/mem"
 
 import "../game"
-import "ext:basic/mem"
 
 TEX_CELL :: 16
 TEX_X    :: 8
@@ -25,9 +25,9 @@ Collider_Map_Entry :: struct
 COLLIDER_MAP_ENTRY_STRUCT_STR :: `
 Collider_Map_Entry :: struct
 {
-  vertices:     [6]v2f,
+  vertices:     [6]v2f32,
   vertex_count: int,
-  origin:       v2f,
+  origin:       v2f32,
   kind:         type_of(Collider{}.kind),
 }
 

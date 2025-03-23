@@ -1,16 +1,17 @@
 package vecmath
 
 import "base:intrinsics"
+import "base:builtin"
 import "core:math"
 
 // Vector ///////////////////////////////////////////////////////////////////////////
 
-v3f :: #force_inline proc "contextless" (v: [2]f32, z: f32) -> [3]f32
+v3f32 :: #force_inline proc "contextless" (v: [2]f32, z: f32) -> [3]f32
 {
   return {v.x, v.y, z}
 }
 
-v4f :: #force_inline proc "contextless" (v: [3]f32, w: f32) -> [4]f32
+v4f32 :: #force_inline proc "contextless" (v: [3]f32, w: f32) -> [4]f32
 {
   return {v.x, v.y, v.z, w}
 }
@@ -88,6 +89,22 @@ projection :: proc
 projection_2f32 :: #force_inline proc "contextless" (a, b: [2]f32) -> [2]f32
 {
   return (dot(a, b) / magnitude_squared(b)) * b
+}
+
+abs :: proc
+{
+  abs_2f32,
+  abs_3f32,
+}
+
+abs_2f32 :: proc(v: [2]f32) -> [2]f32
+{
+  return {builtin.abs(v.x), builtin.abs(v.y)}
+}
+
+abs_3f32 :: proc(v: [3]f32) -> [3]f32
+{
+  return {builtin.abs(v.x), builtin.abs(v.y), builtin.abs(v.z)}
 }
 
 magnitude :: proc
@@ -236,6 +253,17 @@ lerp_angle :: #force_inline proc "contextless" (
   result = math.mod_f32(result + math.TAU, math.TAU)
   
   return result;
+}
+
+vectorize :: proc(mat: ^[$R][$C]$T, math_proc: proc(T) -> T)
+{
+  for &dim in mat
+  {
+    for &elem in dim
+    {
+      elem = math_proc(elem)
+    }
+  }
 }
 
 // Matrix ///////////////////////////////////////////////////////////////////////////

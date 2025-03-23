@@ -4,10 +4,10 @@ package render
 
 import "core:fmt"
 import "core:os"
-
-import vm "src:vecmath"
-import plf "src:platform"
 import gl "ext:opengl"
+
+import vm "../vecmath"
+import plf "../platform"
 
 GL_Renderer :: struct
 {
@@ -15,12 +15,12 @@ GL_Renderer :: struct
   vertex_count: int,
   indices:      [60000]u16,
   index_count:  int,
-  projection:   m3x3f,
-  viewport:     v4i,
+  projection:   m3x3f32,
+  viewport:     v4i32,
   texture:      ^Texture,
   uniforms:     struct
   {
-    proj:       m4x4f,
+    proj:       m4x4f32,
   },
   window:       ^plf.Window,
   shader:       u32,
@@ -116,7 +116,7 @@ gl_init :: proc(window: ^plf.Window, textures: ^[Texture_ID]Texture)
                      gl.DYNAMIC_DRAW)
 }
 
-gl_clear :: proc(color: v4f)
+gl_clear :: proc(color: v4f32)
 {
   gl.ClearColor(color.r, color.g, color.b, color.a)
   gl.Clear(gl.COLOR_BUFFER_BIT);
@@ -128,11 +128,8 @@ gl_flush :: proc()
 
   window_size := plf.window_size(gl_renderer.window)
 
-  gl_renderer.projection = vm.orthographic_3x3f(0, 
-                                               960,
-                                               0, 
-                                               540)
-  gl_renderer.uniforms.proj = cast(m4x4f) gl_renderer.projection
+  gl_renderer.projection = vm.orthographic_3x3f(0, 960, 0, 540)
+  gl_renderer.uniforms.proj = cast(m4x4f32) gl_renderer.projection
 
   gl.Viewport(expand_values(gl_renderer.viewport))
 

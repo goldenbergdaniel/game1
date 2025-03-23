@@ -6,10 +6,11 @@ import "core:math"
 import "core:os"
 import "core:slice"
 
-import plf "src:platform"
-import r "src:render"
-import vm "src:vecmath"
 import "ext:basic/mem"
+
+import plf "platform"
+import r "render"
+import vm "vecmath"
 
 @(thread_local, private="file")
 global_game_frame_arena: mem.Arena
@@ -24,13 +25,13 @@ sp_entities: [enum{
 
 // Game //////////////////////////////////////////////////////////////////////////////////
 
-GAME_MAX_ENTITY_COUNT :: 128 + 1
+MAX_ENTITY_COUNT :: 128 + 1
 
 Game :: struct
 {
   t:                  f32,
   t_mult:             f32,
-  entities:           [GAME_MAX_ENTITY_COUNT]Entity,
+  entities:           [MAX_ENTITY_COUNT]Entity,
   entities_cnt:       int,
   debug_entities:     [128]Debug_Entity,
   debug_entities_pos: int,
@@ -60,7 +61,7 @@ init_game :: proc(gm: ^Game)
   player := alloc_entity(gm)
   player.flags = {.ACTIVE}
   player.props = {.WRAP_AT_WORLD_EDGES}
-  player.scale = {2, 2}
+  player.scale = {SPRITE_SCALE, SPRITE_SCALE}
   player.tint = {1, 1, 1, 1}
   player.color = {0, 0, 0, 0}
   player.sprite = .SHIP
@@ -69,8 +70,9 @@ init_game :: proc(gm: ^Game)
 
   asteroid := alloc_entity(gm)
   asteroid.flags = {.ACTIVE}
+  asteroid.props = {.ROTATE_OVER_TIME}
   asteroid.pos = {WORLD_WIDTH/2, WORLD_HEIGHT/2}
-  asteroid.scale = {2, 2}
+  asteroid.scale = {SPRITE_SCALE, SPRITE_SCALE}
   asteroid.tint = {0.57, 0.53, 0.49, 1}
   asteroid.sprite = .ASTEROID_BIG
   asteroid.z_layer = .DECORATION
@@ -160,7 +162,8 @@ update_game :: proc(gm: ^Game, dt: f32)
 
     if desc.kind != .NIL && gm.t >= desc.time
     {
-      enemy := spawn_enemy_entity(desc.pos)
+      enemy := spawn_enemy(.ALIEN)
+      enemy.pos = desc.pos
       enemy.vel = {-50, 50}
 
       gm.enemy_to_spawn_idx += 1
@@ -180,16 +183,14 @@ update_game :: proc(gm: ^Game, dt: f32)
 
   if gm.entities[3].idx != 0 && gm.entities[3].gen == 0
   {
-    gm.entities[3].tint = v4f{abs(math.sin(gm.t)), 0, 0, 1}
+    gm.entities[3].tint = v4f32{abs(math.sin(gm.t)), 0, 0, 1}
   }
-
-  gm.entities[2].rot += 0.5 * math.PI * dt
-  
+ 
   // - Player movement ---
   {
-    SPEED :: 600.0
-    ACC   :: 400.0
-    DRAG  :: 1.5
+    SPEED :: 350.0
+    ACC   :: 250.0
+    DRAG  :: 1.25
 
     if plf.key_pressed(.A) && !plf.key_pressed(.D)
     {
@@ -229,20 +230,45 @@ update_game :: proc(gm: ^Game, dt: f32)
     }
   }
 
-  // - Player attack ---
+  // - Enemy movement ---
+  for &en in gm.entities
   {
-    if !player.attack_timer.ticking
-    {
-      timer_start(&player.attack_timer, 0.1)
-    }
+    if .ACTIVE not_in en.flags || en.enemy_kind == .NIL do continue
 
-    if plf.mouse_btn_pressed(.LEFT) && timer_timeout(&player.attack_timer)
-    {
-      player.attack_timer.ticking = false
+    SPEED :: 200.0
+    ACC   :: 400.0
+    DRAG  :: 3
 
-      proj := spawn_weapon_entity(player.pos + player.vel * dt)
-      proj.vel = {math.cos(player.rot), math.sin(player.rot)} * 500
-      proj.rot = player.rot
+    if .FOLLOW_ENTITY in en.props
+    {
+      target := entity_from_ref(en.targetting.target)
+      dir := vm.normalize(target.pos - en.pos)
+
+      dist_to_target := vm.abs(en.pos - target.pos)
+
+      if dist_to_target.x >= en.targetting.min_dist && 
+         dist_to_target.x <= en.targetting.max_dist
+      {
+        en.vel.x += dir.x * ACC * dt
+        en.vel.x = clamp(en.vel.x, -SPEED, SPEED)
+      }
+      else
+      {
+        en.vel.x = math.lerp(en.vel.x, 0, DRAG * dt)
+        en.vel.x = approx(en.vel.x, 0, 1)
+      }
+
+      if dist_to_target.y >= en.targetting.min_dist && 
+         dist_to_target.y <= en.targetting.max_dist
+      {
+        en.vel.y += dir.y * ACC * dt
+        en.vel.y = clamp(en.vel.y, -SPEED, SPEED)
+      }
+      else
+      {
+        en.vel.y = math.lerp(en.vel.y, 0, DRAG * dt)
+        en.vel.y = approx(en.vel.y, 0, 1)
+      }
     }
   }
 
@@ -251,6 +277,24 @@ update_game :: proc(gm: ^Game, dt: f32)
     if .ACTIVE not_in en.flags do continue
     
     en.pos += en.vel * dt
+  }
+
+  // - Player attack ---
+  {
+    if !player.attack_timer.ticking
+    {
+      timer_start(&player.attack_timer, 0.2)
+    }
+
+    if plf.mouse_btn_pressed(.LEFT) && timer_timeout(&player.attack_timer)
+    {
+      player.attack_timer.ticking = false
+
+      proj := spawn_weapon(.LASER)
+      proj.pos = player.pos + player.vel * dt
+      proj.vel = {math.cos(player.rot), math.sin(player.rot)} * 500
+      proj.rot = player.rot
+    }
   }
 
   // - Update colliders ---
@@ -318,6 +362,11 @@ update_game :: proc(gm: ^Game, dt: f32)
       }
     }
 
+    if .ROTATE_OVER_TIME in en.props
+    {
+      en.rot += 0.25 * math.PI * dt
+    }
+
     if .LOOK_AT_TARGET in en.props
     {
       entity_look_at_point(&en, player.pos)
@@ -338,7 +387,7 @@ update_game :: proc(gm: ^Game, dt: f32)
   }
 
   // - Save and load game ---
-  when true
+  when false
   {
     SAVE_PATH :: "res/saves/main"
 
@@ -508,7 +557,7 @@ load_game_from_file :: proc(fd: os.Handle, gm: ^Game) -> bool
   return true
 }
 
-screen_to_world_pos :: proc(pos: v2f) -> v2f
+screen_to_world_pos :: proc(pos: v2f32) -> v2f32
 {
   return {
     (pos.x - user.viewport.x) * (WORLD_WIDTH / user.viewport.z),
@@ -520,26 +569,35 @@ screen_to_world_pos :: proc(pos: v2f) -> v2f
 
 Entity :: struct
 {
-  idx:          u32,
-  gen:          u32,
-  flags:        bit_set[Entity_Flag],
-  props:        bit_set[Entity_Prop],
-  pos:          v2f,
-  vel:          v2f,
-  scale:        v2f,
-  radius:       f32,
-  rot:          f32,
-  input_dir:    v2f,
-  tint:         v4f,
-  color:        v4f,
-  sprite:       Sprite_ID,
-  collider:     Collider,
-  col_layer:    enum u32 {PLAYER, ENEMY},
-  z_index:      i16,
-  z_layer:      enum u32 {NIL, DECORATION, ENEMY, PLAYER, PROJECTILE},
-  weapon_kind:  Weapon_Kind,
-  attack_timer: Timer,
-  death_timer:  Timer,
+  idx:              u32,
+  gen:              u32,
+  flags:            bit_set[Entity_Flag],
+  props:            bit_set[Entity_Prop],
+  pos:              v2f32,
+  vel:              v2f32,
+  scale:            v2f32,
+  radius:           f32,
+  rot:              f32,
+  input_dir:        v2f32,
+  tint:             v4f32,
+  color:            v4f32,
+  sprite:           Sprite_ID,
+  collider:         Collider,
+  col_layer:        enum u32 {NIL, PLAYER, ENEMY},
+  z_index:          i16,
+  z_layer:          enum u32 {NIL, DECORATION, ENEMY, PLAYER, PROJECTILE},
+  enemy_kind:       Enemy_Kind,
+  weapon_kind:      Weapon_Kind,
+  attack_timer:     Timer,
+  death_timer:      Timer,
+  hurt_timer:       Timer,
+  hurt_grace_timer: Timer,
+  targetting:       struct
+  {   
+    target:         Entity_Ref,
+    min_dist:       f32,
+    max_dist:       f32,
+  },
 }
 
 Entity_Ref :: struct
@@ -560,6 +618,8 @@ Entity_Prop :: enum u64
   WRAP_AT_WORLD_EDGES,
   LOOK_AT_TARGET,
   KILL_AFTER_TIME,
+  FOLLOW_ENTITY,
+  ROTATE_OVER_TIME,
 }
 
 Enemy_Kind :: enum
@@ -572,6 +632,7 @@ Weapon_Kind :: enum
 {
   NIL,
   LASER,
+  PROJ,
 }
 
 @(rodata)
@@ -579,6 +640,7 @@ NIL_ENTITY: Entity
 
 @(rodata)
 COLLISION_MATRIX: [type_of(Entity{}.col_layer)]bit_set[type_of(Entity{}.col_layer)] = {
+  .NIL = {},
   .PLAYER = {.ENEMY},
   .ENEMY = {.PLAYER},
 }
@@ -626,42 +688,59 @@ free_entity :: proc(gm: ^Game, en: ^Entity)
   gm.entities_cnt -= 1
 }
 
-spawn_enemy_entity :: proc(pos: v2f) -> ^Entity
+spawn_enemy :: proc(kind: Enemy_Kind) -> ^Entity
 {
   gm := get_current_game()
 
   en := alloc_entity(gm)
-  en.flags = {.ACTIVE}
-  en.props = {.WRAP_AT_WORLD_EDGES}
-  en.pos = pos
-  en.scale = {2, 2}
+  en.enemy_kind = kind
+  en.flags += {.ACTIVE}
+  en.props += {.WRAP_AT_WORLD_EDGES, .FOLLOW_ENTITY}
+  en.scale = {SPRITE_SCALE, SPRITE_SCALE}
   en.tint = {1, 0, 0, 1}
-  en.color = {0, 0, 0, 0}
-  en.sprite = .ALIEN
   en.z_layer = .ENEMY
   en.col_layer = .ENEMY
-  en.collider.kind = .POLYGON
+  en.targetting.target = ref_from_entity(sp_entities[.PLAYER])
+  en.targetting.min_dist = 8
+  en.targetting.max_dist = 1000
+
+  switch kind
+  {
+  case .NIL:
+  case .ALIEN:
+    en.sprite = .ALIEN
+  }
+
+  en.collider.kind = collider_map[en.sprite].kind
 
   return en
 }
 
-spawn_weapon_entity :: proc(pos: v2f) -> ^Entity
+spawn_weapon :: proc(kind: Weapon_Kind) -> ^Entity
 {
   gm := get_current_game()
 
   en := alloc_entity(gm)
-  en.flags = {.ACTIVE, .INTERPOLATE}
-  en.props = {.KILL_AFTER_TIME}
-  en.pos = pos
-  en.scale = {2, 2}
-  en.tint = {0.18, 0.88, 0.18, 1}
-  en.sprite = .LASER
-  en.col_layer = .PLAYER
-  en.collider.kind = collider_map[en.sprite].kind
-  // en.collider.kind = .CIRCLE
-  // en.collider.radius = 4
+  en.weapon_kind = kind
+  en.flags += {.ACTIVE, .INTERPOLATE}
+  en.props += {.KILL_AFTER_TIME}
+  en.scale = {SPRITE_SCALE, SPRITE_SCALE}
   en.z_layer = .PROJECTILE
-  en.weapon_kind = .LASER
+  en.col_layer = .PLAYER
+
+  switch kind
+  {
+  case .NIL:
+  case .LASER:
+    en.tint = {0.18, 0.88, 0.18, 1}
+    en.sprite = .LASER
+  case .PROJ:
+    en.tint = {0.18, 0.88, 0.18, 1}
+    en.sprite = .PROJECTILE
+    en.collider.radius = 4
+  }
+
+  en.collider.kind = collider_map[en.sprite].kind
 
   return en
 }
@@ -682,7 +761,7 @@ entity_has_props :: #force_inline proc(en: ^$E/Entity, props: bit_set[Entity_Pro
   return en.props & props == props
 }
 
-entity_look_at_point :: proc(en: ^$E/Entity, target: v2f)
+entity_look_at_point :: proc(en: ^$E/Entity, target: v2f32)
 {
   dd := target - en.pos
   en.rot = math.atan2(dd.y, dd.x)
@@ -692,79 +771,54 @@ entity_look_at_point :: proc(en: ^$E/Entity, target: v2f)
   }
 }
 
-pos_tl_from_entity :: proc(en: ^Entity) -> v2f
+tl_from_entity :: proc(en: ^Entity) -> v2f32
 {
   pivot := res.sprites[en.sprite].pivot
   dim := dim_from_entity(en)
-  local_pos := vm.rotation_2x2f(en.rot) * (v2f{-dim.x, -dim.y} * pivot)
+  local_pos := vm.rotation_2x2f(en.rot) * (v2f32{-dim.x, -dim.y} * pivot)
   return local_pos + en.pos
 }
 
-pos_tr_from_entity :: proc(en: ^Entity) -> v2f
-{
-  pivot := res.sprites[en.sprite].pivot
-  dim := dim_from_entity(en)
-  local_pos := vm.rotation_2x2f(en.rot) * (v2f{+dim.x, -dim.y} * pivot)
-  return local_pos + en.pos
-}
-
-pos_br_from_entity :: proc(en: ^Entity) -> v2f
-{
-  pivot := res.sprites[en.sprite].pivot
-  dim := dim_from_entity(en)
-  local_pos := vm.rotation_2x2f(en.rot) * (v2f{+dim.x, +dim.y} * pivot)
-  return local_pos + en.pos
-}
-
-pos_bl_from_entity :: proc(en: ^Entity) -> v2f
-{
-  pivot := res.sprites[en.sprite].pivot
-  dim := dim_from_entity(en)
-  local_pos := vm.rotation_2x2f(en.rot) * (v2f{-dim.x, +dim.y} * pivot)
-  return local_pos + en.pos
-}
-
-dim_from_entity :: proc(en: ^Entity) -> v2f
+dim_from_entity :: proc(en: ^Entity) -> v2f32
 {
   return en.scale * {16, 16}
 }
 
-entity_collider_vertex_pos :: proc(en: ^Entity, v: v2f) -> v2f
+entity_collider_vertex_pos :: proc(en: ^Entity, v: v2f32) -> v2f32
 {
   local_pos := vm.rotation_2x2f(en.rot) * v * 2
-  return pos_tl_from_entity(en) + local_pos
+  return tl_from_entity(en) + local_pos
 }
 
-local_xform_from_entity :: proc(en: ^Entity) -> m3x3f
+xform_from_entity :: proc(en: ^Entity) -> m3x3f32
 {
   result := vm.scale_3x3f(en.scale)
   result = vm.rotation_3x3f(en.rot) * result
-  result = vm.translation_3x3f(pos_tl_from_entity(en)) * result
+  result = vm.translation_3x3f(tl_from_entity(en)) * result
   return result
 }
 
 update_entity_collider :: proc(en: ^Entity)
 {
-  if en.collider.kind == .POLYGON
+  switch en.collider.kind
   {
+  case .NIL:
+  case .CIRCLE:
+    origin := xform_from_entity(en) * vm.v3f32(collider_map[en.sprite].origin, 1)
+    en.collider.origin = origin.xy
+    debug_circle(en.collider.origin, en.collider.radius, alpha=0.25)
+  case .POLYGON:
     en.collider.vertices_cnt = cast(u8) collider_map[en.sprite].vertex_count
     for i in 0..<en.collider.vertices_cnt
     {
-      v := local_xform_from_entity(en) * vm.v3f(collider_map[en.sprite].vertices[i], 1)
+      v := xform_from_entity(en) * vm.v3f32(collider_map[en.sprite].vertices[i], 1)
       en.collider.vertices[i] = v.xy
     }
 
     for vert in en.collider.vertices[:en.collider.vertices_cnt]
     {
-      debug_circle(vert, 8, color={0, 1, 0, 0}, alpha=0.75)
+      debug_circle(vert, 4, color={0, 1, 0, 0}, alpha=0.75)
     }
-  }
-  else if en.collider.kind == .CIRCLE
-  {
-    origin := local_xform_from_entity(en) * vm.v3f(collider_map[en.sprite].origin, 1)
-    en.collider.origin = origin.xy
-
-    debug_circle(en.collider.origin, en.collider.radius, alpha=0.25)
   }
 }
 
@@ -772,11 +826,7 @@ entity_collision :: proc(en_a, en_b: ^Entity) -> bool
 {
   result: bool
 
-  if en_a.collider.kind == .NIL || en_b.collider.kind == .NIL
-  {
-    result = false
-  }
-  else if en_a.collider.kind == .CIRCLE && en_b.collider.kind == .CIRCLE
+  if en_a.collider.kind == .CIRCLE && en_b.collider.kind == .CIRCLE
   {
     result = circle_circle_overlap(&en_a.collider, &en_b.collider)
   }
@@ -797,12 +847,11 @@ entity_collision :: proc(en_a, en_b: ^Entity) -> bool
 }
 
 @(thread_local, private="file")
-_entity_collision_cache: [GAME_MAX_ENTITY_COUNT][GAME_MAX_ENTITY_COUNT]bool
+_entity_collision_cache: [MAX_ENTITY_COUNT][MAX_ENTITY_COUNT]bool
 
 get_entities_collided_cache :: proc(a, b: u32) -> bool
 {
-  return _entity_collision_cache[a][b] &&
-         _entity_collision_cache[b][a]
+  return _entity_collision_cache[a][b] && _entity_collision_cache[b][a]
 }
 
 set_entities_collided_cache :: proc(a, b: u32)
@@ -813,7 +862,7 @@ set_entities_collided_cache :: proc(a, b: u32)
 
 reset_entity_collision_cache :: proc()
 {
-  mem.set(&_entity_collision_cache, 0, GAME_MAX_ENTITY_COUNT*GAME_MAX_ENTITY_COUNT)
+  mem.set(&_entity_collision_cache, 0, MAX_ENTITY_COUNT * MAX_ENTITY_COUNT)
 }
 
 // Debug_Entity //////////////////////////////////////////////////////////////////////////
@@ -844,9 +893,10 @@ pop_debug_entity :: proc(den: ^Debug_Entity)
 }
 
 debug_rect :: proc(
-  pos:    v2f,
-  scale:  v2f, 
-  color:  v4f = {1, 1, 1, 1},
+  pos:    v2f32,
+  scale:  v2f32, 
+  color:  v4f32 = {1, 1, 1, 0},
+  alpha:  f32 = 0.5,
   sprite: Sprite_ID = .SQUARE,
 ) -> ^Debug_Entity
 {
@@ -856,16 +906,16 @@ debug_rect :: proc(
   result.pos = pos
   result.scale = scale
   result.color = color
-  result.tint = {1, 1, 1, 1}
+  result.tint = {1, 1, 1, alpha}
   result.sprite = sprite
 
   return result
 }
 
 debug_circle :: proc(
-  pos:    v2f,
+  pos:    v2f32,
   radius: f32, 
-  color:  v4f = {0, 1, 0, 0},
+  color:  v4f32 = {0, 1, 0, 0},
   alpha:  f32 = 0.5,
 ) -> ^Debug_Entity
 {
@@ -913,9 +963,9 @@ timer_remaining :: proc(timer: ^Timer) -> f32
 
 Collider :: struct
 {
-  origin:       v2f,
+  origin:       v2f32,
   radius:       f32,
-  vertices:     [8]v2f,
+  vertices:     [8]v2f32,
   vertices_cnt: u8, 
   kind:         enum u8 {NIL, CIRCLE, POLYGON},
 }
@@ -938,7 +988,8 @@ polygon_polygon_overlap :: proc(a, b: ^Collider) -> bool
     j := (i + 1) % a.vertices_cnt
     proj_axis := vm.normal(a.vertices[i], a.vertices[j])
     
-    min_pa := max(f32); max_pa := min(f32)
+    min_pa := max(f32)
+    max_pa := min(f32)
     for k in 0..<a.vertices_cnt
     {
       p := vm.dot(a.vertices[k], proj_axis)
@@ -946,7 +997,8 @@ polygon_polygon_overlap :: proc(a, b: ^Collider) -> bool
       max_pa = max(max_pa, p)
     }
 
-    min_pb := max(f32); max_pb := min(f32)
+    min_pb := max(f32)
+    max_pb := min(f32)
     for k in 0..<b.vertices_cnt
     {
       p := vm.dot(b.vertices[k], proj_axis)
@@ -963,7 +1015,8 @@ polygon_polygon_overlap :: proc(a, b: ^Collider) -> bool
     j := (i + 1) % b.vertices_cnt
     proj_axis := vm.normal(b.vertices[i], b.vertices[j])
     
-    min_pa := max(f32); max_pa := min(f32)
+    min_pa := max(f32)
+    max_pa := min(f32)
     for k in 0..<a.vertices_cnt
     {
       p := vm.dot(a.vertices[k], proj_axis)
@@ -971,7 +1024,8 @@ polygon_polygon_overlap :: proc(a, b: ^Collider) -> bool
       max_pa = max(max_pa, p)
     }
 
-    min_pb := max(f32); max_pb := min(f32)
+    min_pb := max(f32)
+    max_pb := min(f32)
     for k in 0..<b.vertices_cnt
     {
       p := vm.dot(b.vertices[k], proj_axis)
@@ -993,12 +1047,10 @@ circle_polygon_overlap :: proc(circle, polygon: ^Collider) -> bool
     vi := polygon.vertices[i]
     vj := polygon.vertices[j]
 
-    // if vm.distance(vi, circle.origin) <= circle.radius do return true
-
     edge := vj - vi
     proj := vm.dot(circle.origin - vi, edge) / vm.magnitude_squared(edge)
 
-    edge_point: v2f
+    edge_point: v2f32
     if proj <= 0
     {
       edge_point = vi
@@ -1022,14 +1074,13 @@ circle_polygon_overlap :: proc(circle, polygon: ^Collider) -> bool
   return false
 }
 
-point_in_polygon :: proc(point: v2f, polygon: []v2f) -> bool
+point_in_polygon :: proc(point: v2f32, polygon: []v2f32) -> bool
 {
   inside: bool
-  n := len(polygon)
 
-  for i in 0..<n
+  for i in 0..<len(polygon)
   {
-    j := (i + 1) % n
+    j := (i + 1) % len(polygon)
     vi := polygon[i]
     vj := polygon[j]
 

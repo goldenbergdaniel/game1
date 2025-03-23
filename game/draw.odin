@@ -2,15 +2,17 @@ package game
 
 import "core:math"
 
-import plf "src:platform"
-import r "src:render"
-import vm "src:vecmath"
+import plf "platform"
+import r "render"
+import vm "vecmath"
+
+SPRITE_SCALE :: 1.5
 
 Sprite :: struct
 {
-  coords:  v2i,
-  grid:    v2i,
-  pivot:   v2f,
+  coords:  [2]i32,
+  grid:    [2]i32,
+  pivot:   v2f32,
   texture: r.Texture_ID,
 }
 
@@ -27,7 +29,7 @@ Sprite_ID :: enum
   ASTEROID_BIG,
 }
 
-begin_draw :: #force_inline proc(color: v4f)
+begin_draw :: #force_inline proc(color: v4f32)
 {
   r.clear(color)
 }
@@ -38,11 +40,11 @@ end_draw :: #force_inline proc()
 }
 
 draw_rect :: proc(
-  pos:    v2f,
-  scl:    v2f,
+  pos:    v2f32,
+  scl:    v2f32,
   rot:    f32 = 0,
-  tint:   v4f = {1, 1, 1, 1},
-  color:  v4f = {0, 0, 0, 0},
+  tint:   v4f32 = {1, 1, 1, 1},
+  color:  v4f32 = {0, 0, 0, 0},
   sprite: Sprite_ID = .SQUARE,
 )
 {
@@ -56,10 +58,10 @@ draw_rect :: proc(
   xform *= vm.translation_3x3f(-dim * sprite_res.pivot)
   xform *= vm.scale_3x3f(dim)
 
-  p1 := xform * v3f{0, 0, 1}
-  p2 := xform * v3f{1, 0, 1}
-  p3 := xform * v3f{1, 1, 1}
-  p4 := xform * v3f{0, 1, 1}
+  p1 := xform * v3f32{0, 0, 1}
+  p2 := xform * v3f32{1, 0, 1}
+  p3 := xform * v3f32{1, 1, 1}
+  p4 := xform * v3f32{0, 1, 1}
 
   tl, tr, br, bl := r.coords_from_texture(texture_res, sprite_res.coords, sprite_res.grid)
 
