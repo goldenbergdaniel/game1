@@ -1,5 +1,6 @@
 package game
 
+import "core:fmt"
 import "core:time"
 import "ext:basic/mem"
 
@@ -38,7 +39,7 @@ main :: proc()
   elapsed_time, accumulator: f64
   start_tick := time.tick_now()
 
-  for !should_quit()
+  for !user.window.should_close
   {
     plf.pump_events(&user.window)
 
@@ -85,7 +86,18 @@ main :: proc()
   }
 }
 
-should_quit :: #force_inline proc() -> bool
+v2f32 :: [2]f32
+v3f32 :: [3]f32
+v4f32 :: [4]f32
+
+m2x2f32 :: matrix[2,2]f32
+m3x3f32 :: matrix[3,3]f32
+m4x4f32 :: matrix[4,4]f32
+
+printf  :: fmt.printf
+println :: fmt.println
+
+approx :: #force_inline proc(val, tar, tol: $T) -> T 
 {
-  return user.window.should_close
+  return tar if abs(val) - abs(tol) <= abs(tar) else val
 }

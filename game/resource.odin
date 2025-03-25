@@ -11,7 +11,7 @@ Resources :: struct
   textures:     [r.Texture_ID]r.Texture,
   sprites:      [Sprite_ID]Sprite,
   enemies:      [Enemy_Kind]Enemy_Desc,
-  enemy_spawns: [1]Enemy_Spawn_Desc,
+  enemy_spawns: [2]Enemy_Spawn_Desc,
 }
 
 Enemy_Desc :: struct
@@ -68,7 +68,7 @@ init_resources :: proc(arena: ^mem.Arena)
   // - Enemy spawns ---
   {
     res.enemy_spawns[0] = {kind=.ALIEN, time=1.0, pos={WORLD_WIDTH, 0}}
-    // res.enemy_spawns[1] = {kind=.ALIEN, time=3.0, pos={WORLD_WIDTH, 0}}
+    res.enemy_spawns[1] = {kind=.ALIEN, time=3.0, pos={WORLD_WIDTH, 0}}
     // res.enemy_spawns[2] = {kind=.ALIEN, time=3.0, pos={WORLD_WIDTH-100, 0}}
     // res.enemy_spawns[3] = {kind=.ALIEN, time=8.0, pos={WORLD_WIDTH, 0}}
   }

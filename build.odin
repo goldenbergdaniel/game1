@@ -2,7 +2,6 @@ package build
 
 import "core:fmt"
 import "core:os/os2"
-import "core:strings"
 
 import "metagen"
 
@@ -58,9 +57,9 @@ main :: proc()
       game_process_desc = os2.Process_Desc{
         command={
           "odin", 
-          "build", 
+          "run", 
           "game", 
-          "-out:out/game",
+          "-out:game.bin",
           "-collection:ext=ext", 
           "-debug",
           "-extra-linker-flags:\"-fuse-ld=mold\"",
@@ -74,7 +73,7 @@ main :: proc()
           "odin", 
           "build", 
           "game", 
-          "-out:out/game",
+          "-out:game.bin",
           "-collection:ext=ext", 
           "-vet-style",
           "-o:speed",
@@ -84,11 +83,11 @@ main :: proc()
       }
     }
 
-    os2.make_directory("out")
-    st, stdout, _, err := os2.process_exec(game_process_desc, context.allocator)
-    if stdout != nil
-    {
-      fmt.println(cast(string) stdout[:len(stdout)-1])
-    }
+    // os2.make_directory("out")
+    st, stdout, stderr, err := os2.process_exec(game_process_desc, context.allocator)
+    if stdout != nil do fmt.println(cast(string) stdout[:len(stdout)-1])
+    if stderr != nil do fmt.println(cast(string) stderr[:len(stderr)-1])
   }
+
+  os2.remove("game1")
 }

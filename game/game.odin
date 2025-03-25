@@ -152,7 +152,7 @@ update_game :: proc(gm: ^Game, dt: f32)
   }
 
   // - Enemy spawning ---
-  spawn_loop: for
+  try_spawn: for
   {
     desc: Enemy_Spawn_Desc
     if gm.enemy_to_spawn_idx < len(res.enemy_spawns)
@@ -173,12 +173,12 @@ update_game :: proc(gm: ^Game, dt: f32)
       {
         if res.enemy_spawns[gm.enemy_to_spawn_idx].time == desc.time
         {
-          continue spawn_loop
+          continue try_spawn
         }
       }
     }
 
-    break spawn_loop
+    break try_spawn
   }
 
   if gm.entities[3].idx != 0 && gm.entities[3].gen == 0
@@ -209,7 +209,7 @@ update_game :: proc(gm: ^Game, dt: f32)
 
     if plf.key_pressed(.W) && !plf.key_pressed(.S)
     {
-      acc: f32 = plf.key_pressed(.SPACE) ? ACC*2 : ACC
+      acc: f32 = ACC*2 if plf.key_pressed(.SPACE) else ACC
 
       player.vel.x += math.cos(player.rot) * acc * dt
       player.vel.x = clamp(player.vel.x, -SPEED, SPEED)
