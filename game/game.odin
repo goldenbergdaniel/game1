@@ -83,16 +83,18 @@ init_game :: proc(gm: ^Game)
   
   sp_entities[.PLAYER] = player
 
-  // - Spawn star particles
+  // - Spawn star particles ---
   {
-    for i in 0..<32
+    for i in 0..<64
     {
       par := push_particle(gm)
       par.props += {.ROTATE_OVER_TIME}
-      par.scale = {1.0/8, 1.0/8}
+      par.rot = rand.float32_range(0, math.PI/4)
       par.pos.x = rand.float32_range(0, WORLD_WIDTH)
       par.pos.y = rand.float32_range(0, WORLD_HEIGHT)
-      par.rot = rand.float32_range(0, math.PI/2)
+      par.scale.x = rand.float32_range(1.0/12, 1.0/6)
+      par.scale.y = rand.float32_range(1.0/12, 1.0/6)
+      par.tint.a = rand.float32_range(0.25, 1)
       par.color = {0.8, 0.8, 1, 0}
     }
   }
@@ -464,7 +466,7 @@ render_game :: proc(gm: ^Game, dt: f32)
   {
     if .ACTIVE not_in par.props do continue
     
-    draw_sprite(par.pos, par.scale, par.rot, {1, 1, 1, 1}, par.color, par.sprite)
+    draw_sprite(par.pos, par.scale, par.rot, par.tint, par.color, par.sprite)
   }
 
   // - Draw entities ---
@@ -979,6 +981,7 @@ Particle :: struct
   pos:        v2f32,
   vel:        v2f32,
   scale:      v2f32,
+  tint:       v4f32,
   color:      v4f32,
   kill_timer: Timer, 
   sprite:     Sprite_ID,
@@ -1002,6 +1005,7 @@ push_particle :: proc(gm: ^Game) -> ^Particle
 {
   result := &gm.particles[gm.particles_pos]
   result.props += {.ACTIVE, .INTERPOLATE}
+  result.tint = {1, 1, 1, 1}
   result.color = {0, 0, 0, 1}
 
   gm.particles_pos += 1
