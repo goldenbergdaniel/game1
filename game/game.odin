@@ -3,6 +3,7 @@ package game
 import "base:runtime"
 import "core:fmt"
 import "core:math"
+import "core:math/rand"
 import "core:os"
 import "core:slice"
 
@@ -25,16 +26,19 @@ sp_entities: [enum{
 
 // Game //////////////////////////////////////////////////////////////////////////////////
 
-MAX_ENTITY_COUNT :: 128 + 1
+MAX_ENTITIES_COUNT  :: 128 + 1
+MAX_PARTICLES_COUNT :: 1024
 
 Game :: struct
 {
   t:                  f32,
   t_mult:             f32,
-  entities:           [MAX_ENTITY_COUNT]Entity,
+  entities:           [MAX_ENTITIES_COUNT]Entity,
   entities_cnt:       int,
   debug_entities:     [128]Debug_Entity,
   debug_entities_pos: int,
+  particles:          [MAX_PARTICLES_COUNT]Particle,
+  particles_pos:      int,
   enemy_to_spawn_idx: int,
 }
 
@@ -78,6 +82,20 @@ init_game :: proc(gm: ^Game)
   asteroid.z_layer = .DECORATION
   
   sp_entities[.PLAYER] = player
+
+  // - Spawn star particles
+  {
+    for i in 0..<32
+    {
+      par := push_particle(gm)
+      par.props += {.ROTATE_OVER_TIME}
+      par.scale = {1.0/8, 1.0/8}
+      par.pos.x = rand.float32_range(0, WORLD_WIDTH)
+      par.pos.y = rand.float32_range(0, WORLD_HEIGHT)
+      par.rot = rand.float32_range(0, math.PI/2)
+      par.color = {0.8, 0.8, 1, 0}
+    }
+  }
 }
 
 update_game :: proc(gm: ^Game, dt: f32)
@@ -386,6 +404,17 @@ update_game :: proc(gm: ^Game, dt: f32)
     }
   }
 
+  // - Update particles --- 
+  for &par in gm.particles
+  {
+    if .ACTIVE not_in par.props do continue
+
+    if .ROTATE_OVER_TIME in par.props
+    {
+      par.rot += dt * 2
+    }
+  }
+
   // - Save and load game ---
   when false
   {
@@ -428,6 +457,17 @@ update_game :: proc(gm: ^Game, dt: f32)
 
 render_game :: proc(gm: ^Game, dt: f32)
 {
+  begin_draw({0.07, 0.07, 0.07, 1})
+
+  // - Draw particles ---
+  for &par in gm.particles
+  {
+    if .ACTIVE not_in par.props do continue
+    
+    draw_sprite(par.pos, par.scale, par.rot, {1, 1, 1, 1}, par.color, par.sprite)
+  }
+
+  // - Draw entities ---
   en_targets: [len(gm.entities)]^Entity
   for i in 0..<len(gm.entities)
   {
@@ -445,22 +485,21 @@ render_game :: proc(gm: ^Game, dt: f32)
     }
   })
 
-  begin_draw({0.07, 0.07, 0.07, 1})
-
   for en in en_targets
   {
     if .ACTIVE not_in en.flags do continue
 
-    draw_rect(en.pos, en.scale, en.rot, en.tint, en.color, en.sprite)
+    draw_sprite(en.pos, en.scale, en.rot, en.tint, en.color, en.sprite)
   }
 
+  // - Draw debug entities ---
   if global_debug
   {
-    for den in gm.debug_entities
+    for &den in gm.debug_entities
     {
       if .ACTIVE not_in den.flags do continue
 
-      draw_rect(den.pos, den.scale, den.rot, den.tint, den.color, den.sprite)
+      draw_sprite(den.pos, den.scale, den.rot, den.tint, den.color, den.sprite)
     }
   }
 
@@ -540,7 +579,7 @@ save_game_to_file :: proc(fd: os.Handle, gm: ^Game) -> bool
 // NOTE(dg): This assumes that Game is contiguous and stores no pointers.
 load_game_from_file :: proc(fd: os.Handle, gm: ^Game) -> bool
 {
-  saved_buf: [size_of(Game)*2]byte
+  saved_buf := make([]u8, size_of(Game)*2, mem.a(&global_game_frame_arena))
   saved_len, _ := os.read(fd, saved_buf[:])
   gm_bytes := saved_buf[:saved_len]
 
@@ -847,7 +886,7 @@ entity_collision :: proc(en_a, en_b: ^Entity) -> bool
 }
 
 @(thread_local, private="file")
-_entity_collision_cache: [MAX_ENTITY_COUNT][MAX_ENTITY_COUNT]bool
+_entity_collision_cache: [MAX_ENTITIES_COUNT][MAX_ENTITIES_COUNT]bool
 
 get_entities_collided_cache :: proc(a, b: u32) -> bool
 {
@@ -862,7 +901,7 @@ set_entities_collided_cache :: proc(a, b: u32)
 
 reset_entity_collision_cache :: proc()
 {
-  mem.set(&_entity_collision_cache, 0, MAX_ENTITY_COUNT * MAX_ENTITY_COUNT)
+  mem.set(&_entity_collision_cache, 0, MAX_ENTITIES_COUNT * MAX_ENTITIES_COUNT)
 }
 
 // Debug_Entity //////////////////////////////////////////////////////////////////////////
@@ -931,13 +970,56 @@ debug_circle :: proc(
   return result
 }
 
+// Particle //////////////////////////////////////////////////////////////////////////////
+
+Particle :: struct
+{
+  props:      bit_set[Particle_Prop],
+  rot:        f32,
+  pos:        v2f32,
+  vel:        v2f32,
+  scale:      v2f32,
+  color:      v4f32,
+  kill_timer: Timer, 
+  sprite:     Sprite_ID,
+}
+
+Particle_Prop :: enum u16
+{
+  ACTIVE,
+  INTERPOLATE,
+  KILL_AFTER_TIME,
+  ROTATE_OVER_TIME,
+  SCALE_OVER_TIME,
+}
+
+particle_has_props :: proc(par: ^Particle, props: bit_set[Particle_Prop]) -> bool
+{
+  return par.props & props == props
+}
+
+push_particle :: proc(gm: ^Game) -> ^Particle
+{
+  result := &gm.particles[gm.particles_pos]
+  result.props += {.ACTIVE, .INTERPOLATE}
+  result.color = {0, 0, 0, 1}
+
+  gm.particles_pos += 1
+  if gm.particles_pos == len(gm.particles)
+  {
+    gm.particles_pos = 0
+  }
+
+  return result
+}
+
 // Timer /////////////////////////////////////////////////////////////////////////////////
 
 Timer :: struct
 {
+  ticking:  bool,
   duration: f32,
   end_time: f32,
-  ticking:  bool,
 }
 
 timer_start :: proc(timer: ^Timer, duration: f32)

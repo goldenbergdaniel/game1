@@ -39,7 +39,7 @@ end_draw :: #force_inline proc()
   r.flush()
 }
 
-draw_rect :: proc(
+draw_sprite :: proc(
   pos:    v2f32,
   scl:    v2f32,
   rot:    f32 = 0,
