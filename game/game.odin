@@ -92,8 +92,9 @@ init_game :: proc(gm: ^Game)
       par.rot = rand.float32_range(0, math.PI/4)
       par.pos.x = rand.float32_range(0, WORLD_WIDTH)
       par.pos.y = rand.float32_range(0, WORLD_HEIGHT)
-      par.scale.x = rand.float32_range(1.0/12, 1.0/6)
-      par.scale.y = rand.float32_range(1.0/12, 1.0/6)
+      scl := rand.float32_range(1.0/12, 1.0/6)
+      par.scale.x = scl
+      par.scale.y = scl
       par.tint.a = rand.float32_range(0.25, 1)
       par.color = {0.8, 0.8, 1, 0}
     }
