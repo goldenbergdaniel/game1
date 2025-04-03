@@ -4,9 +4,13 @@ package platform
 
 import "core:fmt"
 import "core:strings"
-import mem "ext:basic/mem"
-import gl  "ext:opengl"
+import gl "ext:opengl"
 import sdl "ext:sdl3"
+import im "ext:imgui"
+import im_gl "ext:imgui/imgui_impl_opengl3"
+import im_sdl "ext:imgui/imgui_impl_sdl3"
+
+import "../basic/mem"
 
 sdl_create_window :: proc(
 	title:  string, 
@@ -32,6 +36,8 @@ sdl_create_window :: proc(
 	{
 		window_flags += {.OPENGL}
 
+		sdl.GL_SetAttribute(.CONTEXT_FLAGS, i32(sdl.GLContextFlag{.FORWARD_COMPATIBLE}))
+		sdl.GL_SetAttribute(.CONTEXT_PROFILE_MASK, i32(sdl.GLProfile.CORE))
 		sdl.GL_SetAttribute(.CONTEXT_MAJOR_VERSION, 4)
 		sdl.GL_SetAttribute(.CONTEXT_MINOR_VERSION, 6)
 		sdl.GL_SetAttribute(.RED_SIZE, 8)
@@ -61,9 +67,19 @@ sdl_create_window :: proc(
 	// window_system_info: sdl.SysWMinfo
 	// sdl.GetVersion(&window_system_info.version)
 	// sdl.GetWindowWMInfo(sdl_window, &window_system_info)
-	
+
+	im.CreateContext()
+	imio := im.GetIO()
+	imio.ConfigFlags += {.NoKeyboard}
+
+	im.StyleColorsDark()
+
+	im_sdl.InitForOpenGL(sdl_window, gl_ctx)
+	im_gl.Init(nil)
+
 	result.handle = sdl_window
-	result.draw_ctx.opengl.sdl_ctx = gl_ctx
+	result.draw_ctx.gl.sdl_ctx = gl_ctx
+	result.imio_handle = imio
 
   return result
 }
@@ -71,6 +87,10 @@ sdl_create_window :: proc(
 sdl_release_os_resources :: proc(window: ^Window)
 {
 	sdl.DestroyWindow(auto_cast window.handle)
+	// im.DestroyContext()
+	// im_sdl.Shutdown()
+	// im_gl.Shutdown()
+	// im.Shutdown()
 }
 
 sdl_gl_swap_buffers :: proc(window: ^Window)
@@ -78,13 +98,20 @@ sdl_gl_swap_buffers :: proc(window: ^Window)
 	sdl.GL_SwapWindow(auto_cast window.handle)
 }
 
-sdl_poll_event :: proc(event: ^Event) -> bool
+sdl_poll_event :: proc(window: ^Window, event: ^Event) -> bool
 {
 	result: bool
 
 	sdl_event: sdl.Event
 	result = sdl.PollEvent(&sdl_event)
 	event^ = sdl_translate_event(&sdl_event)
+   
+	im_sdl.ProcessEvent(&sdl_event)
+	imio := cast(^im.IO) window.imio_handle
+	if imio.WantCaptureMouse && event.mouse_btn_kind != .NIL
+	{
+		event.kind = .NIL
+	}
 
 	return result
 }
@@ -94,6 +121,7 @@ sdl_pump_events :: proc()
 	sdl.PumpEvents()
 }
 
+// TODO(dg): The event codes should be mapped in an array.
 sdl_translate_event :: proc(sdl_event: ^sdl.Event) -> Event
 {
 	result: Event
@@ -151,6 +179,7 @@ sdl_translate_event :: proc(sdl_event: ^sdl.Event) -> Event
 		case .TAB:			 result = Event{kind = .KEY_DOWN, key_kind = .TAB}
     case .RETURN: 	 result = Event{kind = .KEY_DOWN, key_kind = .ENTER}
   	case .BACKSPACE: result = Event{kind = .KEY_DOWN, key_kind = .BACKSPACE}
+		case .GRAVE:		 result = Event{kind = .KEY_DOWN, key_kind = .BACKTICK}
     case .ESCAPE: 	 result = Event{kind = .KEY_DOWN, key_kind = .ESCAPE}
     }
 	case .KEY_UP:
@@ -202,6 +231,7 @@ sdl_translate_event :: proc(sdl_event: ^sdl.Event) -> Event
 		case .TAB:			 result = Event{kind = .KEY_UP, key_kind = .TAB}
     case .RETURN: 	 result = Event{kind = .KEY_UP, key_kind = .ENTER}
   	case .BACKSPACE: result = Event{kind = .KEY_UP, key_kind = .BACKSPACE}
+		case .GRAVE:		 result = Event{kind = .KEY_UP, key_kind = .BACKTICK}
     case .ESCAPE: 	 result = Event{kind = .KEY_UP, key_kind = .ESCAPE}
     }
 	case .MOUSE_BUTTON_DOWN:
@@ -221,6 +251,19 @@ sdl_translate_event :: proc(sdl_event: ^sdl.Event) -> Event
 	}
 
 	return result
+}
+
+sdl_imgui_begin :: proc()
+{
+  im_gl.NewFrame()
+  im_sdl.NewFrame()
+  im.NewFrame()
+}
+
+sdl_imgui_end :: proc()
+{
+  im.Render()
+  im_gl.RenderDrawData(im.GetDrawData())
 }
 
 sdl_window_toggle_fullscreen :: proc(window: ^Window)

@@ -64,6 +64,8 @@ main :: proc()
           "-debug",
           "-extra-linker-flags:\"-fuse-ld=mold\"",
         },
+        stdout = os2.stdout,
+        stderr = os2.stderr,
       }
     }
     else if mode == "release"
@@ -80,13 +82,16 @@ main :: proc()
           "-microarch:native",
           "-extra-linker-flags:\"-fuse-ld=mold\"",
         },
+        stdout = os2.stdout,
+        stderr = os2.stderr,
       }
     }
 
-    // os2.make_directory("out")
-    st, stdout, stderr, err := os2.process_exec(game_process_desc, context.allocator)
-    if stdout != nil do fmt.println(cast(string) stdout[:len(stdout)-1])
-    if stderr != nil do fmt.println(cast(string) stderr[:len(stderr)-1])
+    process, start_err := os2.process_start(game_process_desc)
+    if start_err != nil do fmt.eprintln("Error:", start_err)
+
+    _, wait_err := os2.process_wait(process)
+    if wait_err != nil do fmt.eprintln("Error:", wait_err)
   }
 
   os2.remove("game1")

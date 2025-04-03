@@ -7,7 +7,7 @@ import "core:math/rand"
 import "core:os"
 import "core:slice"
 
-import "ext:basic/mem"
+import "basic/mem"
 
 import plf "platform"
 import r "render"
@@ -77,7 +77,8 @@ init_game :: proc(gm: ^Game)
   asteroid.props = {.ROTATE_OVER_TIME}
   asteroid.pos = {WORLD_WIDTH/2, WORLD_HEIGHT/2}
   asteroid.scale = {SPRITE_SCALE, SPRITE_SCALE}
-  asteroid.tint = {0.57, 0.53, 0.49, 1}
+  // asteroid.tint = {0.57, 0.53, 0.49, 1}
+  asteroid.tint = {1, 1, 1, 1}
   asteroid.sprite = .ASTEROID_BIG
   asteroid.z_layer = .DECORATION
   
@@ -85,18 +86,26 @@ init_game :: proc(gm: ^Game)
 
   // - Spawn star particles ---
   {
-    for i in 0..<64
+    for i in 0..<100
     {
       par := push_particle(gm)
       par.props += {.ROTATE_OVER_TIME}
       par.rot = rand.float32_range(0, math.PI/4)
+      
       par.pos.x = rand.float32_range(0, WORLD_WIDTH)
       par.pos.y = rand.float32_range(0, WORLD_HEIGHT)
+    
       scl := rand.float32_range(1.0/12, 1.0/6)
       par.scale.x = scl
       par.scale.y = scl
+    
       par.tint.a = rand.float32_range(0.25, 1)
-      par.color = {0.8, 0.8, 1, 0}
+
+      colors := [?]v4f32{
+        {0.9, 0.9, 0.9, 0},
+        {0.8, 0.8, 1.0, 0},
+      }
+      par.color = rand.choice(colors[:])
     }
   }
 }
@@ -141,10 +150,14 @@ update_game :: proc(gm: ^Game, dt: f32)
       plf.window_toggle_fullscreen(&user.window)
     }
 
-    if plf.key_just_pressed(.TAB) && plf.key_pressed(.L_CTRL)
+    if plf.key_just_pressed(.BACKTICK) && plf.key_pressed(.L_CTRL)
     {
       global_debug = !global_debug
-      println("Set debug render to", global_debug)
+    }
+
+    if plf.key_just_pressed(.TAB) && plf.key_pressed(.L_CTRL)
+    {
+      user.show_imgui = !user.show_imgui
     }
 
     if plf.key_just_pressed(.S_1) && plf.key_pressed(.L_CTRL)
@@ -204,9 +217,10 @@ update_game :: proc(gm: ^Game, dt: f32)
 
   if gm.entities[3].idx != 0 && gm.entities[3].gen == 0
   {
-    gm.entities[3].tint = v4f32{abs(math.sin(gm.t)), 0, 0, 1}
+    // gm.entities[3].tint = v4f32{abs(math.sin(gm.t)), 0, 0, 1}
+    // gm.entities[3].tint = rgba_from_hsva({abs(math.sin(gm.t * 0.5)), 1, 1, 1})
   }
- 
+
   // - Player movement ---
   {
     SPEED :: 350.0
@@ -241,7 +255,7 @@ update_game :: proc(gm: ^Game, dt: f32)
 
     if !plf.key_pressed(.W)
     {
-      drag: f32 = plf.key_pressed(.S) ? DRAG*2 : DRAG
+      drag: f32 = DRAG*2 if plf.key_pressed(.S) else DRAG
 
       player.vel.x = math.lerp(player.vel.x, 0, drag * dt)
       player.vel.x = approx(player.vel.x, 0, 1)
@@ -460,7 +474,7 @@ update_game :: proc(gm: ^Game, dt: f32)
 
 render_game :: proc(gm: ^Game, dt: f32)
 {
-  begin_draw({0.07, 0.07, 0.07, 1})
+  begin_draw({10, 10, 10, 255}/255.0)
 
   // - Draw particles ---
   for &par in gm.particles
@@ -739,7 +753,7 @@ spawn_enemy :: proc(kind: Enemy_Kind) -> ^Entity
   en.flags += {.ACTIVE}
   en.props += {.WRAP_AT_WORLD_EDGES, .FOLLOW_ENTITY}
   en.scale = {SPRITE_SCALE, SPRITE_SCALE}
-  en.tint = {1, 0, 0, 1}
+  en.tint = {1, 1, 1, 1}
   en.z_layer = .ENEMY
   en.col_layer = .ENEMY
   en.targetting.target = ref_from_entity(sp_entities[.PLAYER])
@@ -846,14 +860,14 @@ update_entity_collider :: proc(en: ^Entity)
   {
   case .NIL:
   case .CIRCLE:
-    origin := xform_from_entity(en) * vm.v3f32(collider_map[en.sprite].origin, 1)
+    origin := xform_from_entity(en) * vm.combine(collider_map[en.sprite].origin, 1)
     en.collider.origin = origin.xy
     debug_circle(en.collider.origin, en.collider.radius, alpha=0.25)
   case .POLYGON:
     en.collider.vertices_cnt = cast(u8) collider_map[en.sprite].vertex_count
     for i in 0..<en.collider.vertices_cnt
     {
-      v := xform_from_entity(en) * vm.v3f32(collider_map[en.sprite].vertices[i], 1)
+      v := xform_from_entity(en) * vm.combine(collider_map[en.sprite].vertices[i], 1)
       en.collider.vertices[i] = v.xy
     }
 

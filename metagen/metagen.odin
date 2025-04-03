@@ -4,9 +4,9 @@ import "core:fmt"
 import "core:image/qoi"
 import "core:os"
 import "core:strings"
-import "ext:basic/mem"
 
 import "../game"
+import "../game/basic/mem"
 
 TEX_CELL :: 16
 TEX_X    :: 8

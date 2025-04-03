@@ -1,6 +1,6 @@
 package platform
 
-import mem "ext:basic/mem"
+import "../basic/mem"
 
 @(private)
 EVENT_QUEUE_CAP :: 16
@@ -8,42 +8,29 @@ EVENT_QUEUE_CAP :: 16
 Window :: struct
 {
   handle:       rawptr,
+  imio_handle: rawptr,
   event_queue:  Event_Queue,
   should_close: bool,
-  draw_ctx: struct #raw_union
+  draw_ctx:     struct #raw_union
   {
-    metal: struct
+    gl:         struct
     {
-      drawable:              rawptr,
-      depth_stencil_texture: rawptr,
-      msaa_color_texture:    rawptr,
-    },
-    d3d11: struct
-    {
-      render_view:        rawptr,
-      resolve_view:       rawptr,
-      depth_stencil_view: rawptr,
-    },
-    opengl: struct
-    {
-      framebuffer: u32,
-      sdl_ctx:     rawptr,
+      sdl_ctx:  rawptr,
     },
   },
 }
 
 Event :: struct
 {
-  kind: Event_Kind,
-  key_kind: Key_Kind,
+  kind:           Event_Kind,
+  key_kind:       Key_Kind,
   mouse_btn_kind: Mouse_Btn_Kind,
-  mouse_pos: [2]f32,
+  mouse_pos:      [2]f32,
 }
 
-Event_Kind :: enum u16
+Event_Kind :: enum
 {
-  NONE,
-
+  NIL,
   QUIT,
   KEY_DOWN,
   KEY_UP,
@@ -51,7 +38,7 @@ Event_Kind :: enum u16
   MOUSE_BTN_UP,
 }
 
-Key_Kind :: enum u8
+Key_Kind :: enum
 {
   NIL,
   A,
@@ -100,10 +87,11 @@ Key_Kind :: enum u8
   TAB,
   ENTER,
   BACKSPACE,
+  BACKTICK,
   ESCAPE,
 }
 
-Mouse_Btn_Kind :: enum u8
+Mouse_Btn_Kind :: enum
 {
   NIL,
   LEFT,
@@ -139,46 +127,42 @@ create_window :: #force_inline proc(
 {
 	result: Window
 
-  when ODIN_OS == .Windows do result = windows_create_window(title, width, height, arena)
-  else                     do result = sdl_create_window(title, width, height, arena)
-
-	init_event_queue(&result.event_queue, arena)
+  when ODIN_OS == .Windows
+  {
+    result = windows_create_window(title, width, height, arena)
+	  init_event_queue(&result.event_queue, arena)
+  }
+  else
+  {
+    result = sdl_create_window(title, width, height, arena)
+  }
 
 	return result
 }
 
-release_resources :: proc(
-  window: ^Window,
-)
+release_resources :: #force_inline proc(window: ^Window)
 {
   when ODIN_OS == .Windows do windows_release_os_resources(window)
 	else                     do sdl_release_os_resources(window)
 }
 
-swap_buffers :: #force_inline proc(
-  window: ^Window,
-)
+swap_buffers :: #force_inline proc(window: ^Window)
 {
   when ODIN_OS != .Windows do sdl_gl_swap_buffers(window)
 }
 
 @(private)
-poll_event :: #force_inline proc(
-  window: ^Window, 
-  event:  ^Event,
-) -> bool
+poll_event :: #force_inline proc(window: ^Window, event:  ^Event) -> bool
 {
 	result: bool
   
   when ODIN_OS == .Windows do result = windows_poll_event(window, event)
-	else                     do result = sdl_poll_event(event)
+	else                     do result = sdl_poll_event(window, event)
 
 	return result
 }
 
-pump_events :: #force_inline proc(
-  window: ^Window,
-)
+pump_events :: #force_inline proc(window: ^Window)
 {
   when ODIN_OS == .Windows do windows_pump_events(window)
 	else                     do sdl_pump_events()
@@ -188,7 +172,7 @@ pump_events :: #force_inline proc(
   {
     switch event.kind
     {
-    case .NONE:
+    case .NIL:
     case .QUIT: 
       window.should_close = true
     case .KEY_DOWN:
@@ -201,6 +185,16 @@ pump_events :: #force_inline proc(
       input.mouse_btns[event.mouse_btn_kind] = false
     }
   }
+}
+
+imgui_begin :: #force_inline proc()
+{
+  sdl_imgui_begin()
+}
+
+imgui_end :: #force_inline proc()
+{
+  sdl_imgui_end()
 }
 
 @(private)
@@ -302,9 +296,7 @@ window_toggle_fullscreen :: proc(window: ^Window)
   else                     do sdl_window_toggle_fullscreen(window)
 }
 
-window_size :: #force_inline proc(
-  window: ^Window,
-) -> [2]i32
+window_size :: #force_inline proc(window: ^Window) -> [2]i32
 {
   result: [2]i32
 

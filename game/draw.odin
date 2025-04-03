@@ -71,3 +71,33 @@ draw_sprite :: proc(
   r.push_vertex(p4.xy, tint, color, bl)
   r.push_rect_indices()
 }
+
+rgba_from_hsva :: proc(hsva: v4f32) -> (rgba: v4f32)
+{
+  h, s, v, a := hsva[0], hsva[1], hsva[2], hsva[3]
+
+  if s == 0.0 do return v4f32{v, v, v, a}
+
+  h6 := h * 6.0
+  if h6 >= 6.0 do h6 = 0.0
+
+  sector := cast(int) h6
+  f := h6 - cast(f32) sector
+
+  p := v * (1.0 - s)
+  q := v * (1.0 - s * f)
+  t := v * (1.0 - s * (1.0 - f))
+
+  r, g, b: f32
+  switch sector
+  {
+  case 0: r, g, b = v, t, p
+  case 1: r, g, b = q, v, p
+  case 2: r, g, b = p, v, t
+  case 3: r, g, b = p, q, v
+  case 4: r, g, b = t, p, v
+  case 5: r, g, b = v, p, q
+  }
+
+  return v4f32{r, g, b, a}
+}

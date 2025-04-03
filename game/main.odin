@@ -2,8 +2,10 @@ package game
 
 import "core:fmt"
 import "core:time"
-import "ext:basic/mem"
+import sdl "ext:sdl3"
+import im "ext:imgui"
 
+import "basic/mem"
 import plf "platform"
 import r "render"
 import vm "vecmath"
@@ -18,6 +20,7 @@ User :: struct
   viewport:    v4f32,
   perm_arena:  mem.Arena,
   frame_arena: mem.Arena,
+  show_imgui:  bool,
 }
 
 user: User
@@ -42,6 +45,7 @@ main :: proc()
   for !user.window.should_close
   {
     plf.pump_events(&user.window)
+    plf.imgui_begin()
 
     // - Update viewport ---
     {
@@ -71,17 +75,23 @@ main :: proc()
       copy_game(&prev_game, &curr_game)
       update_game(&curr_game, SIM_STEP * curr_game.t_mult)
       plf.remember_prev_input()
-
+ 
       // if frame_time * 1000 > 20 do printf("%.0f ms\n", frame_time * 1000)
 
       curr_game.t += SIM_STEP * curr_game.t_mult
       accumulator -= SIM_STEP
     }
 
+    if user.show_imgui
+    {
+      im.ShowDemoWindow(nil)
+    }
+
     alpha := accumulator / SIM_STEP
     interpolate_games(&curr_game, &prev_game, &res_game, f32(alpha))
     render_game(&res_game, SIM_STEP)
     
+    plf.imgui_end()
     plf.swap_buffers(&user.window)
   }
 }
