@@ -46,6 +46,8 @@ main :: proc()
   fmt.println("[metagen]")
   metagen.generate_collider_map()
 
+  os2.set_env("SDL_VIDEO_DRIVER", "wayland")
+
   // - Game ---
   if pkg == "game"
   {

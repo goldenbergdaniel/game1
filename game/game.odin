@@ -6,6 +6,8 @@ import "core:math"
 import "core:math/rand"
 import "core:os"
 import "core:slice"
+import "core:time"
+import im "ext:imgui"
 
 import "basic/mem"
 
@@ -14,10 +16,12 @@ import r "render"
 import vm "vecmath"
 
 @(thread_local, private="file")
-global_game_frame_arena: mem.Arena
-
-@(thread_local, private="file")
-global_debug: bool
+global: struct
+{
+  game_frame_arena:    mem.Arena,
+  debug:               bool,
+  debug_target_entity: Entity_Ref,
+}
 
 @(thread_local, private="file")
 sp_entities: [enum{
@@ -58,13 +62,12 @@ set_current_game :: #force_inline proc(gm: ^Game)
 init_game :: proc(gm: ^Game)
 {
   // NOTE(dg): What if multiple games running on same thread? This needs to change. 
-  mem.init_growing_arena(&global_game_frame_arena)
+  mem.init_growing_arena(&global.game_frame_arena)
 
   gm.t_mult = 1
 
   player := alloc_entity(gm)
-  player.flags = {.ACTIVE}
-  player.props = {.WRAP_AT_WORLD_EDGES}
+  player.props += {.WRAP_AT_WORLD_EDGES}
   player.scale = {SPRITE_SCALE, SPRITE_SCALE}
   player.tint = {1, 1, 1, 1}
   player.color = {0, 0, 0, 0}
@@ -73,11 +76,9 @@ init_game :: proc(gm: ^Game)
   player.collider.kind = .POLYGON
 
   asteroid := alloc_entity(gm)
-  asteroid.flags = {.ACTIVE}
-  asteroid.props = {.ROTATE_OVER_TIME}
+  asteroid.props += {.ROTATE_OVER_TIME}
   asteroid.pos = {WORLD_WIDTH/2, WORLD_HEIGHT/2}
   asteroid.scale = {SPRITE_SCALE, SPRITE_SCALE}
-  // asteroid.tint = {0.57, 0.53, 0.49, 1}
   asteroid.tint = {1, 1, 1, 1}
   asteroid.sprite = .ASTEROID_BIG
   asteroid.z_layer = .DECORATION
@@ -90,15 +91,16 @@ init_game :: proc(gm: ^Game)
     {
       par := push_particle(gm)
       par.props += {.ROTATE_OVER_TIME}
+
       par.rot = rand.float32_range(0, math.PI/4)
-      
+
       par.pos.x = rand.float32_range(0, WORLD_WIDTH)
       par.pos.y = rand.float32_range(0, WORLD_HEIGHT)
-    
+
       scl := rand.float32_range(1.0/12, 1.0/6)
       par.scale.x = scl
       par.scale.y = scl
-    
+      
       par.tint.a = rand.float32_range(0.25, 1)
 
       colors := [?]v4f32{
@@ -117,14 +119,15 @@ update_game :: proc(gm: ^Game, dt: f32)
   player := sp_entities[.PLAYER]
   window_size := plf.window_size(&user.window)
   cursor_pos := screen_to_world_pos(plf.cursor_pos())
-
+  
   for &en in gm.entities
   {
-    if en.idx == 0 do continue
+    if en.ref == {} do continue
 
-    en.flags += {.INTERPOLATE}
+    en.props += {.INTERPOLATE}
 
-    if .MARKED_FOR_DEATH in en.flags
+    // - Kill entities
+    if .MARKED_FOR_DEATH in en.props
     {
       free_entity(gm, &en)
     }
@@ -132,7 +135,7 @@ update_game :: proc(gm: ^Game, dt: f32)
 
   for &den in gm.debug_entities
   {
-    if .MARKED_FOR_DEATH in den.flags
+    if .MARKED_FOR_DEATH in den.props
     {
       pop_debug_entity(&den)
     }
@@ -145,43 +148,41 @@ update_game :: proc(gm: ^Game, dt: f32)
       user.window.should_close = true
     }
 
-    if plf.key_just_pressed(.ENTER) && plf.key_pressed(.L_CTRL)
-    {
-      plf.window_toggle_fullscreen(&user.window)
-    }
-
-    if plf.key_just_pressed(.BACKTICK) && plf.key_pressed(.L_CTRL)
-    {
-      global_debug = !global_debug
-    }
-
-    if plf.key_just_pressed(.TAB) && plf.key_pressed(.L_CTRL)
+    if plf.key_just_pressed(.TAB) && !plf.key_pressed(.L_CTRL)
     {
       user.show_imgui = !user.show_imgui
     }
 
-    if plf.key_just_pressed(.S_1) && plf.key_pressed(.L_CTRL)
+    if plf.key_pressed(.L_CTRL)
     {
-      gm.t_mult = 1
-      println("Set time multiplier to", 1.0)
-    }
-
-    if plf.key_just_pressed(.S_2) && plf.key_pressed(.L_CTRL)
-    {
-      gm.t_mult = 0.5
-      println("Set time multiplier to", 0.5)
-    }
-
-    if plf.key_just_pressed(.S_3) && plf.key_pressed(.L_CTRL)
-    {
-      gm.t_mult = 0.25
-      println("Set time multiplier to", 0.25)
-    }
-
-    if plf.key_just_pressed(.S_4) && plf.key_pressed(.L_CTRL)
-    {
-      gm.t_mult = 2
-      println("Set time multiplier to", 2.0)
+      if plf.key_just_pressed(.ENTER)
+      {
+        plf.window_toggle_fullscreen(&user.window)
+      }
+      else if plf.key_just_pressed(.BACKTICK)
+      {
+        global.debug = !global.debug
+      }
+      else if plf.key_just_pressed(.S_1)
+      {
+        gm.t_mult = 1
+      }
+      else if plf.key_just_pressed(.S_2)
+      {
+        gm.t_mult = 0.5
+      }
+      else if plf.key_just_pressed(.S_3)
+      {
+        gm.t_mult = 0.25
+      }
+      else if plf.key_just_pressed(.S_4)
+      {
+        gm.t_mult = 0
+      }
+      else if plf.key_just_pressed(.S_5)
+      {
+        gm.t_mult = 2
+      }
     }
   }
 
@@ -213,12 +214,6 @@ update_game :: proc(gm: ^Game, dt: f32)
     }
 
     break try_spawn
-  }
-
-  if gm.entities[3].idx != 0 && gm.entities[3].gen == 0
-  {
-    // gm.entities[3].tint = v4f32{abs(math.sin(gm.t)), 0, 0, 1}
-    // gm.entities[3].tint = rgba_from_hsva({abs(math.sin(gm.t * 0.5)), 1, 1, 1})
   }
 
   // - Player movement ---
@@ -268,7 +263,7 @@ update_game :: proc(gm: ^Game, dt: f32)
   // - Enemy movement ---
   for &en in gm.entities
   {
-    if .ACTIVE not_in en.flags || en.enemy_kind == .NIL do continue
+    if .ACTIVE not_in en.props || en.enemy_kind == .NIL do continue
 
     SPEED :: 200.0
     ACC   :: 400.0
@@ -309,7 +304,7 @@ update_game :: proc(gm: ^Game, dt: f32)
 
   for &en in gm.entities
   {
-    if .ACTIVE not_in en.flags do continue
+    if .ACTIVE not_in en.props do continue
     
     en.pos += en.vel * dt
   }
@@ -335,7 +330,7 @@ update_game :: proc(gm: ^Game, dt: f32)
   // - Update colliders ---
   for &en in gm.entities
   {
-    if .ACTIVE not_in en.flags || en.collider.kind == .NIL do continue
+    if .ACTIVE not_in en.props || en.collider.kind == .NIL do continue
 
     update_entity_collider(&en)
   }
@@ -343,20 +338,20 @@ update_game :: proc(gm: ^Game, dt: f32)
   // - Collision detection ---
   for &en_a in gm.entities
   {
-    if .ACTIVE not_in en_a.flags do continue
+    if .ACTIVE not_in en_a.props do continue
 
     for &en_b in gm.entities 
     {
-      if .ACTIVE not_in en_b.flags ||
-         en_a.idx == en_b.idx ||
+      if .ACTIVE not_in en_b.props ||
+         en_a.ref.idx == en_b.ref.idx ||
          en_b.col_layer not_in COLLISION_MATRIX[en_a.col_layer]
       {
         continue
       }
 
-      if entity_collision(&en_a, &en_b) && !get_entities_collided_cache(en_a.idx, en_b.idx)
+      if entity_collision(&en_a, &en_b) && !get_entities_collided_cache(en_a.ref, en_b.ref)
       {
-        set_entities_collided_cache(en_a.idx, en_b.idx)
+        set_entities_collided_cache(en_a.ref, en_b.ref)
 
         if en_a.weapon_kind != .NIL || en_b.weapon_kind != .NIL
         {
@@ -365,11 +360,19 @@ update_game :: proc(gm: ^Game, dt: f32)
         }
       }
     }
+
+    if point_in_polygon(cursor_pos, en_a.collider.vertices[:])
+    {
+      if plf.mouse_btn_just_pressed(.RIGHT)
+      {
+        global.debug_target_entity = en_a.ref
+      }
+    }
   }
 
   for &en in gm.entities
   {
-    if .ACTIVE not_in en.flags do continue
+    if .ACTIVE not_in en.props do continue
     
     // - Entity wrap at window edges ---
     if .WRAP_AT_WORLD_EDGES in en.props
@@ -377,23 +380,23 @@ update_game :: proc(gm: ^Game, dt: f32)
       if en.pos.x > WORLD_WIDTH
       {
         en.pos.x = -en.scale.x
-        en.flags -= {.INTERPOLATE}
+        en.props -= {.INTERPOLATE}
       }
       else if en.pos.x + en.scale.x < 0
       {
         en.pos.x = WORLD_WIDTH
-        en.flags -= {.INTERPOLATE}
+        en.props -= {.INTERPOLATE}
       }
 
       if en.pos.y > WORLD_HEIGHT
       {
         en.pos.y = -en.scale.y
-        en.flags -= {.INTERPOLATE}
+        en.props -= {.INTERPOLATE}
       }
       else if en.pos.y + en.scale.y < 0
       {
         en.pos.y = WORLD_HEIGHT
-        en.flags -= {.INTERPOLATE}
+        en.props -= {.INTERPOLATE}
       }
     }
 
@@ -469,7 +472,50 @@ update_game :: proc(gm: ^Game, dt: f32)
 
   reset_entity_collision_cache()
 
-  mem.clear_arena(&global_game_frame_arena)
+  mem.clear_arena(&global.game_frame_arena)
+}
+
+update_debug_ui :: proc(gm: ^Game, dt: f32)
+{
+  // im.ShowDemoWindow()
+
+  im.Begin("Debug Info")
+  {
+    im.Text("Time elapsed: %.f s", gm.t)
+    im.PushItemWidth(80)
+    im.InputFloat("Time multiplier", &gm.t_mult, 0.25, format="%.2f")
+    gm.t_mult = clamp(gm.t_mult, 0, 3)
+    im.PopItemWidth()
+
+    im.Text("Cursor: (%.f, %.f)", plf.cursor_pos().x, plf.cursor_pos().y)
+    im.Text("Entities: %i", gm.entities_cnt)
+    im.Text("Debug Entities: %i", gm.debug_entities_pos)
+
+    im.Spacing()
+    diff := time.tick_diff(update_start_tick, update_end_tick)
+    durr_us := time.duration_microseconds(diff)
+    im.Text("Update: %.f us", durr_us)
+    im.Spacing()
+    im.Spacing()
+
+    im.Checkbox("Show colliders", &global.debug)
+    if im.Button("Spawn enemy")
+    {
+      if gm.entities_cnt < len(gm.entities)
+      {
+        spawn_enemy(.ALIEN)
+      }
+    }
+  }
+  im.End()
+
+  im.Begin("Entity Info")
+  {
+    im.Text("Ref: [idx=%u, gen=%u]", 
+            global.debug_target_entity.idx,
+            global.debug_target_entity.gen)
+  }
+  im.End()
 }
 
 render_game :: proc(gm: ^Game, dt: f32)
@@ -504,17 +550,17 @@ render_game :: proc(gm: ^Game, dt: f32)
 
   for en in en_targets
   {
-    if .ACTIVE not_in en.flags do continue
+    if .RENDER not_in en.props do continue
 
     draw_sprite(en.pos, en.scale, en.rot, en.tint, en.color, en.sprite)
   }
 
   // - Draw debug entities ---
-  if global_debug
+  if global.debug
   {
     for &den in gm.debug_entities
     {
-      if .ACTIVE not_in den.flags do continue
+      if .RENDER not_in den.props do continue
 
       draw_sprite(den.pos, den.scale, den.rot, den.tint, den.color, den.sprite)
     }
@@ -533,8 +579,8 @@ interpolate_games :: proc(curr_gm, prev_gm, res_gm: ^Game, alpha: f32)
     curr_en := &curr_gm.entities[i]
     prev_en := &prev_gm.entities[i]
 
-    if !entity_has_flags(curr_en, {.ACTIVE, .INTERPOLATE}) ||
-       !entity_has_flags(prev_en, {.ACTIVE, .INTERPOLATE})
+    if !entity_has_props(curr_en, {.ACTIVE, .INTERPOLATE}) ||
+       !entity_has_props(prev_en, {.ACTIVE, .INTERPOLATE})
     {
       continue
     }
@@ -548,15 +594,15 @@ interpolate_games :: proc(curr_gm, prev_gm, res_gm: ^Game, alpha: f32)
   }
 
   // - Interpolate debug entities ---
-  if global_debug
+  if global.debug
   {
     for i in 0..<len(res_gm.debug_entities)
     {
       curr_den := &curr_gm.debug_entities[i]
       prev_den := &prev_gm.debug_entities[i]
 
-      if !entity_has_flags(curr_den, {.ACTIVE, .INTERPOLATE}) ||
-         !entity_has_flags(prev_den, {.ACTIVE, .INTERPOLATE})
+      if !entity_has_props(curr_den, {.ACTIVE, .INTERPOLATE}) ||
+         !entity_has_props(prev_den, {.ACTIVE, .INTERPOLATE})
       {
         continue
       }
@@ -569,7 +615,7 @@ interpolate_games :: proc(curr_gm, prev_gm, res_gm: ^Game, alpha: f32)
 
 free_game :: proc(gm: ^Game)
 {
-  mem.destroy_arena(&global_game_frame_arena)
+  mem.destroy_arena(&global.game_frame_arena)
 }
 
 copy_game :: proc(new_gm, old_gm: ^Game)
@@ -596,7 +642,7 @@ save_game_to_file :: proc(fd: os.Handle, gm: ^Game) -> bool
 // NOTE(dg): This assumes that Game is contiguous and stores no pointers.
 load_game_from_file :: proc(fd: os.Handle, gm: ^Game) -> bool
 {
-  saved_buf := make([]u8, size_of(Game)*2, mem.a(&global_game_frame_arena))
+  saved_buf := make([]u8, size_of(Game)*2, mem.a(&global.game_frame_arena))
   saved_len, _ := os.read(fd, saved_buf[:])
   gm_bytes := saved_buf[:saved_len]
 
@@ -625,9 +671,8 @@ screen_to_world_pos :: proc(pos: v2f32) -> v2f32
 
 Entity :: struct
 {
-  idx:              u32,
+  ref:              Entity_Ref,
   gen:              u32,
-  flags:            bit_set[Entity_Flag],
   props:            bit_set[Entity_Prop],
   pos:              v2f32,
   vel:              v2f32,
@@ -662,15 +707,12 @@ Entity_Ref :: struct
   gen: u32,
 }
 
-Entity_Flag :: enum u32
-{
-  ACTIVE,
-  MARKED_FOR_DEATH,
-  INTERPOLATE,
-}
-
 Entity_Prop :: enum u64
 {
+  ACTIVE,
+  RENDER,
+  MARKED_FOR_DEATH,
+  INTERPOLATE,
   WRAP_AT_WORLD_EDGES,
   LOOK_AT_TARGET,
   KILL_AFTER_TIME,
@@ -696,20 +738,20 @@ NIL_ENTITY: Entity
 
 @(rodata)
 COLLISION_MATRIX: [type_of(Entity{}.col_layer)]bit_set[type_of(Entity{}.col_layer)] = {
-  .NIL = {},
+  .NIL    = {.NIL},
   .PLAYER = {.ENEMY},
-  .ENEMY = {.PLAYER},
+  .ENEMY  = {.PLAYER},
+}
+
+entity_is_valid :: #force_inline proc(en: ^Entity) -> bool
+{
+  return en != nil && en.ref.idx != 0
 }
 
 entity_from_ref :: #force_inline proc(ref: Entity_Ref) -> ^Entity
 {
   gm := get_current_game()
   return ref.idx == 0 ? &NIL_ENTITY : &gm.entities[ref.idx]
-}
-
-ref_from_entity :: #force_inline proc(en: ^Entity) -> Entity_Ref
-{
-  return {en.idx, en.gen}
 }
 
 alloc_entity :: proc(gm: ^Game) -> ^Entity
@@ -720,9 +762,10 @@ alloc_entity :: proc(gm: ^Game) -> ^Entity
 
   for &en, i in gm.entities[1:]
   {
-    if en.idx == 0
+    if en.ref.idx == 0
     {
-      en.idx = cast(u32) i + 1
+      en.ref.idx = cast(u32) i + 1
+      en.ref.gen = en.gen
       result = &en
       
       gm.entities_cnt += 1
@@ -730,12 +773,14 @@ alloc_entity :: proc(gm: ^Game) -> ^Entity
     }
   }
 
+  result.props += {.ACTIVE, .RENDER}
+
   return result
 }
 
 free_entity :: proc(gm: ^Game, en: ^Entity)
 {
-  assert(en != nil && en.idx != 0)
+  assert(entity_is_valid(en))
 
   gen := en.gen
   en^ = {}
@@ -750,13 +795,12 @@ spawn_enemy :: proc(kind: Enemy_Kind) -> ^Entity
 
   en := alloc_entity(gm)
   en.enemy_kind = kind
-  en.flags += {.ACTIVE}
-  en.props += {.WRAP_AT_WORLD_EDGES, .FOLLOW_ENTITY}
+  en.props += {.FOLLOW_ENTITY}
   en.scale = {SPRITE_SCALE, SPRITE_SCALE}
   en.tint = {1, 1, 1, 1}
   en.z_layer = .ENEMY
   en.col_layer = .ENEMY
-  en.targetting.target = ref_from_entity(sp_entities[.PLAYER])
+  en.targetting.target = sp_entities[.PLAYER].ref
   en.targetting.min_dist = 8
   en.targetting.max_dist = 1000
 
@@ -778,8 +822,7 @@ spawn_weapon :: proc(kind: Weapon_Kind) -> ^Entity
 
   en := alloc_entity(gm)
   en.weapon_kind = kind
-  en.flags += {.ACTIVE, .INTERPOLATE}
-  en.props += {.KILL_AFTER_TIME}
+  en.props += {.INTERPOLATE, .KILL_AFTER_TIME}
   en.scale = {SPRITE_SCALE, SPRITE_SCALE}
   en.z_layer = .PROJECTILE
   en.col_layer = .PLAYER
@@ -803,13 +846,8 @@ spawn_weapon :: proc(kind: Weapon_Kind) -> ^Entity
 
 kill_entity :: proc(en: ^Entity)
 {
-  // en.flags -= {.ACTIVE}
-  en.flags += {.MARKED_FOR_DEATH}
-}
-
-entity_has_flags :: #force_inline proc(en: ^$E/Entity, flags: bit_set[Entity_Flag]) -> bool
-{
-  return en.flags & flags == flags
+  en.props -= {.ACTIVE}
+  en.props += {.MARKED_FOR_DEATH}
 }
 
 entity_has_props :: #force_inline proc(en: ^$E/Entity, props: bit_set[Entity_Prop]) -> bool
@@ -905,15 +943,15 @@ entity_collision :: proc(en_a, en_b: ^Entity) -> bool
 @(thread_local, private="file")
 _entity_collision_cache: [MAX_ENTITIES_COUNT][MAX_ENTITIES_COUNT]bool
 
-get_entities_collided_cache :: proc(a, b: u32) -> bool
+get_entities_collided_cache :: proc(a, b: Entity_Ref) -> bool
 {
-  return _entity_collision_cache[a][b] && _entity_collision_cache[b][a]
+  return _entity_collision_cache[a.idx][b.idx] && _entity_collision_cache[b.idx][a.idx]
 }
 
-set_entities_collided_cache :: proc(a, b: u32)
+set_entities_collided_cache :: proc(a, b: Entity_Ref)
 {
-  _entity_collision_cache[a][b] = true
-  _entity_collision_cache[b][a] = true
+  _entity_collision_cache[a.idx][b.idx] = true
+  _entity_collision_cache[b.idx][a.idx] = true
 }
 
 reset_entity_collision_cache :: proc()
@@ -930,7 +968,7 @@ push_debug_entity :: proc() -> ^Debug_Entity
   gm := get_current_game()
 
   result := &gm.debug_entities[gm.debug_entities_pos]
-  result.flags += {.ACTIVE, .INTERPOLATE, .MARKED_FOR_DEATH}
+  result.props += {.ACTIVE, .RENDER, .INTERPOLATE, .MARKED_FOR_DEATH}
 
   gm.debug_entities_pos += 1
   if gm.debug_entities_pos == len(gm.debug_entities)
@@ -946,6 +984,12 @@ pop_debug_entity :: proc(den: ^Debug_Entity)
   gm := get_current_game()
   den^ = {}
   gm.debug_entities_pos -= 1
+
+  // NOTE(dg): This is not a good solution because it breaks interpolation. 
+  if gm.debug_entities_pos == -1
+  {
+    gm.debug_entities_pos = len(gm.debug_entities)-1
+  }
 }
 
 debug_rect :: proc(

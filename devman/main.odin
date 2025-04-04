@@ -6,6 +6,62 @@ import "udev"
 
 main :: proc()
 {
+  entity: Entity = make_entity()
+  entity->init({1, 1})
+  entity->tick(1)
+  entity->draw()
+}
+
+Entity_VTable :: struct
+{
+  init: type_of(entity_init),
+  tick: type_of(entity_tick),
+  draw: type_of(entity_draw),
+}
+
+entity_vtable := init_entity_vtable()
+init_entity_vtable :: proc() -> Entity_VTable
+{
+  vtable: Entity_VTable
+  vtable.init = entity_init
+  vtable.tick = entity_tick
+  vtable.draw = entity_draw
+  return vtable
+}
+
+Entity :: struct
+{
+  using v_table: ^Entity_VTable,
+  pos: [2]f32,
+}
+
+make_entity :: proc() -> Entity
+{
+  return {v_table=&entity_vtable}
+}
+
+entity_init :: proc(this: ^Entity, pos: [2]f32)
+{
+  this.pos = pos
+}
+
+entity_tick :: proc(this: ^Entity, dt: f32)
+{
+  this.pos += dt
+}
+
+entity_tick_down :: proc(this: ^Entity, dt: f32)
+{
+  this.pos -= dt
+}
+
+entity_draw :: proc(this: ^Entity)
+{
+  fmt.println(this.pos)
+}
+
+udev_test :: proc()
+{
   inst := udev.new()
   defer udev.unref(inst)
 

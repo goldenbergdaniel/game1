@@ -27,6 +27,7 @@ sdl_create_window :: proc(
 	when ODIN_OS == .Linux
 	{
 		sdl.SetHint("SDL_VIDEO_WAYLAND_ALLOW_LIBDECOR", "1")
+		sdl.SetHint("SDL_VIDEO_DOUBLE_BUFFER", "1")
 	}
 	
 	_ = sdl.Init({.VIDEO, .EVENTS})
@@ -36,8 +37,6 @@ sdl_create_window :: proc(
 	{
 		window_flags += {.OPENGL}
 
-		sdl.GL_SetAttribute(.CONTEXT_FLAGS, i32(sdl.GLContextFlag{.FORWARD_COMPATIBLE}))
-		sdl.GL_SetAttribute(.CONTEXT_PROFILE_MASK, i32(sdl.GLProfile.CORE))
 		sdl.GL_SetAttribute(.CONTEXT_MAJOR_VERSION, 4)
 		sdl.GL_SetAttribute(.CONTEXT_MINOR_VERSION, 6)
 		sdl.GL_SetAttribute(.RED_SIZE, 8)
@@ -61,7 +60,13 @@ sdl_create_window :: proc(
 
 		gl.load_up_to(4, 6, sdl.gl_set_proc_address)
 		sdl.GL_SetSwapInterval(1)
-		// fmt.println(gl.GetString(gl.VERSION))
+
+		when false
+		{
+			fmt.println("    OpenGL Version:", gl.GetString(gl.VERSION))
+			fmt.println("       SDL Version:", sdl.GetVersion())
+			fmt.println("Dear ImGui Version:", im.GetVersion())
+		}
 	}
 
 	// window_system_info: sdl.SysWMinfo
@@ -70,7 +75,7 @@ sdl_create_window :: proc(
 
 	im.CreateContext()
 	imio := im.GetIO()
-	imio.ConfigFlags += {.NoKeyboard}
+	// imio.ConfigFlags += {.NoKeyboard}
 
 	im.StyleColorsDark()
 

@@ -25,6 +25,8 @@ User :: struct
 
 user: User
 
+update_start_tick, update_end_tick: time.Tick
+
 main :: proc()
 {
   mem.init_static_arena(&user.perm_arena)
@@ -45,7 +47,6 @@ main :: proc()
   for !user.window.should_close
   {
     plf.pump_events(&user.window)
-    plf.imgui_begin()
 
     // - Update viewport ---
     {
@@ -72,9 +73,11 @@ main :: proc()
     
     for accumulator >= SIM_STEP
     {
+      update_start_tick = time.tick_now()
       copy_game(&prev_game, &curr_game)
       update_game(&curr_game, SIM_STEP * curr_game.t_mult)
       plf.remember_prev_input()
+      update_end_tick = time.tick_now()
  
       // if frame_time * 1000 > 20 do printf("%.0f ms\n", frame_time * 1000)
 
@@ -82,17 +85,23 @@ main :: proc()
       accumulator -= SIM_STEP
     }
 
+    plf.imgui_begin()
+
     if user.show_imgui
     {
-      im.ShowDemoWindow(nil)
+      update_debug_ui(&curr_game, SIM_STEP * curr_game.t_mult)
     }
 
     alpha := accumulator / SIM_STEP
     interpolate_games(&curr_game, &prev_game, &res_game, f32(alpha))
     render_game(&res_game, SIM_STEP)
-    
+
     plf.imgui_end()
+
+    // start_tick := time.tick_now()
     plf.swap_buffers(&user.window)
+    // end_tick := time.tick_now()
+    // printf("%.f\n", time.duration_milliseconds(time.tick_diff(start_tick, end_tick)))
   }
 }
 
