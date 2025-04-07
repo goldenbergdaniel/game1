@@ -18,8 +18,8 @@ import vm "vecmath"
 @(thread_local, private="file")
 global: struct
 {
-  game_frame_arena:    mem.Arena,
-  debug:               bool,
+  frame_arena:         mem.Arena,
+  debug_mode:          bool,
   debug_target_entity: Entity_Ref,
 }
 
@@ -62,7 +62,7 @@ set_current_game :: #force_inline proc(gm: ^Game)
 init_game :: proc(gm: ^Game)
 {
   // NOTE(dg): What if multiple games running on same thread? This needs to change. 
-  mem.init_growing_arena(&global.game_frame_arena)
+  mem.init_growing_arena(&global.frame_arena)
 
   gm.t_mult = 1
 
@@ -161,7 +161,7 @@ update_game :: proc(gm: ^Game, dt: f32)
       }
       else if plf.key_just_pressed(.BACKTICK)
       {
-        global.debug = !global.debug
+        global.debug_mode = !global.debug_mode
       }
       else if plf.key_just_pressed(.S_1)
       {
@@ -169,7 +169,7 @@ update_game :: proc(gm: ^Game, dt: f32)
       }
       else if plf.key_just_pressed(.S_2)
       {
-        gm.t_mult = 0.5
+        gm.t_mult = 0
       }
       else if plf.key_just_pressed(.S_3)
       {
@@ -177,7 +177,7 @@ update_game :: proc(gm: ^Game, dt: f32)
       }
       else if plf.key_just_pressed(.S_4)
       {
-        gm.t_mult = 0
+        gm.t_mult = 0.5
       }
       else if plf.key_just_pressed(.S_5)
       {
@@ -472,14 +472,14 @@ update_game :: proc(gm: ^Game, dt: f32)
 
   reset_entity_collision_cache()
 
-  mem.clear_arena(&global.game_frame_arena)
+  mem.clear_arena(&global.frame_arena)
 }
 
 update_debug_ui :: proc(gm: ^Game, dt: f32)
 {
   // im.ShowDemoWindow()
 
-  im.Begin("Debug Info")
+  im.Begin("General")
   {
     im.Text("Time elapsed: %.f s", gm.t)
     im.PushItemWidth(80)
@@ -498,7 +498,7 @@ update_debug_ui :: proc(gm: ^Game, dt: f32)
     im.Spacing()
     im.Spacing()
 
-    im.Checkbox("Show colliders", &global.debug)
+    im.Checkbox("Show colliders", &global.debug_mode)
     if im.Button("Spawn enemy")
     {
       if gm.entities_cnt < len(gm.entities)
@@ -509,18 +509,38 @@ update_debug_ui :: proc(gm: ^Game, dt: f32)
   }
   im.End()
 
-  im.Begin("Entity Info")
+  im.Begin("Entity Inspector")
   {
-    im.Text("Ref: [idx=%u, gen=%u]", 
-            global.debug_target_entity.idx,
-            global.debug_target_entity.gen)
+    en := entity_from_ref(global.debug_target_entity)
+
+    im.Text("Ref:   [idx=%u, gen=%u]", en.ref.idx, en.ref.gen)
+
+    im.PushID("Pos")
+    im.Text("Pos:  "); im.SameLine()
+    im.InputFloat2("", &en.pos)
+    im.PopID()
+
+    im.PushID("Rot")
+    im.Text("Rot:  "); im.SameLine()
+    im.InputFloat("", &en.rot)
+    im.PopID()
+
+    im.PushID("Scale")
+    im.Text("Scale:"); im.SameLine()
+    im.InputFloat2("", &en.scale)
+    im.PopID()
+
+    im.PushID("Vel")
+    im.Text("Vel:  "); im.SameLine()
+    im.InputFloat2("", &en.vel)
+    im.PopID()
   }
   im.End()
 }
 
 render_game :: proc(gm: ^Game, dt: f32)
 {
-  begin_draw({10, 10, 10, 255}/255.0)
+  begin_draw({10, 10, 10, 255}/255)
 
   // - Draw particles ---
   for &par in gm.particles
@@ -556,7 +576,7 @@ render_game :: proc(gm: ^Game, dt: f32)
   }
 
   // - Draw debug entities ---
-  if global.debug
+  if global.debug_mode
   {
     for &den in gm.debug_entities
     {
@@ -594,7 +614,7 @@ interpolate_games :: proc(curr_gm, prev_gm, res_gm: ^Game, alpha: f32)
   }
 
   // - Interpolate debug entities ---
-  if global.debug
+  if global.debug_mode
   {
     for i in 0..<len(res_gm.debug_entities)
     {
@@ -615,7 +635,7 @@ interpolate_games :: proc(curr_gm, prev_gm, res_gm: ^Game, alpha: f32)
 
 free_game :: proc(gm: ^Game)
 {
-  mem.destroy_arena(&global.game_frame_arena)
+  mem.destroy_arena(&global.frame_arena)
 }
 
 copy_game :: proc(new_gm, old_gm: ^Game)
@@ -642,7 +662,7 @@ save_game_to_file :: proc(fd: os.Handle, gm: ^Game) -> bool
 // NOTE(dg): This assumes that Game is contiguous and stores no pointers.
 load_game_from_file :: proc(fd: os.Handle, gm: ^Game) -> bool
 {
-  saved_buf := make([]u8, size_of(Game)*2, mem.a(&global.game_frame_arena))
+  saved_buf := make([]u8, size_of(Game)*2, mem.a(&global.frame_arena))
   saved_len, _ := os.read(fd, saved_buf[:])
   gm_bytes := saved_buf[:saved_len]
 
@@ -745,20 +765,22 @@ COLLISION_MATRIX: [type_of(Entity{}.col_layer)]bit_set[type_of(Entity{}.col_laye
 
 entity_is_valid :: #force_inline proc(en: ^Entity) -> bool
 {
-  return en != nil && en.ref.idx != 0
+  assert(en != nil)
+  return en.ref.idx != 0
 }
 
 entity_from_ref :: #force_inline proc(ref: Entity_Ref) -> ^Entity
 {
   gm := get_current_game()
-  return ref.idx == 0 ? &NIL_ENTITY : &gm.entities[ref.idx]
+  en := &gm.entities[ref.idx]
+  return en if en.ref.idx != 0 && ref.gen == en.gen else &NIL_ENTITY
 }
 
 alloc_entity :: proc(gm: ^Game) -> ^Entity
 {
   assert(gm.entities_cnt < len(gm.entities)-1)
 
-  result: ^Entity = &NIL_ENTITY
+  result := &NIL_ENTITY
 
   for &en, i in gm.entities[1:]
   {
@@ -766,6 +788,7 @@ alloc_entity :: proc(gm: ^Game) -> ^Entity
     {
       en.ref.idx = cast(u32) i + 1
       en.ref.gen = en.gen
+      en.props += {.ACTIVE, .RENDER}
       result = &en
       
       gm.entities_cnt += 1
@@ -773,7 +796,6 @@ alloc_entity :: proc(gm: ^Game) -> ^Entity
     }
   }
 
-  result.props += {.ACTIVE, .RENDER}
 
   return result
 }
