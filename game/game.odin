@@ -389,7 +389,7 @@ update_game :: proc(gm: ^Game, dt: f32)
       if anim_id == .NIL do continue
 
       desc := &res.entity_anims[anim_id]
-      println(desc.frames[en.anim.frame_idx])
+      println(en.anim.frame_idx)
 
       en.sprite = desc.frames[en.anim.frame_idx]
       if desc.frame_count > 1
