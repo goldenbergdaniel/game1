@@ -5,12 +5,69 @@ package platform
 import "core:fmt"
 import "core:strings"
 import gl "ext:opengl"
-import sdl "ext:sdl3"
-import im "ext:imgui"
-import im_gl "ext:imgui/imgui_impl_opengl3"
-import im_sdl "ext:imgui/imgui_impl_sdl3"
+import "ext:sdl"
+import "ext:imgui"
+import imgui_gl "ext:imgui/imgui_impl_opengl3"
+import imgui_sdl "ext:imgui/imgui_impl_sdl3"
 
 import "../basic/mem"
+
+sdl_key_map: #sparse [sdl.Scancode]Key_Kind = #partial {
+	.A 				 = .A,
+	.B 				 = .B,
+	.C 				 = .C,
+	.D 				 = .D,
+	.E 				 = .E,
+	.F 				 = .F,
+	.G 				 = .G,
+	.H 				 = .H,
+	.I 				 = .I,
+	.J 				 = .J,
+	.K 				 = .K,
+	.L 				 = .L,
+	.M 				 = .M,
+	.N 				 = .N,
+	.O 				 = .O,
+	.P 				 = .P,
+	.Q 				 = .Q,
+	.R 				 = .R,
+	.S 				 = .S,
+	.T 				 = .T,
+	.U 				 = .U,
+	.V 				 = .V,
+	.W 				 = .W,
+	.X 				 = .X,
+	.Y 				 = .Y,
+	.Z 				 = .Z,
+	._0 			 = .S_0,
+	._1 			 = .S_1,
+	._2 			 = .S_2,
+	._3 			 = .S_3,
+	._4 			 = .S_4,
+	._5 			 = .S_5,
+	._6 			 = .S_6,
+	._7 			 = .S_7,
+	._8 			 = .S_8,
+	._9 			 = .S_9,
+	.LALT 		 = .L_ALT,
+	.RALT 		 = .R_ALT,
+	.LCTRL 		 = .L_CTRL,
+	.RCTRL 		 = .R_CTRL,
+	.LSHIFT 	 = .L_SHIFT,
+	.RSHIFT 	 = .R_SHIFT,
+	.SPACE 		 = .SPACE,
+	.TAB 			 = .TAB,
+	.RETURN 	 = .ENTER,
+	.BACKSPACE = .BACKSPACE,
+	.GRAVE     = .BACKTICK,
+	.ESCAPE    = .ESCAPE,
+}
+
+sdl_mouse_btn_map := [?]Mouse_Btn_Kind{
+	1 = .LEFT,
+	2 = .MIDDLE,
+	3 = .RIGHT,
+}
 
 sdl_create_window :: proc(
 	title:  string, 
@@ -65,7 +122,7 @@ sdl_create_window :: proc(
 		{
 			fmt.println("    OpenGL Version:", gl.GetString(gl.VERSION))
 			fmt.println("       SDL Version:", sdl.GetVersion())
-			fmt.println("Dear ImGui Version:", im.GetVersion())
+			fmt.println("Dear ImGui Version:", imgui.GetVersion())
 		}
 	}
 
@@ -73,14 +130,14 @@ sdl_create_window :: proc(
 	// sdl.GetVersion(&window_system_info.version)
 	// sdl.GetWindowWMInfo(sdl_window, &window_system_info)
 
-	im.CreateContext()
-	imio := im.GetIO()
+	imgui.CreateContext()
+	imio := imgui.GetIO()
 	// imio.ConfigFlags += {.NoKeyboard}
 
-	im.StyleColorsDark()
+	imgui.StyleColorsDark()
 
-	im_sdl.InitForOpenGL(sdl_window, gl_ctx)
-	im_gl.Init(nil)
+	imgui_sdl.InitForOpenGL(sdl_window, gl_ctx)
+	imgui_gl.Init(nil)
 
 	result.handle = sdl_window
 	result.draw_ctx.gl.sdl_ctx = gl_ctx
@@ -92,10 +149,10 @@ sdl_create_window :: proc(
 sdl_release_os_resources :: proc(window: ^Window)
 {
 	sdl.DestroyWindow(auto_cast window.handle)
-	// im.DestroyContext()
-	// im_sdl.Shutdown()
-	// im_gl.Shutdown()
-	// im.Shutdown()
+	// imgui.DestroyContext()
+	// imgui_sdl.Shutdown()
+	// imgui_gl.Shutdown()
+	// imgui.Shutdown()
 }
 
 sdl_gl_swap_buffers :: proc(window: ^Window)
@@ -110,9 +167,9 @@ sdl_poll_event :: proc(window: ^Window, event: ^Event) -> bool
 	sdl_event: sdl.Event
 	result = sdl.PollEvent(&sdl_event)
 	event^ = sdl_translate_event(&sdl_event)
-   
-	im_sdl.ProcessEvent(&sdl_event)
-	imio := cast(^im.IO) window.imio_handle
+
+	imgui_sdl.ProcessEvent(&sdl_event)
+	imio := cast(^imgui.IO) window.imio_handle
 	if imio.WantCaptureMouse && event.mouse_btn_kind != .NIL
 	{
 		event.kind = .NIL
@@ -126,7 +183,6 @@ sdl_pump_events :: proc()
 	sdl.PumpEvents()
 }
 
-// TODO(dg): The event codes should be mapped in an array.
 sdl_translate_event :: proc(sdl_event: ^sdl.Event) -> Event
 {
 	result: Event
@@ -134,124 +190,26 @@ sdl_translate_event :: proc(sdl_event: ^sdl.Event) -> Event
 	#partial switch sdl_event.type
 	{
 	case .QUIT: 
-		result.kind = .QUIT
+		result = Event{kind=.QUIT}
   case .KEY_DOWN:
-    #partial switch sdl_event.key.scancode
-    {
-		case .A:				 result = Event{kind = .KEY_DOWN, key_kind = .A}
-		case .B:				 result = Event{kind = .KEY_DOWN, key_kind = .B}
-		case .C:				 result = Event{kind = .KEY_DOWN, key_kind = .C}
-		case .D:				 result = Event{kind = .KEY_DOWN, key_kind = .D}
-		case .E:				 result = Event{kind = .KEY_DOWN, key_kind = .E}
-		case .F:				 result = Event{kind = .KEY_DOWN, key_kind = .F}
-		case .G:				 result = Event{kind = .KEY_DOWN, key_kind = .G}
-		case .H:				 result = Event{kind = .KEY_DOWN, key_kind = .H}
-		case .I:				 result = Event{kind = .KEY_DOWN, key_kind = .I}
-		case .J:				 result = Event{kind = .KEY_DOWN, key_kind = .J}
-		case .K:				 result = Event{kind = .KEY_DOWN, key_kind = .K}
-		case .L:				 result = Event{kind = .KEY_DOWN, key_kind = .L}
-		case .M:				 result = Event{kind = .KEY_DOWN, key_kind = .M}
-		case .N:				 result = Event{kind = .KEY_DOWN, key_kind = .N}
-		case .O:				 result = Event{kind = .KEY_DOWN, key_kind = .O}
-		case .P:				 result = Event{kind = .KEY_DOWN, key_kind = .P}
-		case .Q:				 result = Event{kind = .KEY_DOWN, key_kind = .Q}
-		case .R:				 result = Event{kind = .KEY_DOWN, key_kind = .R}
-		case .S:				 result = Event{kind = .KEY_DOWN, key_kind = .S}
-		case .T:				 result = Event{kind = .KEY_DOWN, key_kind = .T}
-		case .U:				 result = Event{kind = .KEY_DOWN, key_kind = .U}
-		case .V:				 result = Event{kind = .KEY_DOWN, key_kind = .V}
-		case .W:				 result = Event{kind = .KEY_DOWN, key_kind = .W}
-		case .X:				 result = Event{kind = .KEY_DOWN, key_kind = .X}
-		case .Y:				 result = Event{kind = .KEY_DOWN, key_kind = .Y}
-		case .Z:				 result = Event{kind = .KEY_DOWN, key_kind = .Z}
-		case ._0:				 result = Event{kind = .KEY_DOWN, key_kind = .S_0}
-		case ._1:				 result = Event{kind = .KEY_DOWN, key_kind = .S_1}
-		case ._2:				 result = Event{kind = .KEY_DOWN, key_kind = .S_2}
-		case ._3:				 result = Event{kind = .KEY_DOWN, key_kind = .S_3}
-		case ._4:				 result = Event{kind = .KEY_DOWN, key_kind = .S_4}
-		case ._5:				 result = Event{kind = .KEY_DOWN, key_kind = .S_5}
-		case ._6:				 result = Event{kind = .KEY_DOWN, key_kind = .S_6}
-		case ._7:				 result = Event{kind = .KEY_DOWN, key_kind = .S_7}
-		case ._8:				 result = Event{kind = .KEY_DOWN, key_kind = .S_8}
-		case ._9:				 result = Event{kind = .KEY_DOWN, key_kind = .S_9}
-    case .LALT: 		 result = Event{kind = .KEY_DOWN, key_kind = .L_ALT}
-    case .RALT: 		 result = Event{kind = .KEY_DOWN, key_kind = .R_ALT}
-    case .LCTRL: 		 result = Event{kind = .KEY_DOWN, key_kind = .L_CTRL}
-    case .RCTRL: 		 result = Event{kind = .KEY_DOWN, key_kind = .R_CTRL}
-    case .LSHIFT: 	 result = Event{kind = .KEY_DOWN, key_kind = .L_SHIFT}
-    case .RSHIFT: 	 result = Event{kind = .KEY_DOWN, key_kind = .R_SHIFT}
-    case .SPACE:  	 result = Event{kind = .KEY_DOWN, key_kind = .SPACE}
-		case .TAB:			 result = Event{kind = .KEY_DOWN, key_kind = .TAB}
-    case .RETURN: 	 result = Event{kind = .KEY_DOWN, key_kind = .ENTER}
-  	case .BACKSPACE: result = Event{kind = .KEY_DOWN, key_kind = .BACKSPACE}
-		case .GRAVE:		 result = Event{kind = .KEY_DOWN, key_kind = .BACKTICK}
-    case .ESCAPE: 	 result = Event{kind = .KEY_DOWN, key_kind = .ESCAPE}
-    }
+		result = Event{
+			kind = .KEY_DOWN, 
+			key_kind = sdl_key_map[sdl_event.key.scancode],
+		}
 	case .KEY_UP:
-    #partial switch sdl_event.key.scancode
-    {
-		case .A:				 result = Event{kind = .KEY_UP, key_kind = .A}
-		case .B:				 result = Event{kind = .KEY_UP, key_kind = .B}
-		case .C:				 result = Event{kind = .KEY_UP, key_kind = .C}
-		case .D:				 result = Event{kind = .KEY_UP, key_kind = .D}
-		case .E:				 result = Event{kind = .KEY_UP, key_kind = .E}
-		case .F:				 result = Event{kind = .KEY_UP, key_kind = .F}
-		case .G:				 result = Event{kind = .KEY_UP, key_kind = .G}
-		case .H:				 result = Event{kind = .KEY_UP, key_kind = .H}
-		case .I:				 result = Event{kind = .KEY_UP, key_kind = .I}
-		case .J:				 result = Event{kind = .KEY_UP, key_kind = .J}
-		case .K:				 result = Event{kind = .KEY_UP, key_kind = .K}
-		case .L:				 result = Event{kind = .KEY_UP, key_kind = .L}
-		case .M:				 result = Event{kind = .KEY_UP, key_kind = .M}
-		case .N:				 result = Event{kind = .KEY_UP, key_kind = .N}
-		case .O:				 result = Event{kind = .KEY_UP, key_kind = .O}
-		case .P:				 result = Event{kind = .KEY_UP, key_kind = .P}
-		case .Q:				 result = Event{kind = .KEY_UP, key_kind = .Q}
-		case .R:				 result = Event{kind = .KEY_UP, key_kind = .R}
-		case .S:				 result = Event{kind = .KEY_UP, key_kind = .S}
-		case .T:				 result = Event{kind = .KEY_UP, key_kind = .T}
-		case .U:				 result = Event{kind = .KEY_UP, key_kind = .U}
-		case .V:				 result = Event{kind = .KEY_UP, key_kind = .V}
-		case .W:				 result = Event{kind = .KEY_UP, key_kind = .W}
-		case .X:				 result = Event{kind = .KEY_UP, key_kind = .X}
-		case .Y:				 result = Event{kind = .KEY_UP, key_kind = .Y}
-		case .Z:				 result = Event{kind = .KEY_UP, key_kind = .Z}
-		case ._0:				 result = Event{kind = .KEY_UP, key_kind = .S_0}
-		case ._1:				 result = Event{kind = .KEY_UP, key_kind = .S_1}
-		case ._2:				 result = Event{kind = .KEY_UP, key_kind = .S_2}
-		case ._3:				 result = Event{kind = .KEY_UP, key_kind = .S_3}
-		case ._4:				 result = Event{kind = .KEY_UP, key_kind = .S_4}
-		case ._5:				 result = Event{kind = .KEY_UP, key_kind = .S_5}
-		case ._6:				 result = Event{kind = .KEY_UP, key_kind = .S_6}
-		case ._7:				 result = Event{kind = .KEY_UP, key_kind = .S_7}
-		case ._8:				 result = Event{kind = .KEY_UP, key_kind = .S_8}
-		case ._9:				 result = Event{kind = .KEY_UP, key_kind = .S_9}
-    case .LALT: 		 result = Event{kind = .KEY_UP, key_kind = .L_ALT}
-    case .RALT: 		 result = Event{kind = .KEY_UP, key_kind = .R_ALT}
-    case .LCTRL: 		 result = Event{kind = .KEY_UP, key_kind = .L_CTRL}
-    case .RCTRL: 		 result = Event{kind = .KEY_UP, key_kind = .R_CTRL}
-		case .LSHIFT: 	 result = Event{kind = .KEY_UP, key_kind = .L_SHIFT}
-    case .RSHIFT: 	 result = Event{kind = .KEY_UP, key_kind = .R_SHIFT}
-    case .SPACE:  	 result = Event{kind = .KEY_UP, key_kind = .SPACE}
-		case .TAB:			 result = Event{kind = .KEY_UP, key_kind = .TAB}
-    case .RETURN: 	 result = Event{kind = .KEY_UP, key_kind = .ENTER}
-  	case .BACKSPACE: result = Event{kind = .KEY_UP, key_kind = .BACKSPACE}
-		case .GRAVE:		 result = Event{kind = .KEY_UP, key_kind = .BACKTICK}
-    case .ESCAPE: 	 result = Event{kind = .KEY_UP, key_kind = .ESCAPE}
-    }
+		result = Event{
+			kind = .KEY_UP, 
+			key_kind = sdl_key_map[sdl_event.key.scancode],
+		}
 	case .MOUSE_BUTTON_DOWN:
-		switch sdl_event.button.button
-		{
-		case 1: result = Event{kind = .MOUSE_BTN_DOWN, mouse_btn_kind = .LEFT}
-		case 2: result = Event{kind = .MOUSE_BTN_DOWN, mouse_btn_kind = .MIDDLE}
-		case 3: result = Event{kind = .MOUSE_BTN_DOWN, mouse_btn_kind = .RIGHT}
+		result = Event{
+			kind = .MOUSE_BTN_DOWN, 
+			mouse_btn_kind = sdl_mouse_btn_map[sdl_event.button.button],
 		}
 	case .MOUSE_BUTTON_UP:
-		switch sdl_event.button.button
-		{
-		case 1: result = Event{kind = .MOUSE_BTN_UP, mouse_btn_kind = .LEFT}
-		case 2: result = Event{kind = .MOUSE_BTN_UP, mouse_btn_kind = .MIDDLE}
-		case 3: result = Event{kind = .MOUSE_BTN_UP, mouse_btn_kind = .RIGHT}
+		result = Event{
+			kind = .MOUSE_BTN_UP, 
+			mouse_btn_kind = sdl_mouse_btn_map[sdl_event.button.button],
 		}
 	}
 
@@ -260,15 +218,15 @@ sdl_translate_event :: proc(sdl_event: ^sdl.Event) -> Event
 
 sdl_imgui_begin :: proc()
 {
-  im_gl.NewFrame()
-  im_sdl.NewFrame()
-  im.NewFrame()
+  imgui_gl.NewFrame()
+  imgui_sdl.NewFrame()
+  imgui.NewFrame()
 }
 
 sdl_imgui_end :: proc()
 {
-  im.Render()
-  im_gl.RenderDrawData(im.GetDrawData())
+  imgui.Render()
+  imgui_gl.RenderDrawData(imgui.GetDrawData())
 }
 
 sdl_window_toggle_fullscreen :: proc(window: ^Window)

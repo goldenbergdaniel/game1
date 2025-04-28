@@ -23,7 +23,7 @@
   [
     {
       "name": "main", 
-      "checker_path": ["game", "game/render", "game/platform", "game/vecmath", "metagen"]
+      "checker_path": ["game", "game/render", "game/platform", "game/vecmath", "metagen", "devman"]
     }
   ]
 }

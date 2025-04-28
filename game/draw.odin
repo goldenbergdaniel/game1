@@ -6,7 +6,7 @@ import plf "platform"
 import r "render"
 import vm "vecmath"
 
-SPRITE_SCALE :: 1.5
+SPRITE_SCALE :: 3
 
 Sprite :: struct
 {
@@ -18,15 +18,13 @@ Sprite :: struct
 
 Sprite_ID :: enum
 {
+  NIL,
   SQUARE,
   CIRCLE,
-  SHIP,
-  ALIEN,
-  FOOTBALL,
-  ASTEROID,
-  PROJECTILE,
-  LASER,
-  ASTEROID_BIG,
+  PLAYER_IDLE_1,
+  PLAYER_IDLE_2,
+  BULLET,
+  RIFLE,
 }
 
 begin_draw :: #force_inline proc(color: v4f32)

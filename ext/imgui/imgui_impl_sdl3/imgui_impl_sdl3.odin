@@ -1,6 +1,6 @@
 package imgui_impl_sdl3
 
-import sdl "ext:sdl3"
+import "ext:sdl"
 
 when      ODIN_OS == .Windows { foreign import lib "../imgui_windows_x64.lib" }
 else when ODIN_OS == .Linux   { foreign import lib "../imgui_linux_x64.a" }

@@ -13,6 +13,7 @@ Resources :: struct
   sprites:      [Sprite_ID]Sprite,
   enemies:      [Enemy_Kind]Enemy_Desc,
   enemy_spawns: [1]Enemy_Spawn_Desc,
+  entity_anims: [Entity_Anim_ID]Entity_Anim_Desc,
 }
 
 Enemy_Desc :: struct
@@ -25,6 +26,20 @@ Enemy_Spawn_Desc :: struct
   kind: Enemy_Kind,
   time: f32,
   pos:  v2f32,
+}
+
+Entity_Anim_ID :: enum
+{
+  NIL,
+  PLAYER_IDLE,
+}
+
+Entity_Anim_Desc :: struct
+{
+  frames:          [16]Sprite_ID,
+  frame_count:     u16,
+  ticks_per_frame: u16,
+  exit_state:      Entity_Anim_State,
 }
 
 res: Resources
@@ -49,15 +64,11 @@ init_resources :: proc(arena: ^mem.Arena)
 
   // - Sprites ---
   {
-    res.sprites[.SQUARE]       = {coords={0, 0}, grid={1, 1}, pivot={7, 7}}
-    res.sprites[.CIRCLE]       = {coords={1, 0}, grid={1, 1}, pivot={7, 7}}
-    res.sprites[.SHIP]         = {coords={2, 0}, grid={1, 1}, pivot={7, 8}}
-    res.sprites[.ALIEN]        = {coords={3, 0}, grid={1, 1}, pivot={7, 7}}
-    res.sprites[.FOOTBALL]     = {coords={4, 0}, grid={1, 1}, pivot={7, 7}}
-    res.sprites[.ASTEROID]     = {coords={5, 0}, grid={1, 1}, pivot={7, 7}}
-    res.sprites[.PROJECTILE]   = {coords={6, 0}, grid={1, 1}, pivot={7, 8}}
-    res.sprites[.LASER]        = {coords={7, 0}, grid={1, 1}, pivot={7, 8}}
-    res.sprites[.ASTEROID_BIG] = {coords={0, 1}, grid={2, 2}, pivot={15, 17}}
+    res.sprites[.SQUARE]        = {coords={0, 0}, grid={1, 1}, pivot={7, 7}}
+    res.sprites[.CIRCLE]        = {coords={1, 0}, grid={1, 1}, pivot={7, 7}}
+    res.sprites[.PLAYER_IDLE_1] = {coords={2, 0}, grid={1, 1}, pivot={7, 8}}
+    res.sprites[.PLAYER_IDLE_2] = {coords={3, 0}, grid={1, 1}, pivot={7, 8}}
+    res.sprites[.BULLET]        = {coords={6, 0}, grid={1, 1}, pivot={7, 8}}
 
     for &sprite in res.sprites
     {
@@ -68,9 +79,22 @@ init_resources :: proc(arena: ^mem.Arena)
 
   // - Enemy spawns ---
   {
-    res.enemy_spawns[0] = {kind=.ALIEN, time=1.0, pos={WORLD_WIDTH, 0}}
-    // res.enemy_spawns[1] = {kind=.ALIEN, time=3.0, pos={WORLD_WIDTH, 0}}
-    // res.enemy_spawns[2] = {kind=.ALIEN, time=3.0, pos={WORLD_WIDTH-100, 0}}
-    // res.enemy_spawns[3] = {kind=.ALIEN, time=8.0, pos={WORLD_WIDTH, 0}}
+    res.enemy_spawns[0] = Enemy_Spawn_Desc{kind=.ALIEN, time=1.0, pos={WORLD_WIDTH, 0}}
+    // res.enemy_spawns[1] = Enemy_Spawn_Desc{kind=.ALIEN, time=3.0, pos={WORLD_WIDTH, 0}}
+    // res.enemy_spawns[2] = Enemy_Spawn_Desc{kind=.ALIEN, time=3.0, pos={WORLD_WIDTH-100, 0}}
+    // res.enemy_spawns[3] = Enemy_Spawn_Desc{kind=.ALIEN, time=8.0, pos={WORLD_WIDTH, 0}}
+  }
+
+  // - Entity animations ---
+  {
+    res.entity_anims[.PLAYER_IDLE] = Entity_Anim_Desc{
+      frames = {
+        0 = .PLAYER_IDLE_1, 
+        1 = .PLAYER_IDLE_2,
+      },
+      frame_count = 2,
+      ticks_per_frame = 30,
+      exit_state = .IDLE,
+    }
   }
 }

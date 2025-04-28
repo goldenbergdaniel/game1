@@ -98,3 +98,4 @@ main :: proc()
 
   os2.remove("game1")
 }
+

@@ -7,7 +7,7 @@ import "core:math/rand"
 import "core:os"
 import "core:slice"
 import "core:time"
-import im "ext:imgui"
+import "ext:imgui"
 
 import "basic/mem"
 
@@ -30,9 +30,6 @@ sp_entities: [enum{
 
 // Game //////////////////////////////////////////////////////////////////////////////////
 
-MAX_ENTITIES_COUNT  :: 128 + 1
-MAX_PARTICLES_COUNT :: 1024
-
 Game :: struct
 {
   t:                  f32,
@@ -41,6 +38,8 @@ Game :: struct
   entities_cnt:       int,
   debug_entities:     [128]Debug_Entity,
   debug_entities_pos: int,
+  regions:            [9][64*64]Tile,
+  active_region:      int,
   particles:          [MAX_PARTICLES_COUNT]Particle,
   particles_pos:      int,
   enemy_to_spawn_idx: int,
@@ -65,51 +64,9 @@ init_game :: proc(gm: ^Game)
   mem.init_growing_arena(&global.frame_arena)
 
   gm.t_mult = 1
-
-  player := alloc_entity(gm)
-  player.props += {.WRAP_AT_WORLD_EDGES}
-  player.scale = {SPRITE_SCALE, SPRITE_SCALE}
-  player.tint = {1, 1, 1, 1}
-  player.color = {0, 0, 0, 0}
-  player.sprite = .SHIP
-  player.z_layer = .PLAYER
-  player.collider.kind = .POLYGON
-
-  asteroid := alloc_entity(gm)
-  asteroid.props += {.ROTATE_OVER_TIME}
-  asteroid.pos = {WORLD_WIDTH/2, WORLD_HEIGHT/2}
-  asteroid.scale = {SPRITE_SCALE, SPRITE_SCALE}
-  asteroid.tint = {1, 1, 1, 1}
-  asteroid.sprite = .ASTEROID_BIG
-  asteroid.z_layer = .DECORATION
   
-  sp_entities[.PLAYER] = player
-
-  // - Spawn star particles ---
-  {
-    for i in 0..<100
-    {
-      par := push_particle(gm)
-      par.props += {.ROTATE_OVER_TIME}
-
-      par.rot = rand.float32_range(0, math.PI/4)
-
-      par.pos.x = rand.float32_range(0, WORLD_WIDTH)
-      par.pos.y = rand.float32_range(0, WORLD_HEIGHT)
-
-      scl := rand.float32_range(1.0/12, 1.0/6)
-      par.scale.x = scl
-      par.scale.y = scl
-      
-      par.tint.a = rand.float32_range(0.25, 1)
-
-      colors := [?]v4f32{
-        {0.9, 0.9, 0.9, 0},
-        {0.8, 0.8, 1.0, 0},
-      }
-      par.color = rand.choice(colors[:])
-    }
-  }
+  setup_player(gm)
+  sp_entities[.PLAYER] = &gm.entities[1]
 }
 
 update_game :: proc(gm: ^Game, dt: f32)
@@ -218,46 +175,37 @@ update_game :: proc(gm: ^Game, dt: f32)
 
   // - Player movement ---
   {
-    SPEED :: 350.0
-    ACC   :: 250.0
-    DRAG  :: 1.25
+    ACC  :: 250.0
+    DRAG :: 1.25
+
+    player.vel = {}
 
     if plf.key_pressed(.A) && !plf.key_pressed(.D)
     {
-      player.rot += -2 * dt
+      player.vel.x = -player.movement_speed
     }
 
     if plf.key_pressed(.D) && !plf.key_pressed(.A)
     {
-      player.rot += 2 * dt
-    }
-
-    if !plf.key_pressed(.A) && !plf.key_pressed(.D)
-    {
-      entity_look_at_point(player, cursor_pos)
+      player.vel.x = player.movement_speed;
     }
 
     if plf.key_pressed(.W) && !plf.key_pressed(.S)
     {
-      acc: f32 = ACC*2 if plf.key_pressed(.SPACE) else ACC
-
-      player.vel.x += math.cos(player.rot) * acc * dt
-      player.vel.x = clamp(player.vel.x, -SPEED, SPEED)
-
-      player.vel.y += math.sin(player.rot) * acc * dt
-      player.vel.y = clamp(player.vel.y, -SPEED, SPEED)
+      player.vel.y = -player.movement_speed;
     }
 
-    if !plf.key_pressed(.W)
+    if plf.key_pressed(.S) && !plf.key_pressed(.W)
     {
-      drag: f32 = DRAG*2 if plf.key_pressed(.S) else DRAG
-
-      player.vel.x = math.lerp(player.vel.x, 0, drag * dt)
-      player.vel.x = approx(player.vel.x, 0, 1)
-
-      player.vel.y = math.lerp(player.vel.y, 0, drag * dt)
-      player.vel.y = approx(player.vel.y, 0, 1)
+      player.vel.y = player.movement_speed;
     }
+
+    if player.vel.x != 0 && player.vel.y != 0
+    {
+      player.vel = vm.normalize(player.vel) * player.movement_speed
+    }
+
+    player.pos += player.vel * dt
   }
 
   // - Enemy movement ---
@@ -265,13 +213,12 @@ update_game :: proc(gm: ^Game, dt: f32)
   {
     if .ACTIVE not_in en.props || en.enemy_kind == .NIL do continue
 
-    SPEED :: 200.0
-    ACC   :: 400.0
-    DRAG  :: 3
+    ACC  :: 400.0
+    DRAG :: 3
 
     if .FOLLOW_ENTITY in en.props
     {
-      target := entity_from_ref(en.targetting.target)
+      target := entity_from_ref(en.targetting.target_en)
       dir := vm.normalize(target.pos - en.pos)
 
       dist_to_target := vm.abs(en.pos - target.pos)
@@ -280,7 +227,7 @@ update_game :: proc(gm: ^Game, dt: f32)
          dist_to_target.x <= en.targetting.max_dist
       {
         en.vel.x += dir.x * ACC * dt
-        en.vel.x = clamp(en.vel.x, -SPEED, SPEED)
+        en.vel.x = clamp(en.vel.x, -en.movement_speed, en.movement_speed)
       }
       else
       {
@@ -292,7 +239,7 @@ update_game :: proc(gm: ^Game, dt: f32)
          dist_to_target.y <= en.targetting.max_dist
       {
         en.vel.y += dir.y * ACC * dt
-        en.vel.y = clamp(en.vel.y, -SPEED, SPEED)
+        en.vel.y = clamp(en.vel.y, -en.movement_speed, en.movement_speed)
       }
       else
       {
@@ -300,12 +247,7 @@ update_game :: proc(gm: ^Game, dt: f32)
         en.vel.y = approx(en.vel.y, 0, 1)
       }
     }
-  }
 
-  for &en in gm.entities
-  {
-    if .ACTIVE not_in en.props do continue
-    
     en.pos += en.vel * dt
   }
 
@@ -320,7 +262,7 @@ update_game :: proc(gm: ^Game, dt: f32)
     {
       player.attack_timer.ticking = false
 
-      proj := spawn_weapon(.LASER)
+      proj := spawn_projectile(.LASER)
       proj.pos = player.pos + player.vel * dt
       proj.vel = {math.cos(player.rot), math.sin(player.rot)} * 500
       proj.rot = player.rot
@@ -353,7 +295,7 @@ update_game :: proc(gm: ^Game, dt: f32)
       {
         set_entities_collided_cache(en_a.ref, en_b.ref)
 
-        if en_a.weapon_kind != .NIL || en_b.weapon_kind != .NIL
+        if en_a.projectile_kind != .NIL || en_b.projectile_kind != .NIL
         {
           kill_entity(&en_a)
           kill_entity(&en_b)
@@ -400,14 +342,22 @@ update_game :: proc(gm: ^Game, dt: f32)
       }
     }
 
-    if .ROTATE_OVER_TIME in en.props
-    {
-      en.rot += 0.25 * math.PI * dt
-    }
+
 
     if .LOOK_AT_TARGET in en.props
     {
-      entity_look_at_point(&en, player.pos)
+      target_pos: v2f32
+      target_en, ok := entity_from_ref(en.targetting.target_en)
+      if ok
+      {
+        target_pos = target_en.pos 
+      }
+      else
+      {
+        target_pos = cursor_pos
+      }
+
+      en.flip_x = en.pos.x > target_pos.x
     }
 
     if .KILL_AFTER_TIME in en.props
@@ -420,6 +370,40 @@ update_game :: proc(gm: ^Game, dt: f32)
       if timer_timeout(&en.death_timer)
       {
         kill_entity(&en)
+      }
+    }
+  }
+
+  // - Animate entities ---
+  for &en in gm.entities
+  {
+    if .ACTIVE not_in en.props do continue
+
+    if .ROTATE_OVER_TIME in en.props
+    {
+      en.rot += 0.25 * math.PI * dt
+    }
+
+    for anim_id in en.anim.data
+    {
+      if anim_id == .NIL do continue
+
+      desc := &res.entity_anims[anim_id]
+      println(desc.frames[en.anim.frame_idx])
+
+      en.sprite = desc.frames[en.anim.frame_idx]
+      if desc.frame_count > 1
+      {
+        en.anim.tick_counter += 1
+
+        if en.anim.tick_counter % desc.ticks_per_frame == 0
+        {
+          en.anim.frame_idx += 1
+          if en.anim.frame_idx == desc.frame_count
+          {
+            en.anim.frame_idx = 0
+          }
+        }
       }
     }
   }
@@ -479,27 +463,27 @@ update_debug_ui :: proc(gm: ^Game, dt: f32)
 {
   // im.ShowDemoWindow()
 
-  im.Begin("General")
+  imgui.Begin("General")
   {
-    im.Text("Time elapsed: %.f s", gm.t)
-    im.PushItemWidth(80)
-    im.InputFloat("Time multiplier", &gm.t_mult, 0.25, format="%.2f")
+    imgui.Text("Time elapsed: %.f s", gm.t)
+    imgui.PushItemWidth(80)
+    imgui.InputFloat("Time multiplier", &gm.t_mult, 0.25, format="%.2f")
     gm.t_mult = clamp(gm.t_mult, 0, 3)
-    im.PopItemWidth()
+    imgui.PopItemWidth()
 
-    im.Text("Cursor: (%.f, %.f)", plf.cursor_pos().x, plf.cursor_pos().y)
-    im.Text("Entities: %i", gm.entities_cnt)
-    im.Text("Debug Entities: %i", gm.debug_entities_pos)
+    imgui.Text("Cursor: (%.f, %.f)", plf.cursor_pos().x, plf.cursor_pos().y)
+    imgui.Text("Entities: %i", gm.entities_cnt)
+    imgui.Text("Debug Entities: %i", gm.debug_entities_pos)
 
-    im.Spacing()
+    imgui.Spacing()
     diff := time.tick_diff(update_start_tick, update_end_tick)
     durr_us := time.duration_microseconds(diff)
-    im.Text("Update: %.f us", durr_us)
-    im.Spacing()
-    im.Spacing()
+    imgui.Text("Update: %.f us", durr_us)
+    imgui.Spacing()
+    imgui.Spacing()
 
-    im.Checkbox("Show colliders", &global.debug_mode)
-    if im.Button("Spawn enemy")
+    imgui.Checkbox("Show colliders", &global.debug_mode)
+    if imgui.Button("Spawn enemy")
     {
       if gm.entities_cnt < len(gm.entities)
       {
@@ -507,40 +491,45 @@ update_debug_ui :: proc(gm: ^Game, dt: f32)
       }
     }
   }
-  im.End()
+  imgui.End()
 
-  im.Begin("Entity Inspector")
+  imgui.Begin("Entity Inspector")
   {
     en := entity_from_ref(global.debug_target_entity)
 
-    im.Text("Ref:   [idx=%u, gen=%u]", en.ref.idx, en.ref.gen)
+    imgui.Text("Ref:   [idx=%u, gen=%u]", en.ref.idx, en.ref.gen)
 
-    im.PushID("Pos")
-    im.Text("Pos:  "); im.SameLine()
-    im.InputFloat2("", &en.pos)
-    im.PopID()
+    imgui.PushID("Pos")
+    imgui.Text("Pos:  "); imgui.SameLine()
+    imgui.InputFloat2("", &en.pos)
+    imgui.PopID()
 
-    im.PushID("Rot")
-    im.Text("Rot:  "); im.SameLine()
-    im.InputFloat("", &en.rot)
-    im.PopID()
+    imgui.PushID("Rot")
+    imgui.Text("Rot:  "); imgui.SameLine()
+    imgui.InputFloat("", &en.rot)
+    imgui.PopID()
 
-    im.PushID("Scale")
-    im.Text("Scale:"); im.SameLine()
-    im.InputFloat2("", &en.scale)
-    im.PopID()
+    imgui.PushID("Scale")
+    imgui.Text("Scale:"); imgui.SameLine()
+    imgui.InputFloat2("", &en.scale)
+    imgui.PopID()
 
-    im.PushID("Vel")
-    im.Text("Vel:  "); im.SameLine()
-    im.InputFloat2("", &en.vel)
-    im.PopID()
+    imgui.PushID("Vel")
+    imgui.Text("Vel:  "); imgui.SameLine()
+    imgui.InputFloat2("", &en.vel)
+    imgui.PopID()
+
+    imgui.PushID("Speed")
+    imgui.Text("Speed:"); imgui.SameLine()
+    imgui.InputFloat("", &en.movement_speed)
+    imgui.PopID()
   }
-  im.End()
+  imgui.End()
 }
 
 render_game :: proc(gm: ^Game, dt: f32)
 {
-  begin_draw({10, 10, 10, 255}/255)
+  begin_draw({77, 125, 53, 255}/255)
 
   // - Draw particles ---
   for &par in gm.particles
@@ -568,11 +557,15 @@ render_game :: proc(gm: ^Game, dt: f32)
     }
   })
 
+  // - Draw entities ---
   for en in en_targets
   {
     if .RENDER not_in en.props do continue
 
-    draw_sprite(en.pos, en.scale, en.rot, en.tint, en.color, en.sprite)
+    flip: v2f32
+    flip.x = -1 if en.flip_x else 1
+    flip.y = -1 if en.flip_y else 1
+    draw_sprite(en.pos, en.scale * flip, en.rot, en.tint, en.color, en.sprite)
   }
 
   // - Draw debug entities ---
@@ -581,7 +574,6 @@ render_game :: proc(gm: ^Game, dt: f32)
     for &den in gm.debug_entities
     {
       if .RENDER not_in den.props do continue
-
       draw_sprite(den.pos, den.scale, den.rot, den.tint, den.color, den.sprite)
     }
   }
@@ -689,6 +681,8 @@ screen_to_world_pos :: proc(pos: v2f32) -> v2f32
 
 // Entity ////////////////////////////////////////////////////////////////////////////////
 
+MAX_ENTITIES_COUNT  :: 128 + 1
+
 Entity :: struct
 {
   ref:              Entity_Ref,
@@ -700,24 +694,37 @@ Entity :: struct
   radius:           f32,
   rot:              f32,
   input_dir:        v2f32,
+  movement_speed:   f32,
   tint:             v4f32,
   color:            v4f32,
   sprite:           Sprite_ID,
   collider:         Collider,
-  col_layer:        enum u32 {NIL, PLAYER, ENEMY},
+  col_layer:        enum u16 {NIL, PLAYER, ENEMY},
+  flip_x:           bool,
+  flip_y:           bool,
   z_index:          i16,
-  z_layer:          enum u32 {NIL, DECORATION, ENEMY, PLAYER, PROJECTILE},
+  z_layer:          enum u16 {NIL, DECORATION, ENEMY, PLAYER, PROJECTILE},
   enemy_kind:       Enemy_Kind,
   weapon_kind:      Weapon_Kind,
+  projectile_kind:  Projectile_Kind,
   attack_timer:     Timer,
   death_timer:      Timer,
   hurt_timer:       Timer,
   hurt_grace_timer: Timer,
   targetting:       struct
   {   
-    target:         Entity_Ref,
+    target_en:      Entity_Ref,
+    target_pos:     v2f32,
     min_dist:       f32,
     max_dist:       f32,
+  },
+  anim:             struct
+  {
+    data:           [Entity_Anim_State]Entity_Anim_ID,
+    prev_state:     Entity_Anim_State,
+    curr_state:     Entity_Anim_State,
+    frame_idx:      u16,
+    tick_counter:   u16,
   },
 }
 
@@ -749,8 +756,20 @@ Enemy_Kind :: enum
 Weapon_Kind :: enum
 {
   NIL,
+  RIFLE,
+}
+
+Projectile_Kind :: enum
+{
+  NIL,
   LASER,
   PROJ,
+}
+
+Entity_Anim_State :: enum
+{
+  IDLE,
+  WALK,
 }
 
 @(rodata)
@@ -769,11 +788,19 @@ entity_is_valid :: #force_inline proc(en: ^Entity) -> bool
   return en.ref.idx != 0
 }
 
-entity_from_ref :: #force_inline proc(ref: Entity_Ref) -> ^Entity
+entity_from_ref :: #force_inline proc(ref: Entity_Ref) -> (^Entity, bool) #optional_ok
 {
   gm := get_current_game()
   en := &gm.entities[ref.idx]
-  return en if en.ref.idx != 0 && ref.gen == en.gen else &NIL_ENTITY
+
+  if ref.idx != 0 && ref.gen == en.gen
+  {
+    return en, true
+  }
+  else
+  {
+    return &NIL_ENTITY, false
+  }
 }
 
 alloc_entity :: proc(gm: ^Game) -> ^Entity
@@ -811,6 +838,22 @@ free_entity :: proc(gm: ^Game, en: ^Entity)
   gm.entities_cnt -= 1
 }
 
+setup_player :: proc(gm: ^Game)
+{
+  en := alloc_entity(gm)
+  en.props += {.WRAP_AT_WORLD_EDGES, .LOOK_AT_TARGET}
+  en.scale = {SPRITE_SCALE, SPRITE_SCALE}
+  en.tint = {1, 1, 1, 1}
+  en.color = {0, 0, 0, 0}
+  en.sprite = .PLAYER_IDLE_1
+  en.z_layer = .PLAYER
+  en.collider.kind = .POLYGON
+  en.pos = {WORLD_WIDTH/2, WORLD_HEIGHT/2}
+  en.movement_speed = 200
+
+  en.anim.data[.IDLE] = .PLAYER_IDLE
+}
+
 spawn_enemy :: proc(kind: Enemy_Kind) -> ^Entity
 {
   gm := get_current_game()
@@ -822,7 +865,7 @@ spawn_enemy :: proc(kind: Enemy_Kind) -> ^Entity
   en.tint = {1, 1, 1, 1}
   en.z_layer = .ENEMY
   en.col_layer = .ENEMY
-  en.targetting.target = sp_entities[.PLAYER].ref
+  en.targetting.target_en = sp_entities[.PLAYER].ref
   en.targetting.min_dist = 8
   en.targetting.max_dist = 1000
 
@@ -830,7 +873,7 @@ spawn_enemy :: proc(kind: Enemy_Kind) -> ^Entity
   {
   case .NIL:
   case .ALIEN:
-    en.sprite = .ALIEN
+    en.sprite = .NIL
   }
 
   en.collider.kind = collider_map[en.sprite].kind
@@ -844,6 +887,26 @@ spawn_weapon :: proc(kind: Weapon_Kind) -> ^Entity
 
   en := alloc_entity(gm)
   en.weapon_kind = kind
+  en.scale = {SPRITE_SCALE, SPRITE_SCALE}
+  en.tint = {1, 1, 1, 1}
+  en.z_layer = .DECORATION
+
+  switch kind
+  {
+  case .NIL:
+  case .RIFLE:
+    en.sprite = .RIFLE
+  }
+
+  return en
+}
+
+spawn_projectile :: proc(kind: Projectile_Kind) -> ^Entity
+{
+  gm := get_current_game()
+
+  en := alloc_entity(gm)
+  en.projectile_kind = kind
   en.props += {.INTERPOLATE, .KILL_AFTER_TIME}
   en.scale = {SPRITE_SCALE, SPRITE_SCALE}
   en.z_layer = .PROJECTILE
@@ -854,10 +917,10 @@ spawn_weapon :: proc(kind: Weapon_Kind) -> ^Entity
   case .NIL:
   case .LASER:
     en.tint = {0.18, 0.88, 0.18, 1}
-    en.sprite = .LASER
+    en.sprite = .BULLET
   case .PROJ:
     en.tint = {0.18, 0.88, 0.18, 1}
-    en.sprite = .PROJECTILE
+    en.sprite = .BULLET
     en.collider.radius = 4
   }
 
@@ -918,7 +981,6 @@ update_entity_collider :: proc(en: ^Entity)
 {
   switch en.collider.kind
   {
-  case .NIL:
   case .CIRCLE:
     origin := xform_from_entity(en) * vm.combine(collider_map[en.sprite].origin, 1)
     en.collider.origin = origin.xy
@@ -935,6 +997,7 @@ update_entity_collider :: proc(en: ^Entity)
     {
       debug_circle(vert, 4, color={0, 1, 0, 0}, alpha=0.75)
     }
+  case .NIL:
   }
 }
 
@@ -1053,7 +1116,34 @@ debug_circle :: proc(
   return result
 }
 
+// Tile ///////////////////////////////////////////////////////////////////////////////////
+
+Tile :: struct
+{
+  kind: Tile_Kind,
+}
+
+Tile_Kind :: enum
+{
+  NIL,
+  DIRT,
+  GRASS,
+}
+
+generate_region_tiles :: proc(gm: ^Game, rows, columns: int)
+{
+  for r in 0..<rows
+  {
+    for c in 0..<columns
+    {
+
+    }
+  }
+}
+
 // Particle //////////////////////////////////////////////////////////////////////////////
+
+MAX_PARTICLES_COUNT :: 1024
 
 Particle :: struct
 {

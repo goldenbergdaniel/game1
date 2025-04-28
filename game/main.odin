@@ -2,8 +2,6 @@ package game
 
 import "core:fmt"
 import "core:time"
-import sdl "ext:sdl3"
-import im "ext:imgui"
 
 import "basic/mem"
 import plf "platform"
@@ -24,8 +22,9 @@ User :: struct
 }
 
 user: User
-
 update_start_tick, update_end_tick: time.Tick
+
+curr_game, prev_game, res_game: Game
 
 main :: proc()
 {
@@ -38,7 +37,6 @@ main :: proc()
   init_resources(&user.perm_arena)
   r.init(&user.window, &res.textures)
 
-  curr_game, prev_game, res_game: Game
   init_game(&curr_game)
 
   elapsed_time, accumulator: f64
@@ -84,7 +82,7 @@ main :: proc()
       curr_game.t += SIM_STEP * curr_game.t_mult
       accumulator -= SIM_STEP
     }
-
+    
     plf.imgui_begin()
 
     if user.show_imgui
