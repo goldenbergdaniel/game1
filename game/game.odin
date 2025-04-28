@@ -383,26 +383,21 @@ update_game :: proc(gm: ^Game, dt: f32)
     {
       en.rot += 0.25 * math.PI * dt
     }
+    
+    anim := player.anim.data[player.anim.curr_state]
+    desc := &res.entity_anims[player.anim.data[player.anim.curr_state]]
 
-    for anim_id in en.anim.data
+    en.sprite = desc.frames[en.anim.frame_idx]
+    if desc.frame_count > 1
     {
-      if anim_id == .NIL do continue
+      en.anim.tick_counter += 1
 
-      desc := &res.entity_anims[anim_id]
-      println(en.anim.frame_idx)
-
-      en.sprite = desc.frames[en.anim.frame_idx]
-      if desc.frame_count > 1
+      if en.anim.tick_counter % desc.ticks_per_frame == 0
       {
-        en.anim.tick_counter += 1
-
-        if en.anim.tick_counter % desc.ticks_per_frame == 0
+        en.anim.frame_idx += 1
+        if en.anim.frame_idx == desc.frame_count
         {
-          en.anim.frame_idx += 1
-          if en.anim.frame_idx == desc.frame_count
-          {
-            en.anim.frame_idx = 0
-          }
+          en.anim.frame_idx = 0
         }
       }
     }
@@ -720,9 +715,9 @@ Entity :: struct
   },
   anim:             struct
   {
-    data:           [Entity_Anim_State]Entity_Anim_ID,
-    prev_state:     Entity_Anim_State,
-    curr_state:     Entity_Anim_State,
+    data:           [Entity_State]Entity_Anim_ID,
+    prev_state:     Entity_State,
+    curr_state:     Entity_State,
     frame_idx:      u16,
     tick_counter:   u16,
   },
@@ -766,7 +761,7 @@ Projectile_Kind :: enum
   PROJ,
 }
 
-Entity_Anim_State :: enum
+Entity_State :: enum
 {
   IDLE,
   WALK,

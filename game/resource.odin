@@ -32,6 +32,7 @@ Entity_Anim_ID :: enum
 {
   NIL,
   PLAYER_IDLE,
+  PLAYER_WALK,
 }
 
 Entity_Anim_Desc :: struct
@@ -39,7 +40,7 @@ Entity_Anim_Desc :: struct
   frames:          [16]Sprite_ID,
   frame_count:     u16,
   ticks_per_frame: u16,
-  exit_state:      Entity_Anim_State,
+  exit_state:      Entity_State,
 }
 
 res: Resources
