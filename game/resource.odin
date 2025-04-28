@@ -12,20 +12,12 @@ Resources :: struct
   textures:     [r.Texture_ID]r.Texture,
   sprites:      [Sprite_ID]Sprite,
   enemies:      [Enemy_Kind]Enemy_Desc,
-  enemy_spawns: [1]Enemy_Spawn_Desc,
   entity_anims: [Entity_Anim_ID]Entity_Anim_Desc,
 }
 
 Enemy_Desc :: struct
 {
   props: bit_set[Entity_Prop],
-}
-
-Enemy_Spawn_Desc :: struct
-{
-  kind: Enemy_Kind,
-  time: f32,
-  pos:  v2f32,
 }
 
 Entity_Anim_ID :: enum
@@ -76,14 +68,6 @@ init_resources :: proc(arena: ^mem.Arena)
       sprite.texture = .SPRITE_MAP
       sprite.pivot /= vm.array_cast(sprite.grid, f32) * 15
     }
-  }
-
-  // - Enemy spawns ---
-  {
-    res.enemy_spawns[0] = Enemy_Spawn_Desc{kind=.ALIEN, time=1.0, pos={WORLD_WIDTH, 0}}
-    // res.enemy_spawns[1] = Enemy_Spawn_Desc{kind=.ALIEN, time=3.0, pos={WORLD_WIDTH, 0}}
-    // res.enemy_spawns[2] = Enemy_Spawn_Desc{kind=.ALIEN, time=3.0, pos={WORLD_WIDTH-100, 0}}
-    // res.enemy_spawns[3] = Enemy_Spawn_Desc{kind=.ALIEN, time=8.0, pos={WORLD_WIDTH, 0}}
   }
 
   // - Entity animations ---

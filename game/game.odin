@@ -143,36 +143,6 @@ update_game :: proc(gm: ^Game, dt: f32)
     }
   }
 
-  // - Enemy spawning ---
-  try_spawn: for
-  {
-    desc: Enemy_Spawn_Desc
-    if gm.enemy_to_spawn_idx < len(res.enemy_spawns)
-    {
-      desc = res.enemy_spawns[gm.enemy_to_spawn_idx]
-    }
-
-    if desc.kind != .NIL && gm.t >= desc.time
-    {
-      enemy := spawn_enemy(.ALIEN)
-      enemy.pos = desc.pos
-      enemy.vel = {-50, 50}
-
-      gm.enemy_to_spawn_idx += 1
-
-      // Peak next enemy to see if it spawns at the same time
-      if gm.enemy_to_spawn_idx < len(res.enemy_spawns)
-      {
-        if res.enemy_spawns[gm.enemy_to_spawn_idx].time == desc.time
-        {
-          continue try_spawn
-        }
-      }
-    }
-
-    break try_spawn
-  }
-
   // - Player movement ---
   {
     ACC  :: 250.0
