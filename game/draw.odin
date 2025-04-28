@@ -6,7 +6,7 @@ import plf "platform"
 import r "render"
 import vm "vecmath"
 
-SPRITE_SCALE :: 3
+SPRITE_SIZE :: 3
 
 Sprite :: struct
 {
@@ -14,17 +14,6 @@ Sprite :: struct
   grid:    [2]i32,
   pivot:   v2f32,
   texture: r.Texture_ID,
-}
-
-Sprite_ID :: enum
-{
-  NIL,
-  SQUARE,
-  CIRCLE,
-  PLAYER_IDLE_1,
-  PLAYER_IDLE_2,
-  BULLET,
-  RIFLE,
 }
 
 begin_draw :: #force_inline proc(color: v4f32)
@@ -74,7 +63,7 @@ rgba_from_hsva :: proc(hsva: v4f32) -> (rgba: v4f32)
 {
   h, s, v, a := hsva[0], hsva[1], hsva[2], hsva[3]
 
-  if s == 0.0 do return v4f32{v, v, v, a}
+  if s == 0.0 do return {v, v, v, a}
 
   h6 := h * 6.0
   if h6 >= 6.0 do h6 = 0.0
@@ -97,5 +86,5 @@ rgba_from_hsva :: proc(hsva: v4f32) -> (rgba: v4f32)
   case 5: r, g, b = v, p, q
   }
 
-  return v4f32{r, g, b, a}
+  return {r, g, b, a}
 }

@@ -3,6 +3,7 @@ package game
 import "base:runtime"
 import "core:fmt"
 import "core:math"
+import "core:mem/tlsf"
 import "core:math/rand"
 import "core:os"
 import "core:slice"
@@ -19,12 +20,13 @@ import vm "vecmath"
 global: struct
 {
   frame_arena:         mem.Arena,
+  world_mem:           tlsf.Allocator,
   debug_mode:          bool,
   debug_target_entity: Entity_Ref,
 }
 
 @(thread_local, private="file")
-sp_entities: [enum{
+special_entities: [enum{
   PLAYER,
 }]^Entity
 
@@ -60,20 +62,25 @@ set_current_game :: #force_inline proc(gm: ^Game)
 
 init_game :: proc(gm: ^Game)
 {
+  set_current_game(gm)
+  defer set_current_game(nil)
+
   // NOTE(dg): What if multiple games running on same thread? This needs to change. 
-  mem.init_growing_arena(&global.frame_arena)
+  _ = mem.init_growing_arena(&global.frame_arena)
+  _ = tlsf.init_from_allocator(&global.world_mem, runtime.default_allocator(), mem.MIB * 16)
 
   gm.t_mult = 1
-  
-  setup_player(gm)
-  sp_entities[.PLAYER] = &gm.entities[1]
+
+  player := alloc_entity(gm)
+  setup_player(player)
+  special_entities[.PLAYER] = player
 }
 
 update_game :: proc(gm: ^Game, dt: f32)
 {
   set_current_game(gm)
   
-  player := sp_entities[.PLAYER]
+  player := special_entities[.PLAYER]
   window_size := plf.window_size(&user.window)
   cursor_pos := screen_to_world_pos(plf.cursor_pos())
   
@@ -178,6 +185,12 @@ update_game :: proc(gm: ^Game, dt: f32)
     player.pos += player.vel * dt
   }
 
+  // NOTE(dg): temporary!
+  {
+    shadow := entity_from_ref(player.children[0])
+    shadow.pos = player.pos
+  }
+
   // - Enemy movement ---
   for &en in gm.entities
   {
@@ -232,9 +245,9 @@ update_game :: proc(gm: ^Game, dt: f32)
     {
       player.attack_timer.ticking = false
 
-      proj := spawn_projectile(.LASER)
+      proj := spawn_projectile(.BULLET)
       proj.pos = player.pos + player.vel * dt
-      proj.vel = {math.cos(player.rot), math.sin(player.rot)} * 500
+      proj.vel = 500
       proj.rot = player.rot
     }
   }
@@ -243,7 +256,6 @@ update_game :: proc(gm: ^Game, dt: f32)
   for &en in gm.entities
   {
     if .ACTIVE not_in en.props || en.collider.kind == .NIL do continue
-
     update_entity_collider(&en)
   }
 
@@ -312,8 +324,6 @@ update_game :: proc(gm: ^Game, dt: f32)
       }
     }
 
-
-
     if .LOOK_AT_TARGET in en.props
     {
       target_pos: v2f32
@@ -327,7 +337,14 @@ update_game :: proc(gm: ^Game, dt: f32)
         target_pos = cursor_pos
       }
 
-      en.flip_x = en.pos.x > target_pos.x
+      if en.pos.x > target_pos.x 
+      {
+        en.props += {.FLIP_X}
+      }
+      else
+      {
+        en.props -= {.FLIP_X}
+      }
     }
 
     if .KILL_AFTER_TIME in en.props
@@ -354,20 +371,24 @@ update_game :: proc(gm: ^Game, dt: f32)
       en.rot += 0.25 * math.PI * dt
     }
     
-    anim := player.anim.data[player.anim.curr_state]
-    desc := &res.entity_anims[player.anim.data[player.anim.curr_state]]
+    anim := en.anim.data[en.anim.state]
+    desc := &res.entity_anims[en.anim.data[en.anim.state]]
 
-    en.sprite = desc.frames[en.anim.frame_idx]
-    if desc.frame_count > 1
+    if len(desc.frames) > 0
     {
-      en.anim.tick_counter += 1
+      en.sprite = desc.frames[en.anim.frame_idx]
 
-      if en.anim.tick_counter % desc.ticks_per_frame == 0
+      if len(desc.frames) > 1
       {
-        en.anim.frame_idx += 1
-        if en.anim.frame_idx == desc.frame_count
+        en.anim.counter += 1
+
+        if en.anim.counter % desc.ticks_per_frame == 0
         {
-          en.anim.frame_idx = 0
+          en.anim.frame_idx += 1
+          if en.anim.frame_idx == u16(len(desc.frames))
+          {
+            en.anim.frame_idx = 0
+          }
         }
       }
     }
@@ -528,8 +549,8 @@ render_game :: proc(gm: ^Game, dt: f32)
     if .RENDER not_in en.props do continue
 
     flip: v2f32
-    flip.x = -1 if en.flip_x else 1
-    flip.y = -1 if en.flip_y else 1
+    flip.x = -1 if .FLIP_X in en.props else 1
+    flip.y = -1 if .FLIP_Y in en.props else 1
     draw_sprite(en.pos, en.scale * flip, en.rot, en.tint, en.color, en.sprite)
   }
 
@@ -593,6 +614,7 @@ interpolate_games :: proc(curr_gm, prev_gm, res_gm: ^Game, alpha: f32)
 free_game :: proc(gm: ^Game)
 {
   mem.destroy_arena(&global.frame_arena)
+  tlsf.destroy(&global.world_mem)
 }
 
 copy_game :: proc(new_gm, old_gm: ^Game)
@@ -619,7 +641,7 @@ save_game_to_file :: proc(fd: os.Handle, gm: ^Game) -> bool
 // NOTE(dg): This assumes that Game is contiguous and stores no pointers.
 load_game_from_file :: proc(fd: os.Handle, gm: ^Game) -> bool
 {
-  saved_buf := make([]u8, size_of(Game)*2, mem.a(&global.frame_arena))
+  saved_buf := make([]u8, size_of(Game)*2, mem.allocator(&global.frame_arena))
   saved_len, _ := os.read(fd, saved_buf[:])
   gm_bytes := saved_buf[:saved_len]
 
@@ -653,6 +675,8 @@ Entity :: struct
   ref:              Entity_Ref,
   gen:              u32,
   props:            bit_set[Entity_Prop],
+  parent:           Entity_Ref,
+  children:         [dynamic]Entity_Ref,
   pos:              v2f32,
   vel:              v2f32,
   scale:            v2f32,
@@ -665,8 +689,6 @@ Entity :: struct
   sprite:           Sprite_ID,
   collider:         Collider,
   col_layer:        enum u16 {NIL, PLAYER, ENEMY},
-  flip_x:           bool,
-  flip_y:           bool,
   z_index:          i16,
   z_layer:          enum u16 {NIL, DECORATION, ENEMY, PLAYER, PROJECTILE},
   enemy_kind:       Enemy_Kind,
@@ -686,10 +708,9 @@ Entity :: struct
   anim:             struct
   {
     data:           [Entity_State]Entity_Anim_ID,
-    prev_state:     Entity_State,
-    curr_state:     Entity_State,
+    state:          Entity_State,
     frame_idx:      u16,
-    tick_counter:   u16,
+    counter:        u16,
   },
 }
 
@@ -705,6 +726,8 @@ Entity_Prop :: enum u64
   RENDER,
   MARKED_FOR_DEATH,
   INTERPOLATE,
+  FLIP_X,
+  FLIP_Y,
   WRAP_AT_WORLD_EDGES,
   LOOK_AT_TARGET,
   KILL_AFTER_TIME,
@@ -727,12 +750,12 @@ Weapon_Kind :: enum
 Projectile_Kind :: enum
 {
   NIL,
-  LASER,
-  PROJ,
+  BULLET,
 }
 
 Entity_State :: enum
 {
+  NIL,
   IDLE,
   WALK,
 }
@@ -781,13 +804,14 @@ alloc_entity :: proc(gm: ^Game) -> ^Entity
       en.ref.idx = cast(u32) i + 1
       en.ref.gen = en.gen
       en.props += {.ACTIVE, .RENDER}
+      en.children = make([dynamic]Entity_Ref, tlsf.allocator(&global.world_mem))
+
       result = &en
       
       gm.entities_cnt += 1
       break
     }
   }
-
 
   return result
 }
@@ -797,26 +821,62 @@ free_entity :: proc(gm: ^Game, en: ^Entity)
   assert(entity_is_valid(en))
 
   gen := en.gen
+  
+  delete(en.children)
   en^ = {}
   en.gen = gen + 1
 
   gm.entities_cnt -= 1
 }
 
-setup_player :: proc(gm: ^Game)
+attach_entity_child :: proc(parent, child: ^Entity)
 {
-  en := alloc_entity(gm)
-  en.props += {.WRAP_AT_WORLD_EDGES, .LOOK_AT_TARGET}
-  en.scale = {SPRITE_SCALE, SPRITE_SCALE}
+  has_free: bool
+
+  for &slot in parent.children
+  {
+    if slot.idx == 0
+    {
+      slot = child.ref
+      child.parent = parent.ref
+      has_free = true
+    }
+  }
+
+  if !has_free
+  {
+    append(&parent.children, child.ref)
+    child.parent = parent.ref
+  }
+}
+
+setup_sprite_entity :: proc(en: ^Entity, sprite: Sprite_ID)
+{
+  en.sprite = sprite
   en.tint = {1, 1, 1, 1}
-  en.color = {0, 0, 0, 0}
-  en.sprite = .PLAYER_IDLE_1
+  en.scale = {SPRITE_SIZE, SPRITE_SIZE}
+}
+
+setup_player :: proc(en: ^Entity)
+{
+  gm := get_current_game()
+
+  setup_sprite_entity(en, .PLAYER_IDLE_1)
+  en.props += {.WRAP_AT_WORLD_EDGES, .LOOK_AT_TARGET}
   en.z_layer = .PLAYER
   en.collider.kind = .POLYGON
   en.pos = {WORLD_WIDTH/2, WORLD_HEIGHT/2}
   en.movement_speed = 200
 
+  en.anim.state = .IDLE
   en.anim.data[.IDLE] = .PLAYER_IDLE
+  
+  shadow := alloc_entity(gm)
+  setup_sprite_entity(shadow, .SHADOW)
+  shadow.pos = en.pos
+  shadow.color = {0.3, 0.3, 0.3, 0}
+  shadow.tint.a = 0.3
+  attach_entity_child(en, shadow)
 }
 
 spawn_enemy :: proc(kind: Enemy_Kind) -> ^Entity
@@ -826,19 +886,19 @@ spawn_enemy :: proc(kind: Enemy_Kind) -> ^Entity
   en := alloc_entity(gm)
   en.enemy_kind = kind
   en.props += {.FOLLOW_ENTITY}
-  en.scale = {SPRITE_SCALE, SPRITE_SCALE}
+  en.scale = {SPRITE_SIZE, SPRITE_SIZE}
   en.tint = {1, 1, 1, 1}
   en.z_layer = .ENEMY
   en.col_layer = .ENEMY
-  en.targetting.target_en = sp_entities[.PLAYER].ref
+  en.targetting.target_en = special_entities[.PLAYER].ref
   en.targetting.min_dist = 8
   en.targetting.max_dist = 1000
 
   switch kind
   {
-  case .NIL:
   case .ALIEN:
     en.sprite = .NIL
+  case .NIL:
   }
 
   en.collider.kind = collider_map[en.sprite].kind
@@ -852,15 +912,15 @@ spawn_weapon :: proc(kind: Weapon_Kind) -> ^Entity
 
   en := alloc_entity(gm)
   en.weapon_kind = kind
-  en.scale = {SPRITE_SCALE, SPRITE_SCALE}
+  en.scale = {SPRITE_SIZE, SPRITE_SIZE}
   en.tint = {1, 1, 1, 1}
   en.z_layer = .DECORATION
 
   switch kind
   {
-  case .NIL:
   case .RIFLE:
     en.sprite = .RIFLE
+  case .NIL:
   }
 
   return en
@@ -873,20 +933,16 @@ spawn_projectile :: proc(kind: Projectile_Kind) -> ^Entity
   en := alloc_entity(gm)
   en.projectile_kind = kind
   en.props += {.INTERPOLATE, .KILL_AFTER_TIME}
-  en.scale = {SPRITE_SCALE, SPRITE_SCALE}
+  en.scale = {SPRITE_SIZE, SPRITE_SIZE}
   en.z_layer = .PROJECTILE
   en.col_layer = .PLAYER
 
   switch kind
   {
-  case .NIL:
-  case .LASER:
-    en.tint = {0.18, 0.88, 0.18, 1}
-    en.sprite = .BULLET
-  case .PROJ:
-    en.tint = {0.18, 0.88, 0.18, 1}
+  case .BULLET:
     en.sprite = .BULLET
     en.collider.radius = 4
+  case .NIL:
   }
 
   en.collider.kind = collider_map[en.sprite].kind

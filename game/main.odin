@@ -23,7 +23,6 @@ User :: struct
 
 user: User
 update_start_tick, update_end_tick: time.Tick
-
 curr_game, prev_game, res_game: Game
 
 main :: proc()
@@ -113,6 +112,7 @@ m4x4f32 :: matrix[4,4]f32
 
 printf  :: fmt.printf
 println :: fmt.println
+panicf  :: fmt.panicf
 
 approx :: #force_inline proc(val, tar, tol: $T) -> T 
 {

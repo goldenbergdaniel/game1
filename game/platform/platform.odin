@@ -208,7 +208,7 @@ Event_Queue :: struct
 @(private)
 init_event_queue :: proc(queue: ^Event_Queue, arena: ^mem.Arena)
 {
-  queue.data = make([]Event, EVENT_QUEUE_CAP, mem.a(arena))
+  queue.data = make([]Event, EVENT_QUEUE_CAP, mem.allocator(arena))
 }
 
 @(private)

@@ -107,7 +107,7 @@ sdl_create_window :: proc(
 		window_flags += {.METAL}
 	}
 	
-  title_cstr := strings.clone_to_cstring(title, mem.a(scratch.arena))
+  title_cstr := strings.clone_to_cstring(title, mem.allocator(scratch.arena))
 	sdl_window := sdl.CreateWindow(title_cstr, i32(width), i32(height), window_flags)
 
 	when ODIN_OS == .Linux

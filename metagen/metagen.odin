@@ -40,7 +40,7 @@ color_map: map[Color]int
 main :: proc()
 {
   mem.init_static_arena(&perm_arena)
-  context.allocator = mem.a(&perm_arena)
+  context.allocator = mem.allocator(&perm_arena)
 
   generate_collider_map()
 }
@@ -78,7 +78,7 @@ generate_collider_map :: proc()
   {
     scratch := mem.begin_temp(mem.get_scratch())
     defer mem.end_temp(scratch)
-    context.temp_allocator = mem.a(scratch.arena)
+    context.temp_allocator = mem.allocator(scratch.arena)
     
     strings.write_string(&gen_buffer, "collider_map: [Sprite_ID]Collider_Map_Entry = {\n")
 

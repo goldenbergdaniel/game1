@@ -1,9 +1,0 @@
-TODO
-
-WEAPONS
-  - shotgun
-  - homing missle
-  - 
-
-ENEMIES
-
