@@ -201,10 +201,13 @@ update_game :: proc(gm: ^Game, dt: f32)
 
     if .FOLLOW_ENTITY in en.props
     {
+      en_pos := pos_from_entity(&en)
       target := entity_from_ref(en.targetting.target_en)
-      dir := vm.normalize(target.pos - en.pos)
+      target_pos := pos_from_entity(target)
 
-      dist_to_target := vm.abs(en.pos - target.pos)
+      dir := vm.normalize(target_pos - en_pos)
+
+      dist_to_target := vm.abs(en_pos - target_pos)
 
       if dist_to_target.x >= en.targetting.min_dist && 
          dist_to_target.x <= en.targetting.max_dist
@@ -301,23 +304,25 @@ update_game :: proc(gm: ^Game, dt: f32)
     // - Entity wrap at window edges ---
     if .WRAP_AT_WORLD_EDGES in en.props
     {
-      if en.pos.x > WORLD_WIDTH
+      en_pos := pos_from_entity(&en)
+      
+      if en_pos.x > WORLD_WIDTH
       {
         en.pos.x = -en.scale.x
         en.props -= {.INTERPOLATE}
       }
-      else if en.pos.x + en.scale.x < 0
+      else if en_pos.x + en.scale.x < 0
       {
-        en.pos.x = WORLD_WIDTH
+        en_pos.x = WORLD_WIDTH
         en.props -= {.INTERPOLATE}
       }
 
-      if en.pos.y > WORLD_HEIGHT
+      if en_pos.y > WORLD_HEIGHT
       {
         en.pos.y = -en.scale.y
         en.props -= {.INTERPOLATE}
       }
-      else if en.pos.y + en.scale.y < 0
+      else if en_pos.y + en.scale.y < 0
       {
         en.pos.y = WORLD_HEIGHT
         en.props -= {.INTERPOLATE}
@@ -330,14 +335,15 @@ update_game :: proc(gm: ^Game, dt: f32)
       target_en, ok := entity_from_ref(en.targetting.target_en)
       if ok
       {
-        target_pos = target_en.pos 
+        target_pos = pos_from_entity(target_en)
       }
       else
       {
         target_pos = cursor_pos
       }
 
-      if en.pos.x > target_pos.x 
+      en_pos := pos_from_entity(&en)
+      if en_pos.x > target_pos.x 
       {
         en.props += {.FLIP_X}
       }
@@ -371,25 +377,25 @@ update_game :: proc(gm: ^Game, dt: f32)
       en.rot += 0.25 * math.PI * dt
     }
     
-    anim := en.anim.data[en.anim.state]
-    desc := &res.entity_anims[en.anim.data[en.anim.state]]
+    anim  := en.anim.data[en.anim.state]
+    desc  := &res.animations[en.anim.data[en.anim.state]]
 
-    if len(desc.frames) > 0
+    if len(desc.frames) <= 0 do continue
+
+    frame := &desc.frames[en.anim.frame_idx]
+    en.sprite = frame.sprite
+
+    if len(desc.frames) <= 1 do continue
+
+    en.anim.counter += 1
+    if en.anim.counter % frame.ticks == 0
     {
-      en.sprite = desc.frames[en.anim.frame_idx]
+      en.anim.counter = 0
+      en.anim.frame_idx += 1
 
-      if len(desc.frames) > 1
+      if en.anim.frame_idx == u16(len(desc.frames))
       {
-        en.anim.counter += 1
-
-        if en.anim.counter % desc.ticks_per_frame == 0
-        {
-          en.anim.frame_idx += 1
-          if en.anim.frame_idx == u16(len(desc.frames))
-          {
-            en.anim.frame_idx = 0
-          }
-        }
+        en.anim.frame_idx = 0
       }
     }
   }
@@ -551,7 +557,11 @@ render_game :: proc(gm: ^Game, dt: f32)
     flip: v2f32
     flip.x = -1 if .FLIP_X in en.props else 1
     flip.y = -1 if .FLIP_Y in en.props else 1
-    draw_sprite(en.pos, en.scale * flip, en.rot, en.tint, en.color, en.sprite)
+
+    en_pos := pos_from_entity(en)
+    en_scl := scl_from_entity(en)
+    en_rot := rot_from_entity(en)
+    draw_sprite(en_pos, en_scl * flip, en_rot, en.tint, en.color, en.sprite)
   }
 
   // - Draw debug entities ---
@@ -560,6 +570,7 @@ render_game :: proc(gm: ^Game, dt: f32)
     for &den in gm.debug_entities
     {
       if .RENDER not_in den.props do continue
+  
       draw_sprite(den.pos, den.scale, den.rot, den.tint, den.color, den.sprite)
     }
   }
@@ -676,7 +687,7 @@ Entity :: struct
   gen:              u32,
   props:            bit_set[Entity_Prop],
   parent:           Entity_Ref,
-  children:         [dynamic]Entity_Ref,
+  children:         [4]Entity_Ref,
   pos:              v2f32,
   vel:              v2f32,
   scale:            v2f32,
@@ -688,9 +699,9 @@ Entity :: struct
   color:            v4f32,
   sprite:           Sprite_ID,
   collider:         Collider,
-  col_layer:        enum u16 {NIL, PLAYER, ENEMY},
+  col_layer:        enum {NIL, PLAYER, ENEMY},
   z_index:          i16,
-  z_layer:          enum u16 {NIL, DECORATION, ENEMY, PLAYER, PROJECTILE},
+  z_layer:          enum {NIL, DECORATION, ENEMY, PLAYER, PROJECTILE},
   enemy_kind:       Enemy_Kind,
   weapon_kind:      Weapon_Kind,
   projectile_kind:  Projectile_Kind,
@@ -707,7 +718,7 @@ Entity :: struct
   },
   anim:             struct
   {
-    data:           [Entity_State]Entity_Anim_ID,
+    data:           [Entity_State]Animation_ID,
     state:          Entity_State,
     frame_idx:      u16,
     counter:        u16,
@@ -804,7 +815,6 @@ alloc_entity :: proc(gm: ^Game) -> ^Entity
       en.ref.idx = cast(u32) i + 1
       en.ref.gen = en.gen
       en.props += {.ACTIVE, .RENDER}
-      en.children = make([dynamic]Entity_Ref, tlsf.allocator(&global.world_mem))
 
       result = &en
       
@@ -822,14 +832,13 @@ free_entity :: proc(gm: ^Game, en: ^Entity)
 
   gen := en.gen
   
-  delete(en.children)
   en^ = {}
   en.gen = gen + 1
 
   gm.entities_cnt -= 1
 }
 
-attach_entity_child :: proc(parent, child: ^Entity)
+attach_entity_child :: proc(parent, child: ^Entity) -> bool
 {
   has_free: bool
 
@@ -843,11 +852,7 @@ attach_entity_child :: proc(parent, child: ^Entity)
     }
   }
 
-  if !has_free
-  {
-    append(&parent.children, child.ref)
-    child.parent = parent.ref
-  }
+  return has_free
 }
 
 setup_sprite_entity :: proc(en: ^Entity, sprite: Sprite_ID)
@@ -969,6 +974,24 @@ entity_look_at_point :: proc(en: ^$E/Entity, target: v2f32)
   {
     en.rot += math.TAU
   }
+}
+
+// TODO(dg): This should return the value in global space
+pos_from_entity :: proc(en: ^Entity) -> v2f32
+{
+  return en.pos
+}
+
+// TODO(dg): This should return the value in global space
+scl_from_entity :: proc(en: ^Entity) -> v2f32
+{
+  return en.scale
+}
+
+// TODO(dg): This should return the value in global space
+rot_from_entity :: proc(en: ^Entity) -> f32
+{
+  return en.rot
 }
 
 tl_from_entity :: proc(en: ^Entity) -> v2f32

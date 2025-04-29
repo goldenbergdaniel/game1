@@ -4,16 +4,15 @@ package game
 import "core:image/qoi"
 
 import "basic/mem"
-
 import r "render"
 import vm "vecmath"
 
 Resources :: struct
 {
-  textures:     [r.Texture_ID]r.Texture,
-  sprites:      [Sprite_ID]Sprite,
-  enemies:      [Enemy_Kind]Enemy_Desc,
-  entity_anims: [Entity_Anim_ID]Entity_Anim_Desc,
+  textures:   [r.Texture_ID]r.Texture,
+  sprites:    [Sprite_ID]Sprite,
+  enemies:    [Enemy_Kind]Enemy_Desc,
+  animations: [Animation_ID]Animation,
 }
 
 Sprite_ID :: enum
@@ -33,23 +32,26 @@ Sprite_ID :: enum
   RIFLE,
 }
 
-Enemy_Desc :: struct
-{
-  props: bit_set[Entity_Prop],
-}
-
-Entity_Anim_ID :: enum
+Animation_ID :: enum
 {
   NIL,
   PLAYER_IDLE,
   PLAYER_WALK,
 }
 
-Entity_Anim_Desc :: struct
+Animation :: struct
 {
-  frames:          [dynamic]Sprite_ID,
-  ticks_per_frame: u16,
-  exit_state:      Entity_State,
+  frames:     [dynamic]struct
+  {
+    sprite:   Sprite_ID,
+    ticks:    u16,
+  },
+  exit_state: Entity_State,
+}
+
+Enemy_Desc :: struct
+{
+  props: bit_set[Entity_Prop],
 }
 
 res: Resources
@@ -95,26 +97,24 @@ init_resources :: proc(arena: ^mem.Arena)
     }
   }
 
-  // - Entity animations ---
+  // - Animations ---
   {
-    res.entity_anims[.PLAYER_IDLE] = Entity_Anim_Desc{
+    res.animations[.PLAYER_IDLE] = Animation{
       frames = {
-        .PLAYER_IDLE_1, 
-        .PLAYER_IDLE_2,
+        {.PLAYER_IDLE_1, 30}, 
+        {.PLAYER_IDLE_2, 30},
       },
-      ticks_per_frame = 30,
       exit_state = .NIL,
     }
 
-    res.entity_anims[.PLAYER_WALK] = Entity_Anim_Desc{
+    res.animations[.PLAYER_WALK] = Animation{
       frames = {
-        .PLAYER_WALK_1, 
-        .PLAYER_WALK_2,
-        .PLAYER_WALK_3,
-        .PLAYER_WALK_4,
-        .PLAYER_WALK_5,
+        {.PLAYER_WALK_1, 30},
+        {.PLAYER_WALK_2, 30},
+        {.PLAYER_WALK_3, 30},
+        {.PLAYER_WALK_4, 30},
+        {.PLAYER_WALK_5, 30},
       },
-      ticks_per_frame = 30,
       exit_state = .NIL,
     }
   }
