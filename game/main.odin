@@ -1,5 +1,6 @@
 package game
 
+import "base:intrinsics"
 import "core:fmt"
 import "core:time"
 
@@ -32,6 +33,7 @@ main :: proc()
 
   user.window = plf.create_window("GAME", WORLD_WIDTH, WORLD_HEIGHT, &user.perm_arena)
   defer plf.release_resources(&user.window)
+  plf.window_toggle_fullscreen(&user.window)
 
   init_resources(&user.perm_arena)
   r.init(&user.window, &res.textures)
@@ -108,13 +110,13 @@ v4f32 :: [4]f32
 
 m2x2f32 :: matrix[2,2]f32
 m3x3f32 :: matrix[3,3]f32
-m4x4f32 :: matrix[4,4]f32
 
 printf  :: fmt.printf
 println :: fmt.println
 panicf  :: fmt.panicf
 
 approx :: #force_inline proc(val, tar, tol: $T) -> T 
+  where intrinsics.type_is_numeric(T)
 {
   return tar if abs(val) - abs(tol) <= abs(tar) else val
 }

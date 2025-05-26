@@ -5,13 +5,12 @@ import "core:fmt"
 import "core:math"
 import "core:mem/tlsf"
 import "core:math/rand"
-import "core:os"
 import "core:slice"
 import "core:time"
 import "ext:imgui"
 
 import "basic/mem"
-
+import tt "transform_tree"
 import plf "platform"
 import r "render"
 import vm "vecmath"
@@ -40,6 +39,7 @@ Game :: struct
   entities_cnt:       int,
   debug_entities:     [128]Debug_Entity,
   debug_entities_pos: int,
+  transform_tree:     tt.Tree,
   regions:            [9][64*64]Tile,
   active_region:      int,
   particles:          [MAX_PARTICLES_COUNT]Particle,
@@ -66,10 +66,12 @@ init_game :: proc(gm: ^Game)
   defer set_current_game(nil)
 
   // NOTE(dg): What if multiple games running on same thread? This needs to change. 
-  _ = mem.init_growing_arena(&global.frame_arena)
-  _ = tlsf.init_from_allocator(&global.world_mem, runtime.default_allocator(), mem.MIB * 16)
+  mem.init_growing_arena(&global.frame_arena)
+  tlsf.init_from_allocator(&global.world_mem, runtime.default_allocator(), mem.MIB * 16)
 
   gm.t_mult = 1
+  gm.transform_tree = tt.create_tree(MAX_ENTITIES_COUNT-1, tlsf.allocator(&global.world_mem))
+  tt.global_tree = &gm.transform_tree
 
   player := alloc_entity(gm)
   setup_player(player)
@@ -148,6 +150,20 @@ update_game :: proc(gm: ^Game, dt: f32)
         gm.t_mult = 2
       }
     }
+    else
+    {
+      if plf.key_just_pressed(.Q)
+      {
+        if player.equipped.weapon_kind == .NIL
+        {
+          equip_weapon(player, .RIFLE)
+        }
+        else
+        {
+          equip_weapon(player, .NIL)
+        }
+      }
+    }
   }
 
   // - Player movement ---
@@ -182,13 +198,7 @@ update_game :: proc(gm: ^Game, dt: f32)
       player.vel = vm.normalize(player.vel) * player.movement_speed
     }
 
-    player.pos += player.vel * dt
-  }
-
-  // NOTE(dg): temporary!
-  {
-    shadow := entity_from_ref(player.children[0])
-    shadow.pos = player.pos
+    tt.local(player).pos += player.vel * dt
   }
 
   // - Enemy movement ---
@@ -197,16 +207,15 @@ update_game :: proc(gm: ^Game, dt: f32)
     if .ACTIVE not_in en.props || en.enemy_kind == .NIL do continue
 
     ACC  :: 400.0
-    DRAG :: 3
+    DRAG :: 3.0
 
     if .FOLLOW_ENTITY in en.props
     {
-      en_pos := pos_from_entity(&en)
+      en_pos := tt.global_pos(en)
       target := entity_from_ref(en.targetting.target_en)
-      target_pos := pos_from_entity(target)
+      target_pos := tt.global_pos(target)
 
       dir := vm.normalize(target_pos - en_pos)
-
       dist_to_target := vm.abs(en_pos - target_pos)
 
       if dist_to_target.x >= en.targetting.min_dist && 
@@ -234,7 +243,7 @@ update_game :: proc(gm: ^Game, dt: f32)
       }
     }
 
-    en.pos += en.vel * dt
+    tt.local(en).pos += en.vel * dt
   }
 
   // - Player attack ---
@@ -249,9 +258,9 @@ update_game :: proc(gm: ^Game, dt: f32)
       player.attack_timer.ticking = false
 
       proj := spawn_projectile(.BULLET)
-      proj.pos = player.pos + player.vel * dt
+      tt.local(proj).pos = tt.local(player).pos + player.vel * dt
+      tt.local(proj).rot = tt.local(player).rot
       proj.vel = 500
-      proj.rot = player.rot
     }
   }
 
@@ -304,27 +313,27 @@ update_game :: proc(gm: ^Game, dt: f32)
     // - Entity wrap at window edges ---
     if .WRAP_AT_WORLD_EDGES in en.props
     {
-      en_pos := pos_from_entity(&en)
+      en_pos := tt.global_pos(en)
       
       if en_pos.x > WORLD_WIDTH
       {
-        en.pos.x = -en.scale.x
+        tt.set_global_pos(en, {-tt.global_scl(en).x, en_pos.y})
         en.props -= {.INTERPOLATE}
       }
-      else if en_pos.x + en.scale.x < 0
+      else if en_pos.x + tt.global_scl(en).x < 0
       {
-        en_pos.x = WORLD_WIDTH
+        tt.set_global_pos(en, {WORLD_WIDTH, en_pos.y})
         en.props -= {.INTERPOLATE}
       }
 
       if en_pos.y > WORLD_HEIGHT
       {
-        en.pos.y = -en.scale.y
+        tt.set_global_pos(en, {en_pos.x, -tt.global_scl(en).y})
         en.props -= {.INTERPOLATE}
       }
-      else if en_pos.y + en.scale.y < 0
+      else if en_pos.y + tt.global_scl(en).x < 0
       {
-        en.pos.y = WORLD_HEIGHT
+        tt.set_global_pos(en, {en_pos.x, WORLD_HEIGHT})
         en.props -= {.INTERPOLATE}
       }
     }
@@ -335,21 +344,21 @@ update_game :: proc(gm: ^Game, dt: f32)
       target_en, ok := entity_from_ref(en.targetting.target_en)
       if ok
       {
-        target_pos = pos_from_entity(target_en)
+        target_pos = tt.global_pos(target_en)
       }
       else
       {
         target_pos = cursor_pos
       }
 
-      en_pos := pos_from_entity(&en)
+      en_pos := tt.global_pos(&en)
       if en_pos.x > target_pos.x 
       {
-        en.props += {.FLIP_X}
+        en.props += {.FLIP_H}
       }
       else
       {
-        en.props -= {.FLIP_X}
+        en.props -= {.FLIP_H}
       }
     }
 
@@ -372,9 +381,15 @@ update_game :: proc(gm: ^Game, dt: f32)
   {
     if .ACTIVE not_in en.props do continue
 
+    // - Flip equipment ---
+    {
+      tt.local(en.equipped).scl.x = -1 if .FLIP_H in en.props else 1
+      tt.local(en.equipped).scl.y = -1 if .FLIP_V in en.props else 1
+    }
+
     if .ROTATE_OVER_TIME in en.props
     {
-      en.rot += 0.25 * math.PI * dt
+      tt.local(en).rot += 0.25 * math.PI * dt
     }
     
     anim  := en.anim.data[en.anim.state]
@@ -410,41 +425,6 @@ update_game :: proc(gm: ^Game, dt: f32)
       par.rot += dt * 2
     }
   }
-
-  // - Save and load game ---
-  when false
-  {
-    SAVE_PATH :: "res/saves/main"
-
-    if plf.key_just_pressed(.K) && plf.key_pressed(.L_CTRL)
-    {
-      file_flags := os.O_CREATE | os.O_TRUNC | os.O_RDWR
-      save_file, open_err := os.open(SAVE_PATH, file_flags, 0o644)
-      defer os.close(save_file)
-      if open_err == nil
-      {
-        save_game_to_file(save_file, gm)
-      }
-      else
-      {
-        fmt.eprintln("Error opening file for saving!", open_err)
-      }
-    }
-
-    if plf.key_just_pressed(.L) && plf.key_pressed(.L_CTRL)
-    {
-      save_file, open_err := os.open(SAVE_PATH, os.O_RDWR)
-      defer os.close(save_file)
-      if open_err == nil
-      {
-        load_game_from_file(save_file, gm)
-      }
-      else
-      {
-        fmt.eprintln("Error opening file for loading!", open_err)
-      }
-    }
-  } 
 
   reset_entity_collision_cache()
 
@@ -493,17 +473,17 @@ update_debug_ui :: proc(gm: ^Game, dt: f32)
 
     imgui.PushID("Pos")
     imgui.Text("Pos:  "); imgui.SameLine()
-    imgui.InputFloat2("", &en.pos)
+    imgui.InputFloat2("", &tt.local(en).pos)
     imgui.PopID()
 
     imgui.PushID("Rot")
     imgui.Text("Rot:  "); imgui.SameLine()
-    imgui.InputFloat("", &en.rot)
+    imgui.InputFloat("", &tt.local(en).rot)
     imgui.PopID()
 
     imgui.PushID("Scale")
     imgui.Text("Scale:"); imgui.SameLine()
-    imgui.InputFloat2("", &en.scale)
+    imgui.InputFloat2("", &tt.local(en).scale)
     imgui.PopID()
 
     imgui.PushID("Vel")
@@ -555,12 +535,12 @@ render_game :: proc(gm: ^Game, dt: f32)
     if .RENDER not_in en.props do continue
 
     flip: v2f32
-    flip.x = -1 if .FLIP_X in en.props else 1
-    flip.y = -1 if .FLIP_Y in en.props else 1
+    flip.x = -1 if .FLIP_H in en.props else 1
+    flip.y = -1 if .FLIP_V in en.props else 1
 
-    en_pos := pos_from_entity(en)
-    en_scl := scl_from_entity(en)
-    en_rot := rot_from_entity(en)
+    en_pos := tt.global_pos(en)
+    en_scl := tt.global_scl(en)
+    en_rot := tt.global_rot(en)
     draw_sprite(en_pos, en_scl * flip, en_rot, en.tint, en.color, en.sprite)
   }
 
@@ -570,8 +550,11 @@ render_game :: proc(gm: ^Game, dt: f32)
     for &den in gm.debug_entities
     {
       if .RENDER not_in den.props do continue
-  
-      draw_sprite(den.pos, den.scale, den.rot, den.tint, den.color, den.sprite)
+      
+      den_pos := tt.global_pos(den)
+      den_scl := tt.global_scl(den)
+      den_rot := tt.global_rot(den)
+      draw_sprite(den_pos, den_scl, den_rot, den.tint, den.color, den.sprite)
     }
   }
 
@@ -594,8 +577,12 @@ interpolate_games :: proc(curr_gm, prev_gm, res_gm: ^Game, alpha: f32)
       continue
     }
     
-    res_gm.entities[i].pos = vm.lerp(prev_en.pos, curr_en.pos, alpha)
-    res_gm.entities[i].rot = vm.lerp_angle(prev_en.rot, curr_en.rot, alpha)
+    tt.set_global_pos(res_gm.entities[i], 
+                      vm.lerp(tt.global_pos(prev_en), tt.global_pos(curr_en), alpha))
+
+    tt.set_global_rot(res_gm.entities[i], 
+                      vm.lerp_angle(tt.global_rot(prev_en), tt.global_rot(curr_en), alpha))
+    
     // println("  Odin:", math.angle_lerp(prev_en.rot, curr_en.rot, alpha))
     // println("    AI:", vm.lerp_angle(prev_en.rot, curr_en.rot, alpha))
     // println("Inputs:", prev_en.rot, curr_en.rot)
@@ -616,8 +603,13 @@ interpolate_games :: proc(curr_gm, prev_gm, res_gm: ^Game, alpha: f32)
         continue
       }
 
-      res_gm.debug_entities[i].pos = vm.lerp(prev_den.pos, curr_den.pos, alpha)
-      res_gm.debug_entities[i].rot = vm.lerp_angle(prev_den.rot, curr_den.rot, alpha)
+      tt.set_global_pos(res_gm.debug_entities[i], 
+                        vm.lerp(tt.local(prev_den).pos, 
+                        tt.local(curr_den).pos, alpha))
+
+      tt.set_global_rot(res_gm.debug_entities[i], 
+                        vm.lerp_angle(tt.local(prev_den).rot, 
+                        tt.local(curr_den).rot, alpha))
     }
   }
 }
@@ -633,42 +625,6 @@ copy_game :: proc(new_gm, old_gm: ^Game)
   new_gm^ = old_gm^
 }
 
-// NOTE(dg): This assumes that Game is contiguous and stores no pointers.
-save_game_to_file :: proc(fd: os.Handle, gm: ^Game) -> bool
-{
-  gm_bytes := transmute([]byte) runtime.Raw_Slice{gm, size_of(Game)}
-  _, write_err := os.write(fd, gm_bytes)
-  if write_err != nil
-  {
-    fmt.eprintln("Error saving game to disk.", write_err)
-    return false
-  }
-
-  fmt.println("Saved game to disk.")
-
-  return true
-}
-
-// NOTE(dg): This assumes that Game is contiguous and stores no pointers.
-load_game_from_file :: proc(fd: os.Handle, gm: ^Game) -> bool
-{
-  saved_buf := make([]u8, size_of(Game)*2, mem.allocator(&global.frame_arena))
-  saved_len, _ := os.read(fd, saved_buf[:])
-  gm_bytes := saved_buf[:saved_len]
-
-  ok: bool
-  gm^, ok = slice.to_type(gm_bytes, Game)
-  if !ok
-  {
-    fmt.eprintln("Failed to get Game from bytes!")
-    return false
-  }
-
-  fmt.println("Loaded game from disk.")
-
-  return true
-}
-
 screen_to_world_pos :: proc(pos: v2f32) -> v2f32
 {
   return {
@@ -679,7 +635,7 @@ screen_to_world_pos :: proc(pos: v2f32) -> v2f32
 
 // Entity ////////////////////////////////////////////////////////////////////////////////
 
-MAX_ENTITIES_COUNT  :: 128 + 1
+MAX_ENTITIES_COUNT  :: 1024 + 1
 
 Entity :: struct
 {
@@ -688,18 +644,16 @@ Entity :: struct
   props:            bit_set[Entity_Prop],
   parent:           Entity_Ref,
   children:         [4]Entity_Ref,
-  pos:              v2f32,
+  #subtype xform:   tt.Transform,
   vel:              v2f32,
-  scale:            v2f32,
   radius:           f32,
-  rot:              f32,
   input_dir:        v2f32,
   movement_speed:   f32,
   tint:             v4f32,
   color:            v4f32,
   sprite:           Sprite_ID,
   collider:         Collider,
-  col_layer:        enum {NIL, PLAYER, ENEMY},
+  col_layer:        Entity_Collision_Layer,
   z_index:          i16,
   z_layer:          enum {NIL, DECORATION, ENEMY, PLAYER, PROJECTILE},
   enemy_kind:       Enemy_Kind,
@@ -709,19 +663,24 @@ Entity :: struct
   death_timer:      Timer,
   hurt_timer:       Timer,
   hurt_grace_timer: Timer,
-  targetting:       struct
-  {   
-    target_en:      Entity_Ref,
-    target_pos:     v2f32,
-    min_dist:       f32,
-    max_dist:       f32,
-  },
   anim:             struct
   {
     data:           [Entity_State]Animation_ID,
     state:          Entity_State,
     frame_idx:      u16,
     counter:        u16,
+  },
+  equipped:         struct
+  {
+    #subtype xform: tt.Transform,
+    weapon_kind:    Weapon_Kind,
+  },
+  targetting:       struct
+  {
+    target_en:      Entity_Ref,
+    target_pos:     v2f32,
+    min_dist:       f32,
+    max_dist:       f32,
   },
 }
 
@@ -737,8 +696,8 @@ Entity_Prop :: enum u64
   RENDER,
   MARKED_FOR_DEATH,
   INTERPOLATE,
-  FLIP_X,
-  FLIP_Y,
+  FLIP_H,
+  FLIP_V,
   WRAP_AT_WORLD_EDGES,
   LOOK_AT_TARGET,
   KILL_AFTER_TIME,
@@ -771,11 +730,18 @@ Entity_State :: enum
   WALK,
 }
 
+Entity_Collision_Layer :: enum
+{
+  NIL,
+  PLAYER,
+  ENEMY,
+}
+
 @(rodata)
 NIL_ENTITY: Entity
 
 @(rodata)
-COLLISION_MATRIX: [type_of(Entity{}.col_layer)]bit_set[type_of(Entity{}.col_layer)] = {
+COLLISION_MATRIX: [Entity_Collision_Layer]bit_set[Entity_Collision_Layer] = {
   .NIL    = {.NIL},
   .PLAYER = {.ENEMY},
   .ENEMY  = {.PLAYER},
@@ -783,11 +749,10 @@ COLLISION_MATRIX: [type_of(Entity{}.col_layer)]bit_set[type_of(Entity{}.col_laye
 
 entity_is_valid :: #force_inline proc(en: ^Entity) -> bool
 {
-  assert(en != nil)
-  return en.ref.idx != 0
+  return en != nil && en.ref.idx != 0
 }
 
-entity_from_ref :: #force_inline proc(ref: Entity_Ref) -> (^Entity, bool) #optional_ok
+entity_from_ref :: proc(ref: Entity_Ref) -> (^Entity, bool) #optional_ok
 {
   gm := get_current_game()
   en := &gm.entities[ref.idx]
@@ -815,6 +780,7 @@ alloc_entity :: proc(gm: ^Game) -> ^Entity
       en.ref.idx = cast(u32) i + 1
       en.ref.gen = en.gen
       en.props += {.ACTIVE, .RENDER}
+      en.xform = tt.alloc_transform(&gm.transform_tree)
 
       result = &en
       
@@ -831,7 +797,6 @@ free_entity :: proc(gm: ^Game, en: ^Entity)
   assert(entity_is_valid(en))
 
   gen := en.gen
-  
   en^ = {}
   en.gen = gen + 1
 
@@ -840,26 +805,29 @@ free_entity :: proc(gm: ^Game, en: ^Entity)
 
 attach_entity_child :: proc(parent, child: ^Entity) -> bool
 {
-  has_free: bool
-
   for &slot in parent.children
   {
     if slot.idx == 0
     {
       slot = child.ref
       child.parent = parent.ref
-      has_free = true
+      return true
     }
   }
 
-  return has_free
+  return false
+}
+
+entity_child_at :: proc(en: ^Entity, idx: int) -> ^Entity
+{
+  return entity_from_ref(en.children[idx])
 }
 
 setup_sprite_entity :: proc(en: ^Entity, sprite: Sprite_ID)
 {
   en.sprite = sprite
   en.tint = {1, 1, 1, 1}
-  en.scale = {SPRITE_SIZE, SPRITE_SIZE}
+  tt.local(en).scale = {SPRITE_SIZE, SPRITE_SIZE}
 }
 
 setup_player :: proc(en: ^Entity)
@@ -870,18 +838,37 @@ setup_player :: proc(en: ^Entity)
   en.props += {.WRAP_AT_WORLD_EDGES, .LOOK_AT_TARGET}
   en.z_layer = .PLAYER
   en.collider.kind = .POLYGON
-  en.pos = {WORLD_WIDTH/2, WORLD_HEIGHT/2}
+  tt.local(en).pos = {WORLD_WIDTH/2, WORLD_HEIGHT/2}
   en.movement_speed = 200
-
+  en.equipped.xform = tt.alloc_transform(&gm.transform_tree, en)
   en.anim.state = .IDLE
   en.anim.data[.IDLE] = .PLAYER_IDLE
   
-  shadow := alloc_entity(gm)
-  setup_sprite_entity(shadow, .SHADOW)
-  shadow.pos = en.pos
-  shadow.color = {0.3, 0.3, 0.3, 0}
-  shadow.tint.a = 0.3
-  attach_entity_child(en, shadow)
+  // - Shadow ---
+  {
+    shadow := alloc_entity(gm)
+    setup_sprite_entity(shadow, .SHADOW)
+    tt.set_parent(shadow, en)
+    tt.local(shadow).scl = {1, 1}
+    tt.local(shadow).pos = {0, 8}
+    shadow.color = {0.3, 0.3, 0.3, 0}
+    shadow.tint.a = 0.3
+
+    attach_entity_child(en, shadow)
+  }
+
+  // - Weapon ---
+  {
+    weapon := alloc_entity(gm)
+    setup_sprite_entity(weapon, .RIFLE)
+    tt.set_parent(weapon, en.equipped)
+    tt.local(weapon).scl = {1, 1}
+    weapon.z_layer = .PLAYER
+    weapon.z_index = 1
+
+    en.equipped.weapon_kind = .RIFLE
+    attach_entity_child(en, weapon)
+  }
 }
 
 spawn_enemy :: proc(kind: Enemy_Kind) -> ^Entity
@@ -891,7 +878,7 @@ spawn_enemy :: proc(kind: Enemy_Kind) -> ^Entity
   en := alloc_entity(gm)
   en.enemy_kind = kind
   en.props += {.FOLLOW_ENTITY}
-  en.scale = {SPRITE_SIZE, SPRITE_SIZE}
+  tt.local(en).scale = {SPRITE_SIZE, SPRITE_SIZE}
   en.tint = {1, 1, 1, 1}
   en.z_layer = .ENEMY
   en.col_layer = .ENEMY
@@ -917,7 +904,7 @@ spawn_weapon :: proc(kind: Weapon_Kind) -> ^Entity
 
   en := alloc_entity(gm)
   en.weapon_kind = kind
-  en.scale = {SPRITE_SIZE, SPRITE_SIZE}
+  tt.local(en).scale = {SPRITE_SIZE, SPRITE_SIZE}
   en.tint = {1, 1, 1, 1}
   en.z_layer = .DECORATION
 
@@ -938,7 +925,7 @@ spawn_projectile :: proc(kind: Projectile_Kind) -> ^Entity
   en := alloc_entity(gm)
   en.projectile_kind = kind
   en.props += {.INTERPOLATE, .KILL_AFTER_TIME}
-  en.scale = {SPRITE_SIZE, SPRITE_SIZE}
+  tt.local(en).scale = {SPRITE_SIZE, SPRITE_SIZE}
   en.z_layer = .PROJECTILE
   en.col_layer = .PLAYER
 
@@ -961,7 +948,7 @@ kill_entity :: proc(en: ^Entity)
   en.props += {.MARKED_FOR_DEATH}
 }
 
-entity_has_props :: #force_inline proc(en: ^$E/Entity, props: bit_set[Entity_Prop]) -> bool
+entity_has_props :: proc(en: ^$E/Entity, props: bit_set[Entity_Prop]) -> bool
 {
   return en.props & props == props
 }
@@ -976,49 +963,31 @@ entity_look_at_point :: proc(en: ^$E/Entity, target: v2f32)
   }
 }
 
-// TODO(dg): This should return the value in global space
-pos_from_entity :: proc(en: ^Entity) -> v2f32
-{
-  return en.pos
-}
-
-// TODO(dg): This should return the value in global space
-scl_from_entity :: proc(en: ^Entity) -> v2f32
-{
-  return en.scale
-}
-
-// TODO(dg): This should return the value in global space
-rot_from_entity :: proc(en: ^Entity) -> f32
-{
-  return en.rot
-}
-
 tl_from_entity :: proc(en: ^Entity) -> v2f32
 {
   pivot := res.sprites[en.sprite].pivot
   dim := dim_from_entity(en)
-  local_pos := vm.rotation_2x2f(en.rot) * (v2f32{-dim.x, -dim.y} * pivot)
-  return local_pos + en.pos
+  local_pos := vm.rotation_2x2f(tt.local(en).rot) * (v2f32{-dim.x, -dim.y} * pivot)
+  return local_pos + tt.local(en).pos
 }
 
 dim_from_entity :: proc(en: ^Entity) -> v2f32
 {
-  return en.scale * {16, 16}
-}
-
-entity_collider_vertex_pos :: proc(en: ^Entity, v: v2f32) -> v2f32
-{
-  local_pos := vm.rotation_2x2f(en.rot) * v * 2
-  return tl_from_entity(en) + local_pos
+  return tt.local(en).scl * {16, 16}
 }
 
 xform_from_entity :: proc(en: ^Entity) -> m3x3f32
 {
-  result := vm.scale_3x3f(en.scale)
-  result = vm.rotation_3x3f(en.rot) * result
+  result := vm.scale_3x3f(tt.local(en).scl)
+  result = vm.rotation_3x3f(tt.local(en).rot) * result
   result = vm.translation_3x3f(tl_from_entity(en)) * result
   return result
+}
+
+entity_collider_vertex_pos :: proc(en: ^Entity, v: v2f32) -> v2f32
+{
+  local_pos := vm.rotation_2x2f(tt.local(en).rot) * v * 2
+  return tl_from_entity(en) + local_pos
 }
 
 update_entity_collider :: proc(en: ^Entity)
@@ -1026,14 +995,14 @@ update_entity_collider :: proc(en: ^Entity)
   switch en.collider.kind
   {
   case .CIRCLE:
-    origin := xform_from_entity(en) * vm.combine(collider_map[en.sprite].origin, 1)
+    origin := xform_from_entity(en) * vm.concat(collider_map[en.sprite].origin, 1)
     en.collider.origin = origin.xy
     debug_circle(en.collider.origin, en.collider.radius, alpha=0.25)
   case .POLYGON:
     en.collider.vertices_cnt = cast(u8) collider_map[en.sprite].vertex_count
     for i in 0..<en.collider.vertices_cnt
     {
-      v := xform_from_entity(en) * vm.combine(collider_map[en.sprite].vertices[i], 1)
+      v := xform_from_entity(en) * vm.concat(collider_map[en.sprite].vertices[i], 1)
       en.collider.vertices[i] = v.xy
     }
 
@@ -1088,6 +1057,23 @@ reset_entity_collision_cache :: proc()
   mem.set(&_entity_collision_cache, 0, MAX_ENTITIES_COUNT * MAX_ENTITIES_COUNT)
 }
 
+equip_weapon :: proc(en: ^Entity, kind: Weapon_Kind)
+{
+  if !entity_is_valid(en) do return
+
+  en.equipped.weapon_kind = kind
+  weapon := entity_child_at(en, 1)
+  weapon.weapon_kind = kind
+  if kind == .NIL
+  {
+    weapon.props -= {.RENDER}
+  }
+  else
+  {
+    weapon.props += {.RENDER}
+  }
+}
+
 // Debug_Entity //////////////////////////////////////////////////////////////////////////
 
 Debug_Entity :: distinct Entity
@@ -1098,6 +1084,7 @@ push_debug_entity :: proc() -> ^Debug_Entity
 
   result := &gm.debug_entities[gm.debug_entities_pos]
   result.props += {.ACTIVE, .RENDER, .INTERPOLATE, .MARKED_FOR_DEATH}
+  result.xform = tt.alloc_transform(&gm.transform_tree)
 
   gm.debug_entities_pos += 1
   if gm.debug_entities_pos == len(gm.debug_entities)
@@ -1111,6 +1098,7 @@ push_debug_entity :: proc() -> ^Debug_Entity
 pop_debug_entity :: proc(den: ^Debug_Entity)
 {
   gm := get_current_game()
+  tt.free_transform(&gm.transform_tree, den)
   den^ = {}
   gm.debug_entities_pos -= 1
 
@@ -1132,8 +1120,8 @@ debug_rect :: proc(
   gm := get_current_game()
 
   result := push_debug_entity()
-  result.pos = pos
-  result.scale = scale
+  tt.local(result).pos = pos
+  tt.local(result).scale = scale
   result.color = color
   result.tint = {1, 1, 1, alpha}
   result.sprite = sprite
@@ -1151,8 +1139,8 @@ debug_circle :: proc(
   gm := get_current_game()
 
   result := push_debug_entity()
-  result.pos = pos
-  result.scale = {radius/16, radius/16}
+  tt.local(result).pos = pos
+  tt.local(result).scale = {radius/16, radius/16}
   result.color = color
   result.tint = {1, 1, 1, alpha}
   result.sprite = .CIRCLE
@@ -1271,7 +1259,7 @@ Collider :: struct
   kind:         enum u8 {NIL, CIRCLE, POLYGON},
 }
 
-bounds_overlap :: #force_inline proc(a, b: [2]f32) -> bool
+bounds_overlap :: proc(a, b: [2]f32) -> bool
 {
   return a[0] <= b[1] && a[1] >= b[0]
 }
@@ -1307,7 +1295,7 @@ polygon_polygon_overlap :: proc(a, b: ^Collider) -> bool
       max_pb = max(max_pb, p)
     }
 
-    if !bounds_overlap({min_pa, max_pa}, {min_pb, max_pb}) do return false
+    bounds_overlap({min_pa, max_pa}, {min_pb, max_pb}) or_return
   }
 
   // - Entity B ---
@@ -1334,7 +1322,7 @@ polygon_polygon_overlap :: proc(a, b: ^Collider) -> bool
       max_pb = max(max_pb, p)
     }
 
-    if !bounds_overlap({min_pa, max_pa}, {min_pb, max_pb}) do return false
+    bounds_overlap({min_pa, max_pa}, {min_pb, max_pb}) or_return
   }
 
   return true

@@ -3,8 +3,6 @@ package build
 import "core:fmt"
 import "core:os/os2"
 
-import "metagen"
-
 main :: proc()
 {
   // - Target ---
@@ -44,7 +42,7 @@ main :: proc()
 
   // - Metagen ---
   fmt.println("[metagen]")
-  metagen.generate_collider_map()
+  // metagen.generate_collider_map()
 
   os2.set_env("SDL_VIDEO_DRIVER", "wayland")
 
@@ -98,4 +96,3 @@ main :: proc()
 
   os2.remove("game1")
 }
-

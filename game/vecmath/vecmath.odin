@@ -22,48 +22,48 @@ array_cast :: #force_inline proc "contextless" (
 	return res
 }
 
-combine :: proc
+concat :: proc
 {
-  combine_1f32_2f32,
-  combine_1f32_3f32,
-  combine_2f32_1f32,
-  combine_2f32_2f32,
-  combine_3f32_1f32,
-  combine_1f32_2f32_1f32,
+  concat_1f32_2f32,
+  concat_1f32_3f32,
+  concat_2f32_1f32,
+  concat_2f32_2f32,
+  concat_3f32_1f32,
+  concat_1f32_2f32_1f32,
 }
 
 @(require_results)
-combine_1f32_2f32 :: #force_inline proc(a: f32, b: [2]f32) -> [3]f32
+concat_1f32_2f32 :: #force_inline proc(a: f32, b: [2]f32) -> [3]f32
 {
   return {a, b[0], b[1]}
 }
 
 @(require_results)
-combine_2f32_1f32 :: #force_inline proc(a: [2]f32, b: f32) -> [3]f32
+concat_2f32_1f32 :: #force_inline proc(a: [2]f32, b: f32) -> [3]f32
 {
   return {a[0], a[1], b}
 }
 
 @(require_results)
-combine_1f32_3f32 :: #force_inline proc(a: f32, b: [3]f32) -> [4]f32
+concat_1f32_3f32 :: #force_inline proc(a: f32, b: [3]f32) -> [4]f32
 {
   return {a, b[0], b[1], b[2]}
 }
 
 @(require_results)
-combine_2f32_2f32 :: #force_inline proc(a: [2]f32, b: [2]f32) -> [4]f32
+concat_2f32_2f32 :: #force_inline proc(a: [2]f32, b: [2]f32) -> [4]f32
 {
   return {a[0], a[1], b[0], b[1]}
 }
 
 @(require_results)
-combine_3f32_1f32 :: #force_inline proc(a: [3]f32, b: f32) -> [4]f32
+concat_3f32_1f32 :: #force_inline proc(a: [3]f32, b: f32) -> [4]f32
 {
   return {a[0], a[1], a[2], b}
 }
 
 @(require_results)
-combine_1f32_2f32_1f32 :: #force_inline proc(a: f32, b: [2]f32, c: f32) -> [4]f32
+concat_1f32_2f32_1f32 :: #force_inline proc(a: f32, b: [2]f32, c: f32) -> [4]f32
 {
   return {a, b[0], b[1], c}
 }

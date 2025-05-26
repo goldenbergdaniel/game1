@@ -3,7 +3,7 @@ package game
 import "core:math"
 
 import plf "platform"
-import r "render"
+import "render"
 import vm "vecmath"
 
 SPRITE_SIZE :: 3
@@ -13,17 +13,17 @@ Sprite :: struct
   coords:  [2]i32,
   grid:    [2]i32,
   pivot:   v2f32,
-  texture: r.Texture_ID,
+  texture: render.Texture_ID,
 }
 
 begin_draw :: #force_inline proc(color: v4f32)
 {
-  r.clear(color)
+  render.clear(color)
 }
 
 end_draw :: #force_inline proc()
 {
-  r.flush()
+  render.flush()
 }
 
 draw_sprite :: proc(
@@ -50,13 +50,13 @@ draw_sprite :: proc(
   p3 := xform * v3f32{1, 1, 1}
   p4 := xform * v3f32{0, 1, 1}
 
-  tl, tr, br, bl := r.coords_from_texture(texture_res, sprite_res.coords, sprite_res.grid)
+  tl, tr, br, bl := render.coords_from_texture(texture_res, sprite_res.coords, sprite_res.grid)
 
-  r.push_vertex(p1.xy, tint, color, tl)
-  r.push_vertex(p2.xy, tint, color, tr)
-  r.push_vertex(p3.xy, tint, color, br)
-  r.push_vertex(p4.xy, tint, color, bl)
-  r.push_rect_indices()
+  render.push_vertex(p1.xy, tint, color, tl)
+  render.push_vertex(p2.xy, tint, color, tr)
+  render.push_vertex(p3.xy, tint, color, br)
+  render.push_vertex(p4.xy, tint, color, bl)
+  render.push_rect_indices()
 }
 
 rgba_from_hsva :: proc(hsva: v4f32) -> (rgba: v4f32)

@@ -28,8 +28,8 @@ Sprite_ID :: enum
   PLAYER_WALK_3,
   PLAYER_WALK_4,
   PLAYER_WALK_5,
-  BULLET,
   RIFLE,
+  BULLET,
 }
 
 Animation_ID :: enum
@@ -66,7 +66,10 @@ init_resources :: proc(arena: ^mem.Arena)
     err: qoi.Error
 
     img, err = qoi.load_from_file("res/textures/sprite_map.qoi", allocator=mem.allocator(arena))
-    if err != nil do panicf("Failed to open texture file!", err)
+    if err != nil
+    {
+      panicf("Failed to open texture file!", err)
+    }
 
     res.textures[.SPRITE_MAP] = r.Texture{
       data = img.pixels.buf[:],
@@ -80,7 +83,7 @@ init_resources :: proc(arena: ^mem.Arena)
   {
     res.sprites[.SQUARE]        = {coords={0, 0}, grid={1, 1}, pivot={7, 7}}
     res.sprites[.CIRCLE]        = {coords={1, 0}, grid={1, 1}, pivot={7, 7}}
-    res.sprites[.SHADOW]        = {coords={2, 0}, grid={1, 1}, pivot={7, 7}}
+    res.sprites[.SHADOW]        = {coords={2, 0}, grid={1, 1}, pivot={7, 14}}
     res.sprites[.PLAYER_IDLE_1] = {coords={0, 1}, grid={1, 1}, pivot={7, 8}}
     res.sprites[.PLAYER_IDLE_2] = {coords={1, 1}, grid={1, 1}, pivot={7, 8}}
     res.sprites[.PLAYER_WALK_1] = {coords={2, 1}, grid={1, 1}, pivot={7, 8}}
@@ -88,7 +91,8 @@ init_resources :: proc(arena: ^mem.Arena)
     res.sprites[.PLAYER_WALK_3] = {coords={4, 1}, grid={1, 1}, pivot={7, 8}}
     res.sprites[.PLAYER_WALK_4] = {coords={5, 1}, grid={1, 1}, pivot={7, 8}}
     res.sprites[.PLAYER_WALK_5] = {coords={6, 1}, grid={1, 1}, pivot={7, 8}}
-    res.sprites[.BULLET]        = {coords={0, 2}, grid={1, 1}, pivot={7, 8}}
+    res.sprites[.RIFLE]         = {coords={0, 2}, grid={1, 1}, pivot={4, 8}}
+    res.sprites[.BULLET]        = {coords={0, 3}, grid={1, 1}, pivot={7, 8}}
 
     for &sprite in res.sprites
     {
