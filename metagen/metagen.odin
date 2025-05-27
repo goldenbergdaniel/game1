@@ -76,7 +76,7 @@ generate_collider_map :: proc()
 
   // - Write collider map entries ---
   {
-    scratch := mem.begin_temp(mem.get_scratch())
+    scratch := mem.begin_temp(mem.scratch())
     defer mem.end_temp(scratch)
     context.temp_allocator = mem.allocator(scratch.arena)
     

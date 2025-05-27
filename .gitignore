@@ -3,5 +3,6 @@ game.bin
 game1
 imgui.ini
 
+.vscode/
 devman/
 transform_tree/

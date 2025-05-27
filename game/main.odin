@@ -11,7 +11,7 @@ import vm "vecmath"
 
 WORLD_WIDTH  :: 960.0
 WORLD_HEIGHT :: 540.0
-SIM_STEP     :: 1.0/60
+SIM_STEP     :: 1.0/20
 
 User :: struct
 {
@@ -28,8 +28,8 @@ curr_game, prev_game, res_game: Game
 
 main :: proc()
 {
-  mem.init_static_arena(&user.perm_arena)
-  mem.init_growing_arena(&user.frame_arena)
+  _ = mem.arena_init_static(&user.perm_arena)
+  _ = mem.arena_init_growing(&user.frame_arena)
 
   user.window = plf.create_window("GAME", WORLD_WIDTH, WORLD_HEIGHT, &user.perm_arena)
   defer plf.release_resources(&user.window)
@@ -39,6 +39,8 @@ main :: proc()
   r.init(&user.window, &res.textures)
 
   init_game(&curr_game)
+  init_game(&prev_game)
+  init_game(&res_game)
 
   elapsed_time, accumulator: f64
   start_tick := time.tick_now()
@@ -93,7 +95,7 @@ main :: proc()
 
     alpha := accumulator / SIM_STEP
     interpolate_games(&curr_game, &prev_game, &res_game, f32(alpha))
-    render_game(&res_game, SIM_STEP)
+    render_game(&res_game)
 
     plf.imgui_end()
 

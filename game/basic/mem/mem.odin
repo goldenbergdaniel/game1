@@ -3,11 +3,13 @@ package mem0
 import "base:intrinsics"
 import "base:runtime"
 import "core:mem/virtual"
+import "core:mem/tlsf"
 
 Allocator       :: runtime.Allocator
 Allocator_Error :: runtime.Allocator_Error
 Arena           :: virtual.Arena
-Arena_Temp      :: virtual.Arena_Temp
+Temp      			:: virtual.Arena_Temp
+Heap						:: tlsf.Allocator
 
 KIB :: 1 << 10
 MIB :: 1 << 20
@@ -19,8 +21,15 @@ global_scratches: [2]Arena
 @(init)
 init_scratches :: proc()
 {
-	init_growing_arena(&global_scratches[0])
-	init_growing_arena(&global_scratches[1])
+	if err := arena_init_growing(&global_scratches[0]); err != nil
+	{
+		panic("Error initializing scratch arena!")
+	}
+
+	if err := arena_init_growing(&global_scratches[1]); err != nil
+	{
+		panic("Error initializing scratch arena!")
+	}
 }
 
 copy :: #force_inline proc "contextless" (dst, src: rawptr, len: int) -> rawptr
@@ -40,7 +49,13 @@ zero :: #force_inline proc "contextless" (data: rawptr, len: int) -> rawptr
 	return data
 }
 
-allocator :: #force_inline proc "contextless" (arena: ^Arena) -> Allocator
+allocator :: proc
+{
+	allocator_arena,
+	allocator_heap,	
+}
+
+allocator_arena :: #force_inline proc "contextless" (arena: ^Arena) -> Allocator
 {
 	return Allocator{
 		procedure = virtual.arena_allocator_proc,
@@ -48,49 +63,30 @@ allocator :: #force_inline proc "contextless" (arena: ^Arena) -> Allocator
 	}
 }
 
-init_arena_buffer :: #force_inline proc(arena: ^Arena, buffer: []byte) -> Allocator_Error
+allocator_heap :: #force_inline proc "contextless" (heap: ^Heap) -> Allocator
 {
-	return virtual.arena_init_buffer(arena, buffer)
+	return Allocator{
+		procedure = tlsf.allocator_proc,
+		data = heap,
+	}
 }
 
-init_growing_arena :: proc(
-	arena: ^Arena, 
-	reserved := virtual.DEFAULT_ARENA_GROWING_MINIMUM_BLOCK_SIZE
-) -> Allocator_Error
+default_allocator :: #force_inline proc() -> Allocator
 {
-	return virtual.arena_init_growing(arena, uint(reserved))
+	return runtime.default_allocator()
 }
 
-init_static_arena :: proc(
-	arena: ^Arena, 
-	reserved := virtual.DEFAULT_ARENA_STATIC_RESERVE_SIZE,
-	committed := virtual.DEFAULT_ARENA_STATIC_COMMIT_SIZE
-) -> Allocator_Error
-{
-	return virtual.arena_init_static(arena, uint(reserved), uint(committed))
-}
+// Arena /////////////////////////////////////////////////////////////////////////////////
 
-clear_arena :: #force_inline proc(arena: ^Arena)
-{
-	free_all(allocator(arena))
-}
+arena_init_buffer  :: virtual.arena_init_buffer
+arena_init_growing :: virtual.arena_init_growing
+arena_init_static  :: virtual.arena_init_static
+arena_destroy			 :: virtual.arena_destroy
 
-destroy_arena :: #force_inline proc(arena: ^Arena)
-{
-	virtual.arena_destroy(arena)
-}
+temp_begin :: virtual.arena_temp_begin
+temp_end	 :: virtual.arena_temp_end
 
-begin_temp :: #force_inline proc(arena: ^Arena) -> Arena_Temp
-{
-	return virtual.arena_temp_begin(arena)
-}
-
-end_temp :: #force_inline proc(temp: Arena_Temp)
-{
-	virtual.arena_temp_end(temp)
-}
-
-get_scratch :: proc(conflict: ^Arena = nil) -> ^Arena
+scratch :: proc(conflict: ^Arena = nil) -> ^Arena
 {
 	result := &global_scratches[0]
 
@@ -103,3 +99,10 @@ get_scratch :: proc(conflict: ^Arena = nil) -> ^Arena
 
 	return result
 }
+
+// Heap //////////////////////////////////////////////////////////////////////////////////
+
+heap_init 							 :: tlsf.init
+heap_init_from_allocator :: tlsf.init_from_allocator
+heap_init_from_buffer 	 :: tlsf.init_from_buffer
+heap_destroy						 :: tlsf.destroy

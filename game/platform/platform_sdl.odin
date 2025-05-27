@@ -78,8 +78,8 @@ sdl_create_window :: proc(
 {
   result: Window
 
-	scratch := mem.begin_temp(mem.get_scratch())
-	defer mem.end_temp(scratch)
+	scratch := mem.temp_begin(mem.scratch())
+	defer mem.temp_end(scratch)
 
 	when ODIN_OS == .Linux
 	{

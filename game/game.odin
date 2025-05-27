@@ -1,9 +1,7 @@
 package game
 
-import "base:runtime"
 import "core:fmt"
 import "core:math"
-import "core:mem/tlsf"
 import "core:math/rand"
 import "core:slice"
 import "core:time"
@@ -19,7 +17,7 @@ import vm "vecmath"
 global: struct
 {
   frame_arena:         mem.Arena,
-  world_mem:           tlsf.Allocator,
+  world_mem:           mem.Heap,
   debug_mode:          bool,
   debug_target_entity: Entity_Ref,
 }
@@ -39,7 +37,7 @@ Game :: struct
   entities_cnt:       int,
   debug_entities:     [128]Debug_Entity,
   debug_entities_pos: int,
-  transform_tree:     tt.Tree,
+  transform_tree:     tt.Transform_Tree,
   regions:            [9][64*64]Tile,
   active_region:      int,
   particles:          [MAX_PARTICLES_COUNT]Particle,
@@ -58,6 +56,7 @@ get_current_game :: #force_inline proc() -> ^Game
 set_current_game :: #force_inline proc(gm: ^Game)
 {
   _current_game = gm
+  tt.global_tree = &gm.transform_tree
 }
 
 init_game :: proc(gm: ^Game)
@@ -66,16 +65,31 @@ init_game :: proc(gm: ^Game)
   defer set_current_game(nil)
 
   // NOTE(dg): What if multiple games running on same thread? This needs to change. 
-  mem.init_growing_arena(&global.frame_arena)
-  tlsf.init_from_allocator(&global.world_mem, runtime.default_allocator(), mem.MIB * 16)
+  _ = mem.arena_init_growing(&global.frame_arena)
+  mem.heap_init(&global.world_mem, mem.default_allocator(), mem.MIB * 16)
 
   gm.t_mult = 1
-  gm.transform_tree = tt.create_tree(MAX_ENTITIES_COUNT-1, tlsf.allocator(&global.world_mem))
+  gm.transform_tree = tt.create_tree(MAX_ENTITIES_COUNT-1, mem.allocator(&global.world_mem))
   tt.global_tree = &gm.transform_tree
 
   player := alloc_entity(gm)
   setup_player(player)
   special_entities[.PLAYER] = player
+}
+
+free_game :: proc(gm: ^Game)
+{
+  mem.arena_destroy(&global.frame_arena)
+  mem.heap_destroy(&global.world_mem)
+  tt.destroy_tree(&gm.transform_tree)
+}
+
+copy_game :: proc(dst, src: ^Game)
+{
+  dst_tree := dst.transform_tree
+  dst^ = src^
+  dst.transform_tree = dst_tree
+  tt.copy_tree(&dst.transform_tree, &src.transform_tree)
 }
 
 update_game :: proc(gm: ^Game, dt: f32)
@@ -248,6 +262,30 @@ update_game :: proc(gm: ^Game, dt: f32)
 
   // - Player attack ---
   {
+    weapon := entity_child_at(player, 1)
+    
+    // - Rotate equipped weapon ---
+    if player.equipped.weapon_kind != .NIL
+    {
+      diff := cursor_pos - tt.global_pos(player)
+      angle := math.atan2(diff.y, diff.x)
+      if .FLIP_H not_in player.props
+      {
+        angle = clamp(angle, -math.PI/2, math.PI/2)
+      }
+      else
+      {
+        if angle < 0
+        {
+          angle += math.PI*2
+        }
+
+        angle = clamp(angle, math.PI/2, 3*math.PI/2) + math.PI
+      }
+
+      tt.local(weapon).rot = angle
+    }
+
     if !player.attack_timer.ticking
     {
       timer_start(&player.attack_timer, 0.2)
@@ -258,8 +296,8 @@ update_game :: proc(gm: ^Game, dt: f32)
       player.attack_timer.ticking = false
 
       proj := spawn_projectile(.BULLET)
-      tt.local(proj).pos = tt.local(player).pos + player.vel * dt
-      tt.local(proj).rot = tt.local(player).rot
+      tt.local(proj).pos = tt.global_pos(player) + player.vel * dt
+      tt.local(proj).rot = tt.global_rot(player)
       proj.vel = 500
     }
   }
@@ -428,7 +466,7 @@ update_game :: proc(gm: ^Game, dt: f32)
 
   reset_entity_collision_cache()
 
-  mem.clear_arena(&global.frame_arena)
+  free_all(mem.allocator(&global.frame_arena))
 }
 
 update_debug_ui :: proc(gm: ^Game, dt: f32)
@@ -499,8 +537,10 @@ update_debug_ui :: proc(gm: ^Game, dt: f32)
   imgui.End()
 }
 
-render_game :: proc(gm: ^Game, dt: f32)
+render_game :: proc(gm: ^Game)
 {
+  set_current_game(gm)
+
   begin_draw({77, 125, 53, 255}/255)
 
   // - Draw particles ---
@@ -565,8 +605,11 @@ interpolate_games :: proc(curr_gm, prev_gm, res_gm: ^Game, alpha: f32)
 {
   copy_game(res_gm, curr_gm)
 
+  curr_tt := &curr_gm.transform_tree
+  prev_tt := &prev_gm.transform_tree
+
   // - Interpolate entities ---
-  for i in 0..<len(res_gm.entities)
+  for i in 1..<len(res_gm.entities)
   {
     curr_en := &curr_gm.entities[i]
     prev_en := &prev_gm.entities[i]
@@ -576,17 +619,18 @@ interpolate_games :: proc(curr_gm, prev_gm, res_gm: ^Game, alpha: f32)
     {
       continue
     }
-    
+
     tt.set_global_pos(res_gm.entities[i], 
-                      vm.lerp(tt.global_pos(prev_en), tt.global_pos(curr_en), alpha))
+                      vm.lerp(tt.global_pos(prev_en, prev_tt), 
+                              tt.global_pos(curr_en, curr_tt), 
+                              alpha),
+                      &res_gm.transform_tree)
 
     tt.set_global_rot(res_gm.entities[i], 
-                      vm.lerp_angle(tt.global_rot(prev_en), tt.global_rot(curr_en), alpha))
-    
-    // println("  Odin:", math.angle_lerp(prev_en.rot, curr_en.rot, alpha))
-    // println("    AI:", vm.lerp_angle(prev_en.rot, curr_en.rot, alpha))
-    // println("Inputs:", prev_en.rot, curr_en.rot)
-    // println()
+                      vm.lerp_angle(tt.global_rot(prev_en, prev_tt), 
+                                    tt.global_rot(curr_en, curr_tt), 
+                                    alpha),
+                      &res_gm.transform_tree)
   }
 
   // - Interpolate debug entities ---
@@ -604,25 +648,18 @@ interpolate_games :: proc(curr_gm, prev_gm, res_gm: ^Game, alpha: f32)
       }
 
       tt.set_global_pos(res_gm.debug_entities[i], 
-                        vm.lerp(tt.local(prev_den).pos, 
-                        tt.local(curr_den).pos, alpha))
+                        vm.lerp(tt.global_pos(prev_den, prev_tt), 
+                                tt.global_pos(curr_den, curr_tt), 
+                                alpha),
+                        &res_gm.transform_tree)
 
       tt.set_global_rot(res_gm.debug_entities[i], 
-                        vm.lerp_angle(tt.local(prev_den).rot, 
-                        tt.local(curr_den).rot, alpha))
+                        vm.lerp_angle(tt.global_rot(prev_den, prev_tt), 
+                                      tt.global_rot(curr_den, curr_tt), 
+                                      alpha),
+                        &res_gm.transform_tree)
     }
   }
-}
-
-free_game :: proc(gm: ^Game)
-{
-  mem.destroy_arena(&global.frame_arena)
-  tlsf.destroy(&global.world_mem)
-}
-
-copy_game :: proc(new_gm, old_gm: ^Game)
-{
-  new_gm^ = old_gm^
 }
 
 screen_to_world_pos :: proc(pos: v2f32) -> v2f32

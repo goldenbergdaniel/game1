@@ -120,17 +120,14 @@ push_rect_indices :: proc()
   renderer.indices[index_count - 1] = layout[5] + offset
 }
 
-coords_from_texture :: proc(
-  texture: ^Texture,
-  coords:  v2i32,
-  grid:    v2i32,
-) -> (
-  tl, tr, br, bl: v2f32,
-)
+coords_from_texture :: proc(texture: ^Texture, coords, grid: v2i32) -> (tl, tr, br, bl: v2f32)
 {
   cell := cast(f32) texture.cell
   width := cast(f32) texture.width
   height := cast(f32) texture.height
+
+  // coords := coords
+  // coords.y = i32(height/cell) - coords.y - 1
 
   tl = v2f32{
     (f32(coords.x) * cell) / width, 
