@@ -8,7 +8,7 @@ EVENT_QUEUE_CAP :: 16
 Window :: struct
 {
   handle:       rawptr,
-  imio_handle: rawptr,
+  imio_handle:  rawptr,
   event_queue:  Event_Queue,
   should_close: bool,
   draw_ctx:     struct #raw_union
@@ -18,6 +18,21 @@ Window :: struct
       sdl_ctx:  rawptr,
     },
   },
+}
+
+Window_Props :: enum
+{
+  FULLSCREEN,
+  RESIZEABLE,
+  MAXIMIZED,
+}
+
+Window_Desc :: struct
+{
+  title:  string,
+  width:  int,
+  height: int,
+  props:  bit_set[Window_Props],
 }
 
 Event :: struct
@@ -77,18 +92,44 @@ Key_Kind :: enum
   S_7,
   S_8,
   S_9,
-  L_ALT,
-  R_ALT,
-  L_CTRL,
-  R_CTRL,
-  L_SHIFT,
-  R_SHIFT,
+  OPEN_BRACKET,
+  CLOSE_BRACKET,
+  FWD_SLASH,
+  BWD_SLASH,
+  SEMICOLON,
+  APOSTROPHE,
+  COMMA,
+  PERIOD,
+  BACKTICK,
+  LEFT_ALT,
+  RIGHT_ALT,
+  LEFT_CTRL,
+  RIGHT_CTRL,
+  LEFT_SHIFT,
+  RIGHT_SHIFT,
+  UP,
+  DOWN,
+  LEFT,
+  RIGHT,
+  PAGE_UP,
+  PAGE_DOWN,
   SPACE,
   TAB,
   ENTER,
   BACKSPACE,
-  BACKTICK,
   ESCAPE,
+  F1,
+  F2,
+  F3,
+  F4,
+  F5,
+  F6,
+  F7,
+  F8,
+  F9,
+  F10,
+  F11,
+  F12,
 }
 
 Mouse_Btn_Kind :: enum
@@ -119,36 +160,49 @@ global: struct
 }
 
 create_window :: #force_inline proc(
-	title:  string, 
-	width:  int, 
-	height: int, 
-	arena:  ^mem.Arena,
-) -> Window
-{
-	result: Window
-
+	desc:  Window_Desc,
+	arena: ^mem.Arena,
+) -> (
+  result: Window,
+){
   when ODIN_OS == .Windows
   {
-    result = windows_create_window(title, width, height, arena)
+    result = windows_create_window(desc.title, desc.width, desc.height, arena)
 	  init_event_queue(&result.event_queue, arena)
   }
   else
   {
-    result = sdl_create_window(title, width, height, arena)
+    result = sdl_create_window(desc, arena)
   }
 
 	return result
 }
 
-release_resources :: #force_inline proc(window: ^Window)
+destroy_window :: #force_inline proc(window: ^Window)
 {
   when ODIN_OS == .Windows do windows_release_os_resources(window)
-	else                     do sdl_release_os_resources(window)
+	else                     do sdl_destroy_window(window)
 }
 
-swap_buffers :: #force_inline proc(window: ^Window)
+window_toggle_fullscreen :: proc(window: ^Window)
 {
-  when ODIN_OS != .Windows do sdl_gl_swap_buffers(window)
+  when ODIN_OS == .Windows do return
+  else                     do sdl_window_toggle_fullscreen(window)
+}
+
+window_size :: #force_inline proc(window: ^Window) -> [2]i32
+{
+  result: [2]i32
+
+  when ODIN_OS == .Windows do result = windows_window_size(window)
+	else                     do result = sdl_window_size(window)
+
+  return result
+}
+
+window_swap :: #force_inline proc(window: ^Window)
+{
+  when ODIN_OS != .Windows do sdl_gl_window_swap(window)
 }
 
 @(private)
@@ -237,7 +291,7 @@ pop_event :: proc(queue: ^Event_Queue) -> ^Event
   return result
 }
 
-remember_prev_input :: proc()
+save_input :: proc()
 {
   for key in Key_Kind
   {
@@ -290,23 +344,7 @@ mouse_btn_just_released :: #force_inline proc(btn: Mouse_Btn_Kind) -> bool
   return !input.mouse_btns[btn] && input.prev_mouse_btns[btn]
 }
 
-window_toggle_fullscreen :: proc(window: ^Window)
-{
-  when ODIN_OS == .Windows do return
-  else                     do sdl_window_toggle_fullscreen(window)
-}
-
-window_size :: #force_inline proc(window: ^Window) -> [2]i32
-{
-  result: [2]i32
-
-  when ODIN_OS == .Windows do result = windows_window_size(window)
-	else                     do result = sdl_window_size(window)
-
-  return result
-}
-
-cursor_pos :: #force_inline proc() -> [2]f32
+cursor_position :: #force_inline proc() -> [2]f32
 {
   result: [2]f32
 
