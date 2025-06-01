@@ -7,7 +7,6 @@ main :: proc()
 {
   // - Target ---
   target := fmt.tprintf("%s_%s", ODIN_OS_STRING, ODIN_ARCH_STRING)
-  fmt.printf("[target:%s]\n", target)
 
   // - Package ---
   pkg := "game"
@@ -41,7 +40,7 @@ main :: proc()
   fmt.printf("[mode:%s]\n", mode)
 
   // - Metagen ---
-  fmt.println("[metagen]")
+  // fmt.println("[metagen]")
   // metagen.generate_collider_map()
 
   os2.set_env("SDL_VIDEO_DRIVER", "wayland")

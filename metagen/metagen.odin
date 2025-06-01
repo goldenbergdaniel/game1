@@ -34,12 +34,12 @@ Collider_Map_Entry :: struct
 `
 
 perm_arena: mem.Arena
-collider_map: [game.Sprite_ID]Collider_Map_Entry
+collider_map: [game.Sprite_Kind]Collider_Map_Entry
 color_map: map[Color]int
 
 main :: proc()
 {
-  mem.init_static_arena(&perm_arena)
+  _ = mem.arena_init_static(&perm_arena)
   context.allocator = mem.allocator(&perm_arena)
 
   generate_collider_map()
@@ -76,8 +76,8 @@ generate_collider_map :: proc()
 
   // - Write collider map entries ---
   {
-    scratch := mem.begin_temp(mem.scratch())
-    defer mem.end_temp(scratch)
+    scratch := mem.temp_begin(mem.scratch())
+    defer mem.temp_end(scratch)
     context.temp_allocator = mem.allocator(scratch.arena)
     
     strings.write_string(&gen_buffer, "collider_map: [Sprite_ID]Collider_Map_Entry = {\n")
@@ -113,7 +113,7 @@ collider_map_from_bitmap :: proc(data: []byte)
     
     cell_idx := (pixel_idx / TEX_CELL) % TEX_X
     cell_idx += (pixel_idx / (TEX_CELL * TEX_CELL * TEX_X)) * TEX_X
-    sprite := cast(game.Sprite_ID) (cell_idx % (int(max(game.Sprite_ID)) + 1))
+    sprite := cast(game.Sprite_Kind) (cell_idx % (int(max(game.Sprite_Kind)) + 1))
 
     color := color_from_data(data[i:i+4])
     if color in color_map
