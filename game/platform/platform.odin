@@ -243,12 +243,14 @@ pump_events :: #force_inline proc(window: ^Window)
 
 imgui_begin :: #force_inline proc()
 {
-  sdl_imgui_begin()
+  when ODIN_OS == .Windows do windows_imgui_begin()
+  else                     do sdl_imgui_begin()
 }
 
 imgui_end :: #force_inline proc()
 {
-  sdl_imgui_end()
+  when ODIN_OS == .Windows do windows_imgui_end()
+  else                     do sdl_imgui_end()
 }
 
 @(private)
