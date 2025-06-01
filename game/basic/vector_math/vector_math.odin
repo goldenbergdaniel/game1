@@ -1,4 +1,4 @@
-package vecmath
+package vmath
 
 import "base:intrinsics"
 import "base:builtin"
@@ -8,8 +8,8 @@ import "core:math"
 
 @(require_results)
 array_cast :: #force_inline proc "contextless" (
-  arr: $A/[$N]$T, 
-  $E:  typeid,
+  #no_broadcast arr: $A/[$N]$T, 
+  $E:                typeid,
 ) -> (
   res: [N]E,
 ) where N <= 4 #no_bounds_check

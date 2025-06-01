@@ -11,7 +11,8 @@ struct Vertex
 layout(binding=0)
 uniform ubo
 {
-  mat4 u_proj;
+  mat4 u_projection;
+  mat4 u_camera;
 };
 
 layout(binding=1) 
@@ -62,7 +63,7 @@ vec2 get_uv()
 
 void main()
 {
-  gl_Position = u_proj * vec4(get_position().xy, 1.0, 1.0);
+  gl_Position = u_projection * u_camera * vec4(get_position().xy, 1.0, 1.0);
   fs_tint = get_tint();
   fs_color = get_color();
   fs_tex_coord = get_uv();

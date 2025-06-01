@@ -4,10 +4,10 @@ package render
 
 import "core:fmt"
 import "core:os"
-import gl "ext:opengl"
 
-import vm "../vecmath"
-import plf "../platform"
+import gl "ext:opengl"
+import vmath "../basic/vector_math"
+import "../platform"
 
 GL_Renderer :: struct
 {
@@ -15,14 +15,16 @@ GL_Renderer :: struct
   vertex_count: int,
   indices:      [60000]u16,
   index_count:  int,
+  camera:       m3x3f32,
   projection:   m3x3f32,
   viewport:     v4i32,
   texture:      ^Texture,
   uniforms:     struct
   {
-    proj:       m4x4f32,
+    projection: m4x4f32,
+    camera:     m4x4f32,
   },
-  window:       ^plf.Window,
+  window:       ^platform.Window,
   shader:       u32,
   textures:     [Texture_ID]u32,
   ubo:          u32,
@@ -32,9 +34,13 @@ GL_Renderer :: struct
 
 gl_renderer: GL_Renderer
 
-gl_init :: proc(window: ^plf.Window, textures: ^[Texture_ID]Texture)
-{
+gl_init :: proc(
+  window:     ^platform.Window, 
+  projection: v4f32,
+  textures:   ^[Texture_ID]Texture,
+){
   gl_renderer.window = window
+  gl_renderer.projection = vmath.orthographic_3x3f(expand_values(projection))
 
   // - Vertex array object ---
   vao: u32
@@ -126,10 +132,8 @@ gl_flush :: proc()
 {
   if gl_renderer.vertex_count == 0 do return
 
-  window_size := plf.window_size(gl_renderer.window)
-
-  gl_renderer.projection = vm.orthographic_3x3f(0, 960, 0, 540)
-  gl_renderer.uniforms.proj = cast(m4x4f32) gl_renderer.projection
+  gl_renderer.uniforms.projection = cast(m4x4f32) gl_renderer.projection
+  gl_renderer.uniforms.camera = cast(m4x4f32) gl_renderer.camera
 
   gl.Viewport(expand_values(gl_renderer.viewport))
 

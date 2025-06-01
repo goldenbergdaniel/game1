@@ -1,0 +1,194 @@
+#+feature dynamic-literals
+package game
+
+import "core:image/qoi"
+
+import "basic/mem"
+import vmath "basic/vector_math"
+import "render"
+
+Resources :: struct
+{
+  textures:   [render.Texture_ID]render.Texture,
+  sprites:    [Sprite_Kind]Sprite,
+  animations: [Animation_Kind]Animation_Desc,
+  particles:  [Particle_Kind]Particle_Desc,
+  enemies:    [Enemy_Kind]Enemy_Desc,
+  weapons:    [Weapon_Kind]Weapon_Desc,
+}
+
+Animation_Kind :: enum
+{
+  NIL,
+  PLAYER_IDLE,
+  PLAYER_WALK,
+}
+
+Animation_Desc :: struct
+{
+  frames:     [dynamic]struct
+  {
+    sprite:   Sprite_Kind,
+    ticks:    u16,
+  },
+  exit_state: Entity_State,
+}
+
+Particle_Kind :: enum
+{
+  NIL,
+  GUN_SMOKE,
+}
+
+Particle_Desc :: struct
+{
+  sprite:        Sprite_Kind,
+  emmision_kind: Particle_Emmision_Kind,
+  props:         bit_set[Particle_Prop],
+  count:         u16,
+  lifetime:      f32,
+  spread:        f32,
+  color_a:       v4f32,
+  color_b:       v4f32,
+  speed:         f32,
+  speed_dt:      f32,
+  scl:           v2f32,
+  scl_dt:        v2f32,
+  dir:           f32,
+  dir_dt:        f32,
+  rot:           f32,
+  rot_dt:        f32,
+}
+
+Enemy_Desc :: struct
+{
+  props: bit_set[Entity_Prop],
+}
+
+Weapon_Desc :: struct
+{
+  sprite:      Sprite_Kind,
+  shot_point:  v2f32,
+  shot_time:   f32,
+  reload_time: f32,
+  damage:      f32,
+  speed:       f32,
+  capacity:    u16,
+}
+
+res: Resources
+
+init_resources :: proc(arena: ^mem.Arena)
+{
+  context.allocator = mem.allocator(arena)
+
+  // - Textures ---
+  {
+    img: ^qoi.Image
+    err: qoi.Error
+
+    img, err = qoi.load_from_file("res/textures/sprite_map.qoi", allocator=mem.allocator(arena))
+    if err != nil
+    {
+      panicf("Failed to open texture file!", err)
+    }
+
+    res.textures[.SPRITE_MAP] = render.Texture{
+      data = img.pixels.buf[:],
+      width = cast(i32) img.width,
+      height = cast(i32) img.height,
+      cell = 16,
+    }
+  }
+
+  // - Sprites ---
+  {
+    res.sprites = [Sprite_Kind]Sprite{
+      .NIL            = {coords={0.0, 0.0}, grid={1.0, 1.0}, pivot={7.5, 7.5}},
+      .SQUARE         = {coords={1.0, 0.0}, grid={1.0, 1.0}, pivot={7.5, 7.5}},
+      .CIRCLE         = {coords={2.0, 0.0}, grid={1.0, 1.0}, pivot={8.5, 8.5}},
+      .SHADOW         = {coords={3.0, 0.0}, grid={1.0, 1.0}, pivot={7.5, 14.5}},
+      .PLAYER_IDLE_0  = {coords={0.0, 1.0}, grid={1.0, 1.0}, pivot={7.5, 8.5}},
+      .PLAYER_IDLE_1  = {coords={1.0, 1.0}, grid={1.0, 1.0}, pivot={7.5, 8.5}},
+      .PLAYER_WALK_0  = {coords={2.0, 1.0}, grid={1.0, 1.0}, pivot={7.5, 8.5}},
+      .PLAYER_WALK_1  = {coords={3.0, 1.0}, grid={1.0, 1.0}, pivot={7.5, 8.5}},
+      .PLAYER_WALK_2  = {coords={4.0, 1.0}, grid={1.0, 1.0}, pivot={7.5, 8.5}},
+      .PLAYER_WALK_3  = {coords={5.0, 1.0}, grid={1.0, 1.0}, pivot={7.5, 8.5}},
+      .PLAYER_WALK_4  = {coords={6.0, 1.0}, grid={1.0, 1.0}, pivot={7.5, 8.5}},
+      .RIFLE          = {coords={0.0, 2.0}, grid={1.0, 1.0}, pivot={4.5, 8.5}},
+      .SHOTGUN        = {coords={1.0, 2.0}, grid={1.0, 1.0}, pivot={4.5, 8.5}},
+      .MUZZLE_FLASH   = {coords={0.0, 3.0}, grid={1.0, 1.0}, pivot={8.5, 8.5}},
+      .BULLET         = {coords={1.0, 3.0}, grid={1.0, 1.0}, pivot={8.5, 8.5}},
+      .SMOKE_PARTICLE = {coords={2.0, 3.0}, grid={1.0, 1.0}, pivot={8.5, 8.5}},
+      .TILE_DIRT      = {coords={0.0, 6.0}, grid={0.5, 0.5}, pivot={4.0, 4.0}},
+      .TILE_GRASS_0   = {coords={0.5, 6.0}, grid={0.5, 0.5}, pivot={4.0, 4.0}},
+      .TILE_GRASS_1   = {coords={1.0, 6.0}, grid={0.5, 0.5}, pivot={4.0, 4.0}},
+      .TILE_GRASS_2   = {coords={1.5, 6.0}, grid={0.5, 0.5}, pivot={4.0, 4.0}},
+      .TILE_STONE_0   = {coords={2.0, 6.0}, grid={0.5, 0.5}, pivot={4.0, 4.0}},
+      .TILE_STONE_1   = {coords={2.5, 6.0}, grid={0.5, 0.5}, pivot={4.0, 4.0}},
+    }
+
+    for &sprite in res.sprites
+    {
+      sprite.texture = .SPRITE_MAP
+      sprite.pivot /= vmath.array_cast(sprite.grid, f32) * 16
+    }
+  }
+
+  // - Animations ---
+  {
+    res.animations = [Animation_Kind]Animation_Desc{
+      .NIL = {},
+      .PLAYER_IDLE = {
+        frames = {
+          {sprite=.PLAYER_IDLE_0, ticks=30}, 
+          {sprite=.PLAYER_IDLE_1, ticks=30},
+        },
+        exit_state = .NIL,
+      },
+      .PLAYER_WALK = {
+        frames = {
+          {sprite=.PLAYER_WALK_0, ticks=30},
+          {sprite=.PLAYER_WALK_1, ticks=30},
+          {sprite=.PLAYER_WALK_2, ticks=30},
+          {sprite=.PLAYER_WALK_3, ticks=30},
+          {sprite=.PLAYER_WALK_4, ticks=30},
+        },
+        exit_state = .NIL,
+      },
+    }
+  }
+
+  // - Particles ---
+  {
+    res.particles = [Particle_Kind]Particle_Desc{
+      .NIL = {},
+      .GUN_SMOKE = {
+        sprite = .SMOKE_PARTICLE,
+        color_a = {0.4, 0.4, 0.4, 0},
+        count = 3,
+        lifetime = 3.0,
+        scl = {0.7, 0.7},
+        scl_dt = -{0.7, 0.7},
+        speed = 48.0,
+        emmision_kind = .BURST,
+      },
+    }
+  }
+
+  // - Weapons ---
+  {
+    res.weapons = [Weapon_Kind]Weapon_Desc{
+      .NIL = {},
+      .RIFLE = {
+        sprite = .RIFLE,
+        shot_point = {11.0, 0.0},
+        shot_time = 0.35,
+        reload_time = 3.0,
+        damage = 7,
+        speed = 512.0,
+        capacity = 5,
+      },
+    }
+  }
+}

@@ -1,6 +1,6 @@
 package render
 
-import plf "../platform"
+import "../platform"
 
 when ODIN_OS == .Darwin  do BACKEND :: "metal"
 when ODIN_OS == .Linux   do BACKEND :: "opengl"
@@ -43,9 +43,12 @@ when BACKEND == "opengl"
   renderer := &gl_renderer
 }
 
-init :: #force_inline proc(window: ^plf.Window, textures: ^[Texture_ID]Texture)
-{
-  /**/ when BACKEND == "opengl" do gl_init(window, textures)
+init :: #force_inline proc(
+  window: ^platform.Window, 
+  projection: v4f32,
+  textures: ^[Texture_ID]Texture,
+){
+  /**/ when BACKEND == "opengl" do gl_init(window, projection, textures)
   else                          do panic("Invalid render backend selected!")
 }
 
@@ -120,14 +123,11 @@ push_rect_indices :: proc()
   renderer.indices[index_count - 1] = layout[5] + offset
 }
 
-coords_from_texture :: proc(texture: ^Texture, coords, grid: v2i32) -> (tl, tr, br, bl: v2f32)
+coords_from_texture :: proc(texture: ^Texture, coords, grid: v2f32) -> (tl, tr, br, bl: v2f32)
 {
   cell := cast(f32) texture.cell
   width := cast(f32) texture.width
   height := cast(f32) texture.height
-
-  // coords := coords
-  // coords.y = i32(height/cell) - coords.y - 1
 
   tl = v2f32{
     (f32(coords.x) * cell) / width, 
@@ -152,7 +152,12 @@ coords_from_texture :: proc(texture: ^Texture, coords, grid: v2i32) -> (tl, tr, 
   return
 }
 
-set_viewport :: proc(viewport: v4i32)
+set_viewport :: #force_inline proc(viewport: v4i32)
 {
   renderer.viewport = viewport
+}
+
+set_camera :: #force_inline proc(camera: m3x3f32)
+{
+  renderer.camera = camera
 }

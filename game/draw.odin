@@ -1,55 +1,67 @@
 package game
 
-import "core:math"
-
-import plf "platform"
+import vmath "basic/vector_math"
 import "render"
-import vm "vecmath"
-
-SPRITE_SIZE :: 3
 
 Sprite :: struct
 {
-  coords:  [2]i32,
-  grid:    [2]i32,
+  coords:  [2]f32,
+  grid:    [2]f32,
   pivot:   v2f32,
   texture: render.Texture_ID,
 }
 
-begin_draw :: #force_inline proc(color: v4f32)
+Sprite_Kind :: enum
 {
-  render.clear(color)
-}
-
-end_draw :: #force_inline proc()
-{
-  render.flush()
+  NIL,
+  SQUARE,
+  CIRCLE,
+  SHADOW,
+  PLAYER_IDLE_0,
+  PLAYER_IDLE_1,
+  PLAYER_WALK_0,
+  PLAYER_WALK_1,
+  PLAYER_WALK_2,
+  PLAYER_WALK_3,
+  PLAYER_WALK_4,
+  RIFLE,
+  SHOTGUN,
+  MUZZLE_FLASH,
+  BULLET,
+  SMOKE_PARTICLE,
+  TILE_DIRT,
+  TILE_GRASS_0,
+  TILE_GRASS_1,
+  TILE_GRASS_2,
+  TILE_STONE_0,
+  TILE_STONE_1,
 }
 
 draw_sprite :: proc(
   pos:    v2f32,
-  scl:    v2f32,
+  scl:    v2f32 = {1, 1},
   rot:    f32 = 0,
   tint:   v4f32 = {1, 1, 1, 1},
   color:  v4f32 = {0, 0, 0, 0},
-  sprite: Sprite_ID = .SQUARE,
+  sprite: Sprite_Kind = .NIL,
 )
 {
   sprite_res := &res.sprites[sprite]
   texture_res := &res.textures[sprite_res.texture]
-  dim := scl * vm.array_cast(sprite_res.grid * 16, f32)
+  dim := scl * sprite_res.grid * 16
 
-  xform := vm.translation_3x3f(pos - dim * sprite_res.pivot)
-  xform *= vm.translation_3x3f(dim * sprite_res.pivot)
-  xform *= vm.rotation_3x3f(rot)
-  xform *= vm.translation_3x3f(-dim * sprite_res.pivot)
-  xform *= vm.scale_3x3f(dim)
+  xform := vmath.translation_3x3f(pos - dim * sprite_res.pivot)
+  xform *= vmath.translation_3x3f(dim * sprite_res.pivot)
+  xform *= vmath.rotation_3x3f(rot)
+  xform *= vmath.translation_3x3f(-dim * sprite_res.pivot)
+  xform *= vmath.scale_3x3f(dim)
 
   p1 := xform * v3f32{0, 0, 1}
   p2 := xform * v3f32{1, 0, 1}
   p3 := xform * v3f32{1, 1, 1}
   p4 := xform * v3f32{0, 1, 1}
 
+  // grid := vm.array_cast(sprite_res.grid, i32)
   tl, tr, br, bl := render.coords_from_texture(texture_res, sprite_res.coords, sprite_res.grid)
 
   render.push_vertex(p1.xy, tint, color, tl)
