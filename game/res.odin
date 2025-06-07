@@ -10,14 +10,48 @@ import "render"
 Resources :: struct
 {
   textures:   [render.Texture_ID]render.Texture,
-  sprites:    [Sprite_Kind]Sprite,
-  animations: [Animation_Kind]Animation_Desc,
-  particles:  [Particle_Kind]Particle_Desc,
-  enemies:    [Enemy_Kind]Enemy_Desc,
+  sprites:    [Sprite_Name]Sprite,
+  animations: [Animation_Name]Animation_Desc,
+  particles:  [Particle_Name]Particle_Desc,
   weapons:    [Weapon_Kind]Weapon_Desc,
 }
 
-Animation_Kind :: enum
+Sprite :: struct
+{
+  coords:  [2]f32,
+  grid:    [2]f32,
+  pivot:   v2f32,
+  texture: render.Texture_ID,
+}
+
+Sprite_Name :: enum u16
+{
+  NIL,
+  SQUARE,
+  CIRCLE,
+  SHADOW,
+  PLAYER_IDLE_0,
+  PLAYER_IDLE_1,
+  PLAYER_WALK_0,
+  PLAYER_WALK_1,
+  PLAYER_WALK_2,
+  PLAYER_WALK_3,
+  PLAYER_WALK_4,
+  RIFLE,
+  SHOTGUN,
+  MUZZLE_FLASH,
+  BULLET,
+  SMOKE_PARTICLE,
+  TILE_DIRT,
+  TILE_GRASS_0,
+  TILE_GRASS_1,
+  TILE_GRASS_2,
+  TILE_STONE_0,
+  TILE_STONE_1,
+  TILE_WALL,
+}
+
+Animation_Name :: enum
 {
   NIL,
   PLAYER_IDLE,
@@ -28,13 +62,13 @@ Animation_Desc :: struct
 {
   frames:     [dynamic]struct
   {
-    sprite:   Sprite_Kind,
+    sprite:   Sprite_Name,
     ticks:    u16,
   },
   exit_state: Entity_State,
 }
 
-Particle_Kind :: enum
+Particle_Name :: enum
 {
   NIL,
   GUN_SMOKE,
@@ -42,7 +76,7 @@ Particle_Kind :: enum
 
 Particle_Desc :: struct
 {
-  sprite:        Sprite_Kind,
+  sprite:        Sprite_Name,
   emmision_kind: Particle_Emmision_Kind,
   props:         bit_set[Particle_Prop],
   count:         u16,
@@ -60,14 +94,9 @@ Particle_Desc :: struct
   rot_dt:        f32,
 }
 
-Enemy_Desc :: struct
-{
-  props: bit_set[Entity_Prop],
-}
-
 Weapon_Desc :: struct
 {
-  sprite:      Sprite_Kind,
+  sprite:      Sprite_Name,
   shot_point:  v2f32,
   shot_time:   f32,
   reload_time: f32,
@@ -103,29 +132,30 @@ init_resources :: proc(arena: ^mem.Arena)
 
   // - Sprites ---
   {
-    res.sprites = [Sprite_Kind]Sprite{
-      .NIL            = {coords={0.0, 0.0}, grid={1.0, 1.0}, pivot={7.5, 7.5}},
-      .SQUARE         = {coords={1.0, 0.0}, grid={1.0, 1.0}, pivot={7.5, 7.5}},
-      .CIRCLE         = {coords={2.0, 0.0}, grid={1.0, 1.0}, pivot={8.5, 8.5}},
-      .SHADOW         = {coords={3.0, 0.0}, grid={1.0, 1.0}, pivot={7.5, 14.5}},
-      .PLAYER_IDLE_0  = {coords={0.0, 1.0}, grid={1.0, 1.0}, pivot={7.5, 8.5}},
-      .PLAYER_IDLE_1  = {coords={1.0, 1.0}, grid={1.0, 1.0}, pivot={7.5, 8.5}},
-      .PLAYER_WALK_0  = {coords={2.0, 1.0}, grid={1.0, 1.0}, pivot={7.5, 8.5}},
-      .PLAYER_WALK_1  = {coords={3.0, 1.0}, grid={1.0, 1.0}, pivot={7.5, 8.5}},
-      .PLAYER_WALK_2  = {coords={4.0, 1.0}, grid={1.0, 1.0}, pivot={7.5, 8.5}},
-      .PLAYER_WALK_3  = {coords={5.0, 1.0}, grid={1.0, 1.0}, pivot={7.5, 8.5}},
-      .PLAYER_WALK_4  = {coords={6.0, 1.0}, grid={1.0, 1.0}, pivot={7.5, 8.5}},
-      .RIFLE          = {coords={0.0, 2.0}, grid={1.0, 1.0}, pivot={4.5, 8.5}},
-      .SHOTGUN        = {coords={1.0, 2.0}, grid={1.0, 1.0}, pivot={4.5, 8.5}},
-      .MUZZLE_FLASH   = {coords={0.0, 3.0}, grid={1.0, 1.0}, pivot={8.5, 8.5}},
-      .BULLET         = {coords={1.0, 3.0}, grid={1.0, 1.0}, pivot={8.5, 8.5}},
-      .SMOKE_PARTICLE = {coords={2.0, 3.0}, grid={1.0, 1.0}, pivot={8.5, 8.5}},
-      .TILE_DIRT      = {coords={0.0, 6.0}, grid={0.5, 0.5}, pivot={4.0, 4.0}},
-      .TILE_GRASS_0   = {coords={0.5, 6.0}, grid={0.5, 0.5}, pivot={4.0, 4.0}},
-      .TILE_GRASS_1   = {coords={1.0, 6.0}, grid={0.5, 0.5}, pivot={4.0, 4.0}},
-      .TILE_GRASS_2   = {coords={1.5, 6.0}, grid={0.5, 0.5}, pivot={4.0, 4.0}},
-      .TILE_STONE_0   = {coords={2.0, 6.0}, grid={0.5, 0.5}, pivot={4.0, 4.0}},
-      .TILE_STONE_1   = {coords={2.5, 6.0}, grid={0.5, 0.5}, pivot={4.0, 4.0}},
+    res.sprites = [Sprite_Name]Sprite{
+      .NIL            = {coords={0, 0}, grid={1, 1}, pivot={7.5, 7.5}},
+      .SQUARE         = {coords={1, 0}, grid={1, 1}, pivot={7.5, 7.5}},
+      .CIRCLE         = {coords={2, 0}, grid={1, 1}, pivot={8.5, 8.5}},
+      .SHADOW         = {coords={3, 0}, grid={1, 1}, pivot={7.5, 14.5}},
+      .PLAYER_IDLE_0  = {coords={0, 1}, grid={1, 1}, pivot={7.5, 8.5}},
+      .PLAYER_IDLE_1  = {coords={1, 1}, grid={1, 1}, pivot={7.5, 8.5}},
+      .PLAYER_WALK_0  = {coords={2, 1}, grid={1, 1}, pivot={7.5, 8.5}},
+      .PLAYER_WALK_1  = {coords={3, 1}, grid={1, 1}, pivot={7.5, 8.5}},
+      .PLAYER_WALK_2  = {coords={4, 1}, grid={1, 1}, pivot={7.5, 8.5}},
+      .PLAYER_WALK_3  = {coords={5, 1}, grid={1, 1}, pivot={7.5, 8.5}},
+      .PLAYER_WALK_4  = {coords={6, 1}, grid={1, 1}, pivot={7.5, 8.5}},
+      .RIFLE          = {coords={0, 2}, grid={1, 1}, pivot={4.5, 8.5}},
+      .SHOTGUN        = {coords={1, 2}, grid={1, 1}, pivot={4.5, 8.5}},
+      .MUZZLE_FLASH   = {coords={0, 3}, grid={1, 1}, pivot={8.5, 8.5}},
+      .BULLET         = {coords={1, 3}, grid={1, 1}, pivot={8.5, 8.5}},
+      .SMOKE_PARTICLE = {coords={2, 3}, grid={1, 1}, pivot={8.5, 8.5}},
+      .TILE_DIRT      = {coords={0, 6}, grid={1, 1}, pivot={8.0, 8.0}},
+      .TILE_GRASS_0   = {coords={1, 6}, grid={1, 1}, pivot={8.0, 8.0}},
+      .TILE_GRASS_1   = {coords={2, 6}, grid={1, 1}, pivot={8.0, 8.0}},
+      .TILE_GRASS_2   = {coords={3, 6}, grid={1, 1}, pivot={8.0, 8.0}},
+      .TILE_STONE_0   = {coords={4, 6}, grid={1, 1}, pivot={8.0, 8.0}},
+      .TILE_STONE_1   = {coords={5, 6}, grid={1, 1}, pivot={8.0, 8.0}},
+      .TILE_WALL      = {coords={6, 6}, grid={1, 1}, pivot={8.0, 8.0}},
     }
 
     for &sprite in res.sprites
@@ -137,7 +167,7 @@ init_resources :: proc(arena: ^mem.Arena)
 
   // - Animations ---
   {
-    res.animations = [Animation_Kind]Animation_Desc{
+    res.animations = [Animation_Name]Animation_Desc{
       .NIL = {},
       .PLAYER_IDLE = {
         frames = {
@@ -161,7 +191,7 @@ init_resources :: proc(arena: ^mem.Arena)
 
   // - Particles ---
   {
-    res.particles = [Particle_Kind]Particle_Desc{
+    res.particles = [Particle_Name]Particle_Desc{
       .NIL = {},
       .GUN_SMOKE = {
         sprite = .SMOKE_PARTICLE,

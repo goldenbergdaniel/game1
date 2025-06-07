@@ -1,11 +1,10 @@
 #+build !windows
-#+private
+// #+private
 package platform
 
 import "core:fmt"
 import "core:strings"
 
-import gl 			 "ext:opengl"
 import 				   "ext:sdl"
 import imgui     "ext:dear_imgui"
 import imgui_gl  "ext:dear_imgui/imgui_impl_opengl3"
@@ -148,7 +147,6 @@ sdl_create_window :: proc(
 	{
 		gl_ctx := sdl.GL_CreateContext(sdl_window)
 		sdl.GL_MakeCurrent(sdl_window, gl_ctx)
-		gl.load_up_to(4, 6, sdl.gl_set_proc_address)
 		sdl.GL_SetSwapInterval(1)
 
 		when false
@@ -274,3 +272,5 @@ sdl_cursor_pos :: proc() -> [2]f32
 	_ = sdl.GetMouseState(&result.x, &result.y)
 	return result
 }
+
+sdl_gl_set_proc_address :: sdl.gl_set_proc_address

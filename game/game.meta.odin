@@ -9,6 +9,6 @@ Collider_Map_Entry :: struct
   kind:         type_of(Collider{}.kind),
 }
 
-collider_map: [Sprite_Kind]Collider_Map_Entry = #partial {
+collider_map: [Sprite_Name]Collider_Map_Entry = #partial {
 
 }

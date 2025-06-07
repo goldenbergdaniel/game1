@@ -39,6 +39,8 @@ gl_init :: proc(
   projection: v4f32,
   textures:   ^[Texture_ID]Texture,
 ){
+  gl.load_up_to(4, 6, platform.gl_set_proc_address)
+
   gl_renderer.window = window
   gl_renderer.projection = vmath.orthographic_3x3f(expand_values(projection))
 

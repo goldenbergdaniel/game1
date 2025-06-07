@@ -355,3 +355,5 @@ cursor_position :: #force_inline proc() -> [2]f32
 
   return result
 }
+
+gl_set_proc_address :: sdl_gl_set_proc_address

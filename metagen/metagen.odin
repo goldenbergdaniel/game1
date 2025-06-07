@@ -34,7 +34,7 @@ Collider_Map_Entry :: struct
 `
 
 perm_arena: mem.Arena
-collider_map: [game.Sprite_Kind]Collider_Map_Entry
+collider_map: [game.Sprite_Name]Collider_Map_Entry
 color_map: map[Color]int
 
 main :: proc()
@@ -113,7 +113,7 @@ collider_map_from_bitmap :: proc(data: []byte)
     
     cell_idx := (pixel_idx / TEX_CELL) % TEX_X
     cell_idx += (pixel_idx / (TEX_CELL * TEX_CELL * TEX_X)) * TEX_X
-    sprite := cast(game.Sprite_Kind) (cell_idx % (int(max(game.Sprite_Kind)) + 1))
+    sprite := cast(game.Sprite_Name) (cell_idx % (int(max(game.Sprite_Name)) + 1))
 
     color := color_from_data(data[i:i+4])
     if color in color_map

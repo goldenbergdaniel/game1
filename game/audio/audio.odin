@@ -2,7 +2,12 @@ package game
 
 import ma "ext:miniaudio"
 
-play_sound :: proc()
+init :: proc()
+{
+  
+}
+
+play :: proc()
 {
   
 }

@@ -17,22 +17,28 @@
 # DAY 4 (5.28)
 +shooting (visual)
 
-# Day 5 (5.29)
+# DAY 5 (5.29)
 +particle prefabs
 +basic tilemap
 
-# Day 6 (5.31)
+# DAY 6 (5.31)
 +random cleanup
 +start work on world regions
 
-# Day 7 (6.0)
+# DAY 7 (6.0)
 +world regions
+
+# DAY 8 (6.4)
++overhaul packages and cleanup 
+
+# DAY 9 (6.6)
++overhaul world regions
 
 
 # - UP NEXT -
--figure out how noise works
 -first prey
 -fix edge bleeding
+-audio system
 
 
 # - IDEAS -
