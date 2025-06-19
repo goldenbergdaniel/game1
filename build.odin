@@ -56,6 +56,7 @@ main :: proc()
         "-vet-style",
         "-o:speed",
         "-microarch:native",
+        "-ignore-unknown-attributes",
         "-extra-linker-flags:\"-fuse-ld=mold\"",
       },
       stdout = os2.stdout,

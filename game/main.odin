@@ -4,8 +4,8 @@ import "base:intrinsics"
 import "core:fmt"
 import "core:time"
 
+import "basic"
 import "basic/mem"
-import vmath "basic/vector_math"
 import "platform"
 import "render"
 
@@ -57,7 +57,7 @@ main :: proc()
 
     // - Update viewport ---
     {
-      window_size := vmath.array_cast(platform.window_size(&user.window), f32)
+      window_size := basic.array_cast(platform.window_size(&user.window), f32)
       ratio := window_size.x / window_size.y
       if ratio >= WORLD_WIDTH / WORLD_HEIGHT
       {
@@ -70,7 +70,7 @@ main :: proc()
         user.viewport = {0, (window_size.y - img_height) / 2, window_size.x, img_height}
       }
       
-      render.set_viewport(vmath.array_cast(user.viewport, i32))
+      render.set_viewport(basic.array_cast(user.viewport, i32))
     }
 
     curr_time := time.duration_seconds(time.tick_since(start_tick))
@@ -119,12 +119,8 @@ v4f32 :: [4]f32
 m2x2f32 :: matrix[2,2]f32
 m3x3f32 :: matrix[3,3]f32
 
+Range :: basic.Range
+
 printf  :: fmt.printf
 println :: fmt.println
 panicf  :: fmt.panicf
-
-approx :: #force_inline proc(val, tar, tol: $T) -> T 
-  where intrinsics.type_is_numeric(T)
-{
-  return tar if abs(val) - abs(tol) <= abs(tar) else val
-}

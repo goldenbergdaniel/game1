@@ -34,11 +34,16 @@
 # DAY 9 (6.6)
 +overhaul world regions
 
+# DAY 10 (6.10)
+-first creature (female deer)
+
 
 # - UP NEXT -
--first prey
+-drops and inventory
 -fix edge bleeding
 -audio system
+-day/night cycle
+-town
 
 
 # - IDEAS -

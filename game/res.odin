@@ -3,8 +3,8 @@ package game
 
 import "core:image/qoi"
 
+import "basic"
 import "basic/mem"
-import vmath "basic/vector_math"
 import "render"
 
 Resources :: struct
@@ -13,6 +13,7 @@ Resources :: struct
   sprites:    [Sprite_Name]Sprite,
   animations: [Animation_Name]Animation_Desc,
   particles:  [Particle_Name]Particle_Desc,
+  creatures:  [Creature_Kind]Creature_Desc,
   weapons:    [Weapon_Kind]Weapon_Desc,
 }
 
@@ -29,7 +30,8 @@ Sprite_Name :: enum u16
   NIL,
   SQUARE,
   CIRCLE,
-  SHADOW,
+  SHADOW_PLAYER,
+  SHADOW_DEER,
   PLAYER_IDLE_0,
   PLAYER_IDLE_1,
   PLAYER_WALK_0,
@@ -42,6 +44,14 @@ Sprite_Name :: enum u16
   MUZZLE_FLASH,
   BULLET,
   SMOKE_PARTICLE,
+  DEER_IDLE_0,
+  DEER_IDLE_1,
+  DEER_IDLE_2,
+  DEER_IDLE_3,
+  DEER_WALK_0,
+  DEER_WALK_1,
+  DEER_WALK_2,
+  DEER_WALK_3,
   TILE_DIRT,
   TILE_GRASS_0,
   TILE_GRASS_1,
@@ -56,6 +66,15 @@ Animation_Name :: enum
   NIL,
   PLAYER_IDLE,
   PLAYER_WALK,
+  DEER_IDLE,
+  DEER_WALK,
+}
+
+Animation_State :: enum
+{
+  NIL,
+  IDLE,
+  WALK,
 }
 
 Animation_Desc :: struct
@@ -65,7 +84,6 @@ Animation_Desc :: struct
     sprite:   Sprite_Name,
     ticks:    u16,
   },
-  exit_state: Entity_State,
 }
 
 Particle_Name :: enum
@@ -105,6 +123,12 @@ Weapon_Desc :: struct
   capacity:    u16,
 }
 
+Creature_Desc :: struct
+{
+  animations:   [Animation_State]Animation_Name,
+  wander_range: Range(i32),
+}
+
 res: Resources
 
 init_resources :: proc(arena: ^mem.Arena)
@@ -116,7 +140,7 @@ init_resources :: proc(arena: ^mem.Arena)
     img: ^qoi.Image
     err: qoi.Error
 
-    img, err = qoi.load_from_file("res/textures/sprite_map.qoi", allocator=mem.allocator(arena))
+    img, err = qoi.load_from_file("res/textures/sprite_map.qoi")
     if err != nil
     {
       panicf("Failed to open texture file!", err)
@@ -136,7 +160,8 @@ init_resources :: proc(arena: ^mem.Arena)
       .NIL            = {coords={0, 0}, grid={1, 1}, pivot={7.5, 7.5}},
       .SQUARE         = {coords={1, 0}, grid={1, 1}, pivot={7.5, 7.5}},
       .CIRCLE         = {coords={2, 0}, grid={1, 1}, pivot={8.5, 8.5}},
-      .SHADOW         = {coords={3, 0}, grid={1, 1}, pivot={7.5, 14.5}},
+      .SHADOW_PLAYER  = {coords={3, 0}, grid={1, 1}, pivot={7.5, 14.5}},
+      .SHADOW_DEER    = {coords={4, 0}, grid={1, 1}, pivot={7.5, 14.5}},
       .PLAYER_IDLE_0  = {coords={0, 1}, grid={1, 1}, pivot={7.5, 8.5}},
       .PLAYER_IDLE_1  = {coords={1, 1}, grid={1, 1}, pivot={7.5, 8.5}},
       .PLAYER_WALK_0  = {coords={2, 1}, grid={1, 1}, pivot={7.5, 8.5}},
@@ -149,6 +174,14 @@ init_resources :: proc(arena: ^mem.Arena)
       .MUZZLE_FLASH   = {coords={0, 3}, grid={1, 1}, pivot={8.5, 8.5}},
       .BULLET         = {coords={1, 3}, grid={1, 1}, pivot={8.5, 8.5}},
       .SMOKE_PARTICLE = {coords={2, 3}, grid={1, 1}, pivot={8.5, 8.5}},
+      .DEER_IDLE_0    = {coords={0, 4}, grid={1, 1}, pivot={7.5, 8.5}},
+      .DEER_IDLE_1    = {coords={1, 4}, grid={1, 1}, pivot={7.5, 8.5}},
+      .DEER_IDLE_2    = {coords={2, 4}, grid={1, 1}, pivot={7.5, 8.5}},
+      .DEER_IDLE_3    = {coords={3, 4}, grid={1, 1}, pivot={7.5, 8.5}},
+      .DEER_WALK_0    = {coords={4, 4}, grid={1, 1}, pivot={7.5, 8.5}},
+      .DEER_WALK_1    = {coords={5, 4}, grid={1, 1}, pivot={7.5, 8.5}},
+      .DEER_WALK_2    = {coords={6, 4}, grid={1, 1}, pivot={7.5, 8.5}},
+      .DEER_WALK_3    = {coords={7, 4}, grid={1, 1}, pivot={7.5, 8.5}},
       .TILE_DIRT      = {coords={0, 6}, grid={1, 1}, pivot={8.0, 8.0}},
       .TILE_GRASS_0   = {coords={1, 6}, grid={1, 1}, pivot={8.0, 8.0}},
       .TILE_GRASS_1   = {coords={2, 6}, grid={1, 1}, pivot={8.0, 8.0}},
@@ -161,7 +194,7 @@ init_resources :: proc(arena: ^mem.Arena)
     for &sprite in res.sprites
     {
       sprite.texture = .SPRITE_MAP
-      sprite.pivot /= vmath.array_cast(sprite.grid, f32) * 16
+      sprite.pivot /= basic.array_cast(sprite.grid, f32) * 16
     }
   }
 
@@ -174,7 +207,6 @@ init_resources :: proc(arena: ^mem.Arena)
           {sprite=.PLAYER_IDLE_0, ticks=30}, 
           {sprite=.PLAYER_IDLE_1, ticks=30},
         },
-        exit_state = .NIL,
       },
       .PLAYER_WALK = {
         frames = {
@@ -184,7 +216,22 @@ init_resources :: proc(arena: ^mem.Arena)
           {sprite=.PLAYER_WALK_3, ticks=30},
           {sprite=.PLAYER_WALK_4, ticks=30},
         },
-        exit_state = .NIL,
+      },
+      .DEER_IDLE = {
+        frames = {
+          {sprite=.DEER_IDLE_0, ticks=8}, 
+          {sprite=.DEER_IDLE_1, ticks=8},
+          {sprite=.DEER_IDLE_2, ticks=8},
+          {sprite=.DEER_IDLE_3, ticks=8},
+        },
+      },
+      .DEER_WALK = {
+        frames = {
+          {sprite=.DEER_WALK_0, ticks=10}, 
+          {sprite=.DEER_WALK_1, ticks=10},
+          {sprite=.DEER_WALK_2, ticks=10},
+          {sprite=.DEER_WALK_3, ticks=10},
+        },
       },
     }
   }
@@ -202,6 +249,21 @@ init_resources :: proc(arena: ^mem.Arena)
         scl_dt = -{0.7, 0.7},
         speed = 48.0,
         emmision_kind = .BURST,
+      },
+    }
+  }
+
+  // - Creature ---
+  {
+    res.creatures = [Creature_Kind]Creature_Desc{
+      .NIL = {},
+      .DEER = {
+        animations = #partial {
+          .NIL = .NIL,
+          .IDLE = .DEER_IDLE,
+          .WALK = .DEER_WALK,
+        },
+        wander_range = {10, 50},
       },
     }
   }

@@ -6,22 +6,6 @@ import "core:math"
 
 // Vector ///////////////////////////////////////////////////////////////////////////
 
-@(require_results)
-array_cast :: #force_inline proc "contextless" (
-  #no_broadcast arr: $A/[$N]$T, 
-  $E:                typeid,
-) -> (
-  res: [N]E,
-) where N <= 4 #no_bounds_check
-{
-	#unroll(N) for i in 0..<N
-  {
-		res[i] = cast(E) arr[i]
-	}
-
-	return res
-}
-
 concat :: proc
 {
   concat_1f32_2f32,
