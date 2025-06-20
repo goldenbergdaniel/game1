@@ -546,6 +546,8 @@ update_game :: proc(gm: ^Game, dt: f32)
           en.anim.frame_idx = 0
         }
       }
+
+      if en.ref.idx == 1 do println(en.anim)
       
       en.anim.state = en.anim.next_state
       en.anim.changed_dir = false
@@ -668,24 +670,23 @@ update_game :: proc(gm: ^Game, dt: f32)
       if en.anim.counter % frame.ticks == 0
       {
         en.anim.counter = 0
-        
+
         if en.anim.reverse
         {
           en.anim.frame_idx -= 1
-
-          if en.anim.frame_idx == 0
-          {
-            en.anim.frame_idx = cast(u16) len(desc.frames) - 1
-          }
         }
         else
         {
           en.anim.frame_idx += 1
+        }
 
-          if en.anim.frame_idx == cast(u16) len(desc.frames)
-          {
-            en.anim.frame_idx = 0
-          }
+        if en.anim.frame_idx == 0
+        {
+          en.anim.frame_idx = cast(u16) len(desc.frames) - 1
+        }
+        else if en.anim.frame_idx == cast(u16) len(desc.frames)
+        {
+          en.anim.frame_idx = 0
         }
       }
     }
@@ -1056,7 +1057,7 @@ Entity :: struct
 
   anim:             struct
   {
-    data:           [Animation_State]Animation_Name,
+    data:           [Animation_State]Animation_Name `fmt:"-"`,
     state:          Animation_State,
     next_state:     Animation_State,
     changed_dir:    bool,
@@ -1413,8 +1414,6 @@ spawn_projectile :: proc(kind: Projectile_Kind) -> ^Entity
 
 entity_animate :: proc(en: ^Entity, anim: Animation_State, reverse := false)
 {
-  desc := &res.animations[en.anim.data[anim]]
-
   en.anim.next_state = anim
 
   if en.anim.reverse != reverse
