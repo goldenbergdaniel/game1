@@ -257,31 +257,36 @@ update_game :: proc(gm: ^Game, dt: f32)
   {
     // - Player movement ---
     {
-      ACC     :: 250.0
-      DRAG    :: 1.25
-      BWD_MULT :: 0.7
+      BWD_MULT :: 0.8
 
-      player.vel = {}
-      player.anim.next_state = .IDLE
+      if !(platform.key_pressed(.A) || platform.key_pressed(.D) ||
+           platform.key_pressed(.W) || platform.key_pressed(.S))
+      {
+        player.vel = {}
+        entity_animate(player, .IDLE)
+      }
 
-      dir_factor: f32 = 1
+      bwd: bool
+      dir_factor: f32 = 1.0
 
       if platform.key_pressed(.A) && !platform.key_pressed(.D)
       {
-        dir_factor = cursor_pos.x < tt.local(player).pos.x ? 1.0 : BWD_MULT
+        bwd = cursor_pos.x > tt.local(player).pos.x
+        dir_factor = bwd ? BWD_MULT : 1.0
         player.movement_speed = res.player.speed * dir_factor
 
         player.vel.x = -player.movement_speed
-        player.anim.next_state = .WALK
+        entity_animate(player, .WALK, reverse=bwd)
       }
       
       if platform.key_pressed(.D) && !platform.key_pressed(.A)
       {
-        dir_factor = cursor_pos.x > tt.local(player).pos.x ? 1.0 : BWD_MULT
+        bwd = cursor_pos.x < tt.local(player).pos.x 
+        dir_factor = bwd ? BWD_MULT : 1.0
         player.movement_speed = res.player.speed * dir_factor
 
         player.vel.x = player.movement_speed * dir_factor
-        player.anim.next_state = .WALK
+        entity_animate(player, .WALK, reverse=bwd)
       }
 
       if platform.key_pressed(.W) && !platform.key_pressed(.S)
@@ -289,7 +294,7 @@ update_game :: proc(gm: ^Game, dt: f32)
         player.movement_speed = res.player.speed * dir_factor
 
         player.vel.y = -player.movement_speed
-        player.anim.next_state = .WALK
+        entity_animate(player, .WALK, reverse=bwd)
       }
 
       if platform.key_pressed(.S) && !platform.key_pressed(.W)
@@ -297,7 +302,7 @@ update_game :: proc(gm: ^Game, dt: f32)
         player.movement_speed = res.player.speed * dir_factor
 
         player.vel.y = player.movement_speed
-        player.anim.next_state = .WALK
+        entity_animate(player, .WALK, reverse=bwd)
       }
 
       if player.vel.x != 0 && player.vel.y != 0
@@ -520,6 +525,32 @@ update_game :: proc(gm: ^Game, dt: f32)
   // - Animate entities ---
   for &en in gm.entities do if en.flags.update
   {
+    desc := &res.animations[en.anim.data[en.anim.state]]
+
+    // - Update animation state ---
+    {
+      if en.anim.state != en.anim.next_state
+      {
+        en.anim.counter = 0
+        en.anim.frame_idx = 0
+      }
+
+      if en.anim.state != en.anim.next_state || en.anim.changed_dir
+      {
+        if en.anim.reverse
+        {
+          en.anim.frame_idx = cast(u16) len(desc.frames) - 1
+        }
+        else
+        {
+          en.anim.frame_idx = 0
+        }
+      }
+      
+      en.anim.state = en.anim.next_state
+      en.anim.changed_dir = false
+    }
+
     if .ROTATE_OVER_TIME in en.props
     {
       tt.local(en).rot += 0.25 * math.PI * dt
@@ -625,7 +656,6 @@ update_game :: proc(gm: ^Game, dt: f32)
     // - Animate sprite ---
     {
       anim := en.anim.data[en.anim.state]
-      desc := &res.animations[en.anim.data[en.anim.state]]
 
       if len(desc.frames) <= 0 do continue
 
@@ -638,11 +668,24 @@ update_game :: proc(gm: ^Game, dt: f32)
       if en.anim.counter % frame.ticks == 0
       {
         en.anim.counter = 0
-        en.anim.frame_idx += 1
-
-        if en.anim.frame_idx == u16(len(desc.frames))
+        
+        if en.anim.reverse
         {
-          en.anim.frame_idx = 0
+          en.anim.frame_idx -= 1
+
+          if en.anim.frame_idx == 0
+          {
+            en.anim.frame_idx = cast(u16) len(desc.frames) - 1
+          }
+        }
+        else
+        {
+          en.anim.frame_idx += 1
+
+          if en.anim.frame_idx == cast(u16) len(desc.frames)
+          {
+            en.anim.frame_idx = 0
+          }
         }
       }
     }
@@ -652,19 +695,6 @@ update_game :: proc(gm: ^Game, dt: f32)
   for &par in gm.particles do if .ACTIVE in par.props
   {
     update_particle(&par, dt)
-  }
-
-  // - Update state ---
-  for &en in gm.entities do if en.flags.update
-  {
-    if en.anim.state != en.anim.next_state
-    {
-      en.anim.counter = 0
-      en.anim.frame_idx = 0
-    }
-    
-    en.anim.state = en.anim.next_state
-    en.anim.next_state = .NIL
   }
 
   reset_entity_collision_cache()
@@ -762,16 +792,6 @@ update_debug_ui :: proc(gm: ^Game, dt: f32)
     imgui.PushID("Pos")
     imgui.Text("Pos:  "); imgui.SameLine()
     imgui.InputFloat2("", &tt.local(en).pos)
-    imgui.PopID()
-
-    imgui.PushID("Rot")
-    imgui.Text("Rot:  "); imgui.SameLine()
-    imgui.InputFloat("", &tt.local(en).rot)
-    imgui.PopID()
-
-    imgui.PushID("Scale")
-    imgui.Text("Scale:"); imgui.SameLine()
-    imgui.InputFloat2("", &tt.local(en).scale)
     imgui.PopID()
 
     imgui.PushID("Vel")
@@ -1039,6 +1059,8 @@ Entity :: struct
     data:           [Animation_State]Animation_Name,
     state:          Animation_State,
     next_state:     Animation_State,
+    changed_dir:    bool,
+    reverse:        bool,
     frame_idx:      u16,
     counter:        u16,
   },
@@ -1389,6 +1411,23 @@ spawn_projectile :: proc(kind: Projectile_Kind) -> ^Entity
   return en
 }
 
+entity_animate :: proc(en: ^Entity, anim: Animation_State, reverse := false)
+{
+  desc := &res.animations[en.anim.data[anim]]
+
+  en.anim.next_state = anim
+
+  if en.anim.reverse != reverse
+  {
+    en.anim.reverse = reverse
+    en.anim.changed_dir = true
+  }
+  else
+  {
+    en.anim.changed_dir = false
+  }
+}
+
 entity_rotate_to_target :: proc(en: ^Entity, target: v2f32)
 {
   diff := target - tt.global_pos(en)
@@ -1571,7 +1610,7 @@ entity_equip_weapon :: proc(en: ^Entity, kind: Weapon_Kind)
 
 entity_creature_idle :: proc(en: ^Entity)
 {
-  en.anim.next_state = .IDLE
+  entity_animate(en, .IDLE)
 }
 
 entity_creature_wander :: proc(en: ^Entity, dt: f32)
@@ -1591,7 +1630,7 @@ entity_creature_wander :: proc(en: ^Entity, dt: f32)
     wander.state = .MOVE
 
   case .MOVE:
-    en.anim.next_state = .WALK
+    entity_animate(en, .WALK)
 
     arrived := entity_move_to_point(en, wander.point, dt*25)
     if arrived
@@ -1600,7 +1639,7 @@ entity_creature_wander :: proc(en: ^Entity, dt: f32)
     }
 
   case .WAIT:
-    en.anim.next_state = .IDLE
+    entity_animate(en, .IDLE)
 
     if !wander.wait_timer.ticking
     {

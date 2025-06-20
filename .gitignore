@@ -1,6 +1,6 @@
 .DS_STORE
 game.bin
-game1
 imgui.ini
+log*.txt
 
 .vscode/
