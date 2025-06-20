@@ -210,11 +210,11 @@ init_resources :: proc(arena: ^mem.Arena)
       },
       .PLAYER_WALK = {
         frames = {
-          {sprite=.PLAYER_WALK_0, ticks=30},
-          {sprite=.PLAYER_WALK_1, ticks=30},
-          {sprite=.PLAYER_WALK_2, ticks=30},
-          {sprite=.PLAYER_WALK_3, ticks=30},
-          {sprite=.PLAYER_WALK_4, ticks=30},
+          {sprite=.PLAYER_WALK_0, ticks=7},
+          {sprite=.PLAYER_WALK_1, ticks=7},
+          {sprite=.PLAYER_WALK_2, ticks=7},
+          {sprite=.PLAYER_WALK_3, ticks=7},
+          {sprite=.PLAYER_WALK_4, ticks=7},
         },
       },
       .DEER_IDLE = {
@@ -227,10 +227,10 @@ init_resources :: proc(arena: ^mem.Arena)
       },
       .DEER_WALK = {
         frames = {
-          {sprite=.DEER_WALK_0, ticks=10}, 
-          {sprite=.DEER_WALK_1, ticks=10},
-          {sprite=.DEER_WALK_2, ticks=10},
-          {sprite=.DEER_WALK_3, ticks=10},
+          {sprite=.DEER_WALK_0, ticks=8}, 
+          {sprite=.DEER_WALK_1, ticks=8},
+          {sprite=.DEER_WALK_2, ticks=8},
+          {sprite=.DEER_WALK_3, ticks=8},
         },
       },
     }

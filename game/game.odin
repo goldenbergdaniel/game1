@@ -114,13 +114,13 @@ start_game :: proc(gm: ^Game)
 
   player := alloc_entity(gm)
   setup_player(player)
-  tt.set_global_pos(player, region_to_world_space({WORLD_WIDTH/2, WORLD_HEIGHT/2}, region))
+  tt.set_global_pos(player, region_to_world_space(WORLD_WIDTH/2, region))
 
   gm.special_entities[.PLAYER] = player
 
   deer := spawn_creature(.DEER)
   deer.creature.state = .WANDER
-  tt.set_global_position(deer.xform, region_to_world_space({50, 50}, region))
+  tt.set_global_position(deer.xform, region_to_world_space({100, 100}, region))
 }
 
 update_game :: proc(gm: ^Game, dt: f32)
@@ -261,25 +261,30 @@ update_game :: proc(gm: ^Game, dt: f32)
       DRAG :: 1.25
 
       player.vel = {}
+      entity_animate(player, .IDLE)
 
       if platform.key_pressed(.A) && !platform.key_pressed(.D)
       {
         player.vel.x = -player.movement_speed
+        entity_animate(player, .WALK)
       }
       
       if platform.key_pressed(.D) && !platform.key_pressed(.A)
       {
-        player.vel.x = player.movement_speed;
+        player.vel.x = player.movement_speed
+        entity_animate(player, .WALK)
       }
 
       if platform.key_pressed(.W) && !platform.key_pressed(.S)
       {
-        player.vel.y = -player.movement_speed;
+        player.vel.y = -player.movement_speed
+        entity_animate(player, .WALK)
       }
 
       if platform.key_pressed(.S) && !platform.key_pressed(.W)
       {
-        player.vel.y = player.movement_speed;
+        player.vel.y = player.movement_speed
+        entity_animate(player, .WALK)
       }
 
       if player.vel.x != 0 && player.vel.y != 0
@@ -636,6 +641,19 @@ update_game :: proc(gm: ^Game, dt: f32)
     update_particle(&par, dt)
   }
 
+  // - Update state ---
+  for &en in gm.entities do if en.flags.update
+  {
+    if en.anim.state != en.anim.next_state
+    {
+      en.anim.counter = 0
+      en.anim.frame_idx = 0
+    }
+    
+    en.anim.state = en.anim.next_state
+    en.anim.next_state = .NIL
+  }
+
   reset_entity_collision_cache()
   free_all(mem.allocator(&global.frame_arena))
 }
@@ -717,6 +735,45 @@ update_debug_ui :: proc(gm: ^Game, dt: f32)
     imgui.PushID("Speed")
     imgui.Text("Speed:"); imgui.SameLine()
     imgui.InputFloat("", &en.movement_speed)
+    imgui.PopID()
+
+    imgui.End()
+  }
+
+  when true
+  {
+    imgui.Begin("Player Inspector")
+
+    en := gm.special_entities[.PLAYER]
+
+    imgui.PushID("Pos")
+    imgui.Text("Pos:  "); imgui.SameLine()
+    imgui.InputFloat2("", &tt.local(en).pos)
+    imgui.PopID()
+
+    imgui.PushID("Rot")
+    imgui.Text("Rot:  "); imgui.SameLine()
+    imgui.InputFloat("", &tt.local(en).rot)
+    imgui.PopID()
+
+    imgui.PushID("Scale")
+    imgui.Text("Scale:"); imgui.SameLine()
+    imgui.InputFloat2("", &tt.local(en).scale)
+    imgui.PopID()
+
+    imgui.PushID("Vel")
+    imgui.Text("Vel:  "); imgui.SameLine()
+    imgui.InputFloat2("", &en.vel)
+    imgui.PopID()
+
+    imgui.PushID("Speed")
+    imgui.Text("Speed:"); imgui.SameLine()
+    imgui.InputFloat("", &en.movement_speed)
+    imgui.PopID()
+
+    anim_state_strings := []string{"NONE", "IDLE", "WALK"}
+    imgui.PushID("Animation")
+    imgui.Text("Animation: %s", anim_state_strings[int(en.anim.state)])
     imgui.PopID()
 
     imgui.End()
@@ -968,6 +1025,7 @@ Entity :: struct
   {
     data:           [Animation_State]Animation_Name,
     state:          Animation_State,
+    next_state:     Animation_State,
     frame_idx:      u16,
     counter:        u16,
   },
@@ -1193,6 +1251,7 @@ setup_player :: proc(en: ^Entity)
   en.movement_speed = 64
   en.anim.state = .IDLE
   en.anim.data[.IDLE] = .PLAYER_IDLE
+  en.anim.data[.WALK] = .PLAYER_WALK
   
   // - Shadow ---
   {
@@ -1255,6 +1314,7 @@ spawn_creature :: proc(kind: Creature_Kind) -> ^Entity
     setup_sprite_entity(en, .DEER_IDLE_0)
     en.anim.state = .IDLE
     en.anim.data[.IDLE] = .DEER_IDLE
+    en.anim.data[.WALK] = .DEER_WALK
 
     // - Shadow ---
     {
@@ -1314,6 +1374,11 @@ spawn_projectile :: proc(kind: Projectile_Kind) -> ^Entity
   en.collider.kind = collider_map[en.sprite].kind
 
   return en
+}
+
+entity_animate :: proc(en: ^Entity, anim: Animation_State)
+{
+  en.anim.next_state = anim
 }
 
 entity_rotate_to_target :: proc(en: ^Entity, target: v2f32)
@@ -1498,7 +1563,7 @@ entity_equip_weapon :: proc(en: ^Entity, kind: Weapon_Kind)
 
 entity_creature_idle :: proc(en: ^Entity)
 {
-  en.anim.state = .IDLE
+  entity_animate(en, .IDLE)
 }
 
 entity_creature_wander :: proc(en: ^Entity, dt: f32)
@@ -1518,6 +1583,8 @@ entity_creature_wander :: proc(en: ^Entity, dt: f32)
     wander.state = .MOVE
 
   case .MOVE:
+    entity_animate(en, .WALK)
+
     arrived := entity_move_to_point(en, wander.point, dt*25)
     if arrived
     {
@@ -1525,9 +1592,12 @@ entity_creature_wander :: proc(en: ^Entity, dt: f32)
     }
 
   case .WAIT:
+    entity_animate(en, .IDLE)
+
     if !wander.wait_timer.ticking
     {
-      timer_start(&wander.wait_timer, 1)
+      duration := rand.range_f32({0.5, 3})
+      timer_start(&wander.wait_timer, duration)
     }
 
     if timer_timeout(&wander.wait_timer)

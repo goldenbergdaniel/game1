@@ -35,10 +35,13 @@
 +overhaul world regions
 
 # DAY 10 (6.10)
--first creature (female deer)
++first creature (female deer)
+
+# Day 11 (6.19)
 
 
 # - UP NEXT -
+~state machines
 -drops and inventory
 -fix edge bleeding
 -audio system
