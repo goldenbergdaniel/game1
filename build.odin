@@ -3,23 +3,18 @@ package build
 import "core:fmt"
 import "core:os/os2"
 
+PACKAGE :: "game"
+
 main :: proc()
 {
   // - Target ---
   target := fmt.tprintf("%s_%s", ODIN_OS_STRING, ODIN_ARCH_STRING)
 
-  // - Package ---
-  pkg := "game"
-  if len(os2.args) > 1
-  {
-    pkg = os2.args[1]
-  }
-
   // - Mode ---
   mode := "debug"
-  if len(os2.args) > 2
+  if len(os2.args) > 1
   {
-    mode = os2.args[2]
+    mode = os2.args[1]
   }
 
   // - Metagen ---
@@ -35,7 +30,7 @@ main :: proc()
         "odin", 
         "run", 
         "game", 
-        fmt.tprintf("-out:%s.bin", pkg),
+        fmt.tprintf("-out:%s.bin", PACKAGE),
         "-collection:ext=ext", 
         "-debug",
         "-extra-linker-flags:\"-fuse-ld=mold\"",
@@ -51,7 +46,7 @@ main :: proc()
         "odin", 
         "build", 
         "game", 
-        fmt.tprintf("-out:%s.bin", pkg),
+        fmt.tprintf("-out:%s.bin", PACKAGE),
         "-collection:ext=ext", 
         "-vet-style",
         "-o:speed",
@@ -65,13 +60,13 @@ main :: proc()
   }
   else
   {
-    fmt.eprintf("Failed to build. Mode '%s' is invalid.\n", os2.args[2])
+    fmt.eprintf("Failed to build. Mode '%s' is invalid.\n", mode)
     os2.exit(1)
   }
 
   fmt.printf("[target:%s]\n", target)
   fmt.printf("[mode:%s]\n", mode)
-  fmt.printf("[%s]\n", pkg)
+  fmt.printf("[%s]\n", PACKAGE)
 
   os2.set_env("SDL_VIDEO_DRIVER", "wayland")
 
