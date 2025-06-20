@@ -261,30 +261,30 @@ update_game :: proc(gm: ^Game, dt: f32)
       DRAG :: 1.25
 
       player.vel = {}
-      entity_animate(player, .IDLE)
+      en.anim.next_state = .IDLE
 
       if platform.key_pressed(.A) && !platform.key_pressed(.D)
       {
         player.vel.x = -player.movement_speed
-        entity_animate(player, .WALK)
+        player.anim.next_state = .WALK
       }
       
       if platform.key_pressed(.D) && !platform.key_pressed(.A)
       {
         player.vel.x = player.movement_speed
-        entity_animate(player, .WALK)
+        player.anim.next_state = .WALK
       }
 
       if platform.key_pressed(.W) && !platform.key_pressed(.S)
       {
         player.vel.y = -player.movement_speed
-        entity_animate(player, .WALK)
+        player.anim.next_state = .WALK
       }
 
       if platform.key_pressed(.S) && !platform.key_pressed(.W)
       {
         player.vel.y = player.movement_speed
-        entity_animate(player, .WALK)
+        player.anim.next_state = .WALK
       }
 
       if player.vel.x != 0 && player.vel.y != 0
@@ -1376,11 +1376,6 @@ spawn_projectile :: proc(kind: Projectile_Kind) -> ^Entity
   return en
 }
 
-entity_animate :: proc(en: ^Entity, anim: Animation_State)
-{
-  en.anim.next_state = anim
-}
-
 entity_rotate_to_target :: proc(en: ^Entity, target: v2f32)
 {
   diff := target - tt.global_pos(en)
@@ -1563,7 +1558,7 @@ entity_equip_weapon :: proc(en: ^Entity, kind: Weapon_Kind)
 
 entity_creature_idle :: proc(en: ^Entity)
 {
-  entity_animate(en, .IDLE)
+  en.anim.next_state = .IDLE
 }
 
 entity_creature_wander :: proc(en: ^Entity, dt: f32)
@@ -1583,7 +1578,7 @@ entity_creature_wander :: proc(en: ^Entity, dt: f32)
     wander.state = .MOVE
 
   case .MOVE:
-    entity_animate(en, .WALK)
+    en.anim.next_state = .WALK
 
     arrived := entity_move_to_point(en, wander.point, dt*25)
     if arrived
@@ -1592,7 +1587,7 @@ entity_creature_wander :: proc(en: ^Entity, dt: f32)
     }
 
   case .WAIT:
-    entity_animate(en, .IDLE)
+    en.anim.next_state = .WALK
 
     if !wander.wait_timer.ticking
     {
