@@ -547,8 +547,6 @@ update_game :: proc(gm: ^Game, dt: f32)
         }
       }
 
-      if en.ref.idx == 1 do println(en.anim)
-      
       en.anim.state = en.anim.next_state
       en.anim.changed_dir = false
     }
@@ -673,20 +671,21 @@ update_game :: proc(gm: ^Game, dt: f32)
 
         if en.anim.reverse
         {
+          if en.anim.frame_idx == 0
+          {
+            en.anim.frame_idx = cast(u16) len(desc.frames) - 1
+          }
+
           en.anim.frame_idx -= 1
         }
         else
         {
           en.anim.frame_idx += 1
-        }
-
-        if en.anim.frame_idx == 0
-        {
-          en.anim.frame_idx = cast(u16) len(desc.frames) - 1
-        }
-        else if en.anim.frame_idx == cast(u16) len(desc.frames)
-        {
-          en.anim.frame_idx = 0
+          
+          if en.anim.frame_idx == cast(u16) len(desc.frames) - 1
+          {
+            en.anim.frame_idx = 0
+          }
         }
       }
     }
@@ -1965,7 +1964,6 @@ spawn_particles :: proc(kind: Particle_Name, pos: v2f32)
       par.dir = rand.range_f32({0, 2*math.PI})
       par.vel.x *= math.cos(par.dir)
       par.vel.y *= math.sin(par.dir)
-      // println(i, "dir:", par.dir)
     }
   }
 }
