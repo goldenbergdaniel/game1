@@ -257,12 +257,17 @@ update_game :: proc(gm: ^Game, dt: f32)
   {
     // - Player movement ---
     {
-      BWD_MULT :: 0.8
+      BWD_MULT :: 0.7
 
-      if !(platform.key_pressed(.A) || platform.key_pressed(.D) ||
-           platform.key_pressed(.W) || platform.key_pressed(.S))
+      if !(platform.key_pressed(.A) || platform.key_pressed(.D))
       {
-        player.vel = {}
+        player.vel.x = 0
+        entity_animate(player, .IDLE)
+      }
+
+      if !(platform.key_pressed(.W) || platform.key_pressed(.S))
+      {
+        player.vel.y = 0
         entity_animate(player, .IDLE)
       }
 
@@ -276,7 +281,7 @@ update_game :: proc(gm: ^Game, dt: f32)
         player.movement_speed = res.player.speed * dir_factor
 
         player.vel.x = -player.movement_speed
-        entity_animate(player, .WALK, reverse=bwd)
+        entity_animate(player, .WALK, speed=(bwd ? BWD_MULT : 1), reverse=bwd)
       }
       
       if platform.key_pressed(.D) && !platform.key_pressed(.A)
@@ -286,7 +291,7 @@ update_game :: proc(gm: ^Game, dt: f32)
         player.movement_speed = res.player.speed * dir_factor
 
         player.vel.x = player.movement_speed * dir_factor
-        entity_animate(player, .WALK, reverse=bwd)
+        entity_animate(player, .WALK, speed=(bwd ? BWD_MULT : 1), reverse=bwd)
       }
 
       if platform.key_pressed(.W) && !platform.key_pressed(.S)
@@ -294,7 +299,7 @@ update_game :: proc(gm: ^Game, dt: f32)
         player.movement_speed = res.player.speed * dir_factor
 
         player.vel.y = -player.movement_speed
-        entity_animate(player, .WALK, reverse=bwd)
+        entity_animate(player, .WALK, speed=(bwd ? BWD_MULT : 1), reverse=bwd)
       }
 
       if platform.key_pressed(.S) && !platform.key_pressed(.W)
@@ -302,7 +307,7 @@ update_game :: proc(gm: ^Game, dt: f32)
         player.movement_speed = res.player.speed * dir_factor
 
         player.vel.y = player.movement_speed
-        entity_animate(player, .WALK, reverse=bwd)
+        entity_animate(player, .WALK, speed=(bwd ? BWD_MULT : 1), reverse=bwd)
       }
 
       if player.vel.x != 0 && player.vel.y != 0
@@ -523,32 +528,17 @@ update_game :: proc(gm: ^Game, dt: f32)
   }
 
   // - Animate entities ---
-  for &en in gm.entities do if en.flags.update
+  for &en in gm.entities do if en.flags.update && en.anim.state != .NIL
   {
-    desc := &res.animations[en.anim.data[en.anim.state]]
-
     // - Update animation state ---
     {
       if en.anim.state != en.anim.next_state
       {
-        en.anim.counter = 0
+        en.anim.duration = 0
         en.anim.frame_idx = 0
       }
 
-      if en.anim.state != en.anim.next_state || en.anim.changed_dir
-      {
-        if en.anim.reverse
-        {
-          en.anim.frame_idx = cast(u16) len(desc.frames) - 1
-        }
-        else
-        {
-          en.anim.frame_idx = 0
-        }
-      }
-
       en.anim.state = en.anim.next_state
-      en.anim.changed_dir = false
     }
 
     if .ROTATE_OVER_TIME in en.props
@@ -655,19 +645,15 @@ update_game :: proc(gm: ^Game, dt: f32)
 
     // - Animate sprite ---
     {
-      anim := en.anim.data[en.anim.state]
-
+      desc := &res.animations[en.anim.data[en.anim.state]]
+      
       if len(desc.frames) <= 0 do continue
 
-      frame := &desc.frames[en.anim.frame_idx]
-      en.sprite = frame.sprite
-
-      if len(desc.frames) <= 1 do continue
-
-      en.anim.counter += 1
-      if en.anim.counter % frame.ticks == 0
+      en.anim.duration -= dt
+      if en.anim.duration <= 0
       {
-        en.anim.counter = 0
+        en.sprite = desc.frames[en.anim.frame_idx].sprite
+        en.anim.duration = desc.frames[en.anim.frame_idx].duration * (1/en.anim.speed)
 
         if en.anim.reverse
         {
@@ -681,8 +667,8 @@ update_game :: proc(gm: ^Game, dt: f32)
         else
         {
           en.anim.frame_idx += 1
-          
-          if en.anim.frame_idx == cast(u16) len(desc.frames) - 1
+
+          if en.anim.frame_idx == cast(u16) len(desc.frames)
           {
             en.anim.frame_idx = 0
           }
@@ -1056,13 +1042,13 @@ Entity :: struct
 
   anim:             struct
   {
-    data:           [Animation_State]Animation_Name `fmt:"-"`,
+    data:           [Animation_State]Animation_Name,
     state:          Animation_State,
     next_state:     Animation_State,
-    changed_dir:    bool,
+    speed:          f32,
+    duration:       f32,
     reverse:        bool,
     frame_idx:      u16,
-    counter:        u16,
   },
   distort_h:        struct
   {
@@ -1411,19 +1397,15 @@ spawn_projectile :: proc(kind: Projectile_Kind) -> ^Entity
   return en
 }
 
-entity_animate :: proc(en: ^Entity, anim: Animation_State, reverse := false)
-{
+entity_animate :: proc(
+  en:      ^Entity, 
+  anim:    Animation_State, 
+  speed:   f32 = 1.0,
+  reverse: bool = false
+){
   en.anim.next_state = anim
-
-  if en.anim.reverse != reverse
-  {
-    en.anim.reverse = reverse
-    en.anim.changed_dir = true
-  }
-  else
-  {
-    en.anim.changed_dir = false
-  }
+  en.anim.speed = speed
+  en.anim.reverse = reverse
 }
 
 entity_rotate_to_target :: proc(en: ^Entity, target: v2f32)

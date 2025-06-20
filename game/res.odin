@@ -83,7 +83,7 @@ Animation_Desc :: struct
   frames:     [dynamic]struct
   {
     sprite:   Sprite_Name,
-    ticks:    u16,
+    duration: f32,
   },
 }
 
@@ -210,33 +210,33 @@ init_resources :: proc(arena: ^mem.Arena)
       .NIL = {},
       .PLAYER_IDLE = {
         frames = {
-          {sprite=.PLAYER_IDLE_0, ticks=30}, 
-          {sprite=.PLAYER_IDLE_1, ticks=30},
+          {sprite=.PLAYER_IDLE_0, duration=0.5}, 
+          {sprite=.PLAYER_IDLE_1, duration=0.5},
         },
       },
       .PLAYER_WALK = {
         frames = {
-          {sprite=.PLAYER_WALK_0, ticks=5},
-          {sprite=.PLAYER_WALK_1, ticks=5},
-          {sprite=.PLAYER_WALK_2, ticks=5},
-          {sprite=.PLAYER_WALK_3, ticks=5},
-          {sprite=.PLAYER_WALK_4, ticks=5},
+          {sprite=.PLAYER_WALK_0, duration=0.15},
+          {sprite=.PLAYER_WALK_1, duration=0.15},
+          {sprite=.PLAYER_WALK_2, duration=0.15},
+          {sprite=.PLAYER_WALK_3, duration=0.15},
+          {sprite=.PLAYER_WALK_4, duration=0.15},
         },
       },
       .DEER_IDLE = {
         frames = {
-          {sprite=.DEER_IDLE_0, ticks=8}, 
-          {sprite=.DEER_IDLE_1, ticks=8},
-          {sprite=.DEER_IDLE_2, ticks=8},
-          {sprite=.DEER_IDLE_3, ticks=8},
+          {sprite=.DEER_IDLE_0, duration=0.4}, 
+          {sprite=.DEER_IDLE_1, duration=0.4},
+          {sprite=.DEER_IDLE_2, duration=0.4},
+          {sprite=.DEER_IDLE_3, duration=0.4},
         },
       },
       .DEER_WALK = {
         frames = {
-          {sprite=.DEER_WALK_0, ticks=8}, 
-          {sprite=.DEER_WALK_1, ticks=8},
-          {sprite=.DEER_WALK_2, ticks=8},
-          {sprite=.DEER_WALK_3, ticks=8},
+          {sprite=.DEER_WALK_0, duration=0.3}, 
+          {sprite=.DEER_WALK_1, duration=0.3},
+          {sprite=.DEER_WALK_2, duration=0.3},
+          {sprite=.DEER_WALK_3, duration=0.3},
         },
       },
     }
