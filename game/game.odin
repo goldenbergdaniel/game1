@@ -257,32 +257,45 @@ update_game :: proc(gm: ^Game, dt: f32)
   {
     // - Player movement ---
     {
-      ACC  :: 250.0
-      DRAG :: 1.25
+      ACC     :: 250.0
+      DRAG    :: 1.25
+      BWD_MULT :: 0.7
 
       player.vel = {}
-      en.anim.next_state = .IDLE
+      player.anim.next_state = .IDLE
+
+      dir_factor: f32 = 1
 
       if platform.key_pressed(.A) && !platform.key_pressed(.D)
       {
+        dir_factor = cursor_pos.x < tt.local(player).pos.x ? 1.0 : BWD_MULT
+        player.movement_speed = res.player.speed * dir_factor
+
         player.vel.x = -player.movement_speed
         player.anim.next_state = .WALK
       }
       
       if platform.key_pressed(.D) && !platform.key_pressed(.A)
       {
-        player.vel.x = player.movement_speed
+        dir_factor = cursor_pos.x > tt.local(player).pos.x ? 1.0 : BWD_MULT
+        player.movement_speed = res.player.speed * dir_factor
+
+        player.vel.x = player.movement_speed * dir_factor
         player.anim.next_state = .WALK
       }
 
       if platform.key_pressed(.W) && !platform.key_pressed(.S)
       {
+        player.movement_speed = res.player.speed * dir_factor
+
         player.vel.y = -player.movement_speed
         player.anim.next_state = .WALK
       }
 
       if platform.key_pressed(.S) && !platform.key_pressed(.W)
       {
+        player.movement_speed = res.player.speed * dir_factor
+
         player.vel.y = player.movement_speed
         player.anim.next_state = .WALK
       }
@@ -1248,7 +1261,7 @@ setup_player :: proc(en: ^Entity)
   // en.props += {.INTERPOLATE}
   en.z_layer = .PLAYER
   en.collider.kind = .POLYGON
-  en.movement_speed = 64
+  en.movement_speed = res.player.speed
   en.anim.state = .IDLE
   en.anim.data[.IDLE] = .PLAYER_IDLE
   en.anim.data[.WALK] = .PLAYER_WALK
@@ -1587,7 +1600,7 @@ entity_creature_wander :: proc(en: ^Entity, dt: f32)
     }
 
   case .WAIT:
-    en.anim.next_state = .WALK
+    en.anim.next_state = .IDLE
 
     if !wander.wait_timer.ticking
     {

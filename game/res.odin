@@ -13,6 +13,7 @@ Resources :: struct
   sprites:    [Sprite_Name]Sprite,
   animations: [Animation_Name]Animation_Desc,
   particles:  [Particle_Name]Particle_Desc,
+  player:     Player_Desc,
   creatures:  [Creature_Kind]Creature_Desc,
   weapons:    [Weapon_Kind]Weapon_Desc,
 }
@@ -123,6 +124,11 @@ Weapon_Desc :: struct
   capacity:    u16,
 }
 
+Player_Desc :: struct
+{
+  speed: f32,
+}
+
 Creature_Desc :: struct
 {
   animations:   [Animation_State]Animation_Name,
@@ -210,11 +216,11 @@ init_resources :: proc(arena: ^mem.Arena)
       },
       .PLAYER_WALK = {
         frames = {
-          {sprite=.PLAYER_WALK_0, ticks=7},
-          {sprite=.PLAYER_WALK_1, ticks=7},
-          {sprite=.PLAYER_WALK_2, ticks=7},
-          {sprite=.PLAYER_WALK_3, ticks=7},
-          {sprite=.PLAYER_WALK_4, ticks=7},
+          {sprite=.PLAYER_WALK_0, ticks=5},
+          {sprite=.PLAYER_WALK_1, ticks=5},
+          {sprite=.PLAYER_WALK_2, ticks=5},
+          {sprite=.PLAYER_WALK_3, ticks=5},
+          {sprite=.PLAYER_WALK_4, ticks=5},
         },
       },
       .DEER_IDLE = {
@@ -251,6 +257,11 @@ init_resources :: proc(arena: ^mem.Arena)
         emmision_kind = .BURST,
       },
     }
+  }
+
+  // - Player
+  {
+    res.player.speed = 60
   }
 
   // - Creature ---
