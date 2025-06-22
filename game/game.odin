@@ -43,12 +43,12 @@ Game :: struct
 
   camera:              struct
   {
-    pos:               v2f32,
-    scl:               v2f32,
+    pos:               f32x2,
+    scl:               f32x2,
     rot:               f32,
   },
   regions:             [9][REGION_SPAN_TILES*REGION_SPAN_TILES]Tile,
-  active_region:       v2f32,
+  active_region:       Region_Coord,
  
   transform_tree:      tt.Transform_Tree,
   entities:            [MAX_ENTITIES]Entity,
@@ -108,19 +108,19 @@ start_game :: proc(gm: ^Game)
   gm.t_mult = 1
   gm.camera.scl = {1, 1}
 
-  region := v2f32{0, 0}
+  region: Region_Coord
   generate_world_region(gm)
   set_active_region(gm, region)
 
   player := alloc_entity(gm)
   setup_player(player)
-  tt.set_global_pos(player, region_to_world_space(WORLD_WIDTH/2, region))
+  tt.set_global_pos(player, region_pos_to_world_pos(WORLD_WIDTH/2, region))
 
   gm.special_entities[.PLAYER] = player
 
   deer := spawn_creature(.DEER)
   deer.creature.state = .WANDER
-  tt.set_global_position(deer.xform, region_to_world_space({100, 100}, region))
+  tt.set_global_position(deer.xform, region_pos_to_world_pos({100, 100}, region))
 }
 
 update_game :: proc(gm: ^Game, dt: f32)
@@ -133,6 +133,7 @@ update_game :: proc(gm: ^Game, dt: f32)
 
   gm.interpolate = true
  
+  // - Kill entities ---
   for &en in gm.entities do if (en.ref != {})
   {
     if .INTERPOLATE in en.props
@@ -146,12 +147,18 @@ update_game :: proc(gm: ^Game, dt: f32)
     }
   }
 
+  // - Kill debug entities ---
   for &den in gm.debug_entities
   {
     if .MARKED_FOR_DEATH in den.props
     {
       pop_debug_entity(&den)
     }
+  }
+
+  if !point_in_region_bounds(cursor_pos, gm.active_region)
+  {
+    debug_circle(cursor_pos, 4, {1, 0, 0, 0})
   }
 
   // - Global keybinds ---
@@ -219,7 +226,7 @@ update_game :: proc(gm: ^Game, dt: f32)
 
   // - Move region ---
   {
-    region_pos := region_to_world_space({0, 0})
+    region_pos := region_pos_to_world_pos({0, 0})
     relative_player_pos := tt.global_pos(player) - region_pos
     
     if gm.active_region.x < 2 && relative_player_pos.x > REGION_SPAN
@@ -262,12 +269,14 @@ update_game :: proc(gm: ^Game, dt: f32)
       if !(platform.key_pressed(.A) || platform.key_pressed(.D))
       {
         player.vel.x = 0
+        player.input_dir.x = 0
         entity_animate(player, .IDLE)
       }
 
       if !(platform.key_pressed(.W) || platform.key_pressed(.S))
       {
         player.vel.y = 0
+        player.input_dir.y = 0
         entity_animate(player, .IDLE)
       }
 
@@ -278,41 +287,40 @@ update_game :: proc(gm: ^Game, dt: f32)
       {
         bwd = cursor_pos.x > tt.local(player).pos.x
         dir_factor = bwd ? BWD_MULT : 1.0
-        player.movement_speed = res.player.speed * dir_factor
 
-        player.vel.x = -player.movement_speed
+        player.input_dir.x = -1
         entity_animate(player, .WALK, speed=(bwd ? BWD_MULT : 1), reverse=bwd)
       }
       
       if platform.key_pressed(.D) && !platform.key_pressed(.A)
       {
-        bwd = cursor_pos.x < tt.local(player).pos.x 
+        bwd = cursor_pos.x < tt.local(player).pos.x
         dir_factor = bwd ? BWD_MULT : 1.0
-        player.movement_speed = res.player.speed * dir_factor
-
-        player.vel.x = player.movement_speed * dir_factor
+        
+        player.input_dir.x = 1
         entity_animate(player, .WALK, speed=(bwd ? BWD_MULT : 1), reverse=bwd)
       }
 
       if platform.key_pressed(.W) && !platform.key_pressed(.S)
       {
-        player.movement_speed = res.player.speed * dir_factor
-
-        player.vel.y = -player.movement_speed
+        player.input_dir.y = -1
         entity_animate(player, .WALK, speed=(bwd ? BWD_MULT : 1), reverse=bwd)
       }
 
       if platform.key_pressed(.S) && !platform.key_pressed(.W)
       {
-        player.movement_speed = res.player.speed * dir_factor
-
-        player.vel.y = player.movement_speed
+        player.input_dir.y = 1
         entity_animate(player, .WALK, speed=(bwd ? BWD_MULT : 1), reverse=bwd)
       }
 
+      player.movement_speed = res.player.speed * dir_factor
       if player.vel.x != 0 && player.vel.y != 0
       {
-        player.vel = vmath.normalize(player.vel) * player.movement_speed
+        player.vel = vmath.normalize(player.input_dir) * player.movement_speed
+      }
+      else
+      {
+        player.vel = player.input_dir * player.movement_speed
       }
 
       entity_flip_to_target(player, cursor_pos)
@@ -334,7 +342,7 @@ update_game :: proc(gm: ^Game, dt: f32)
         dist_to_target := vmath.abs(en_pos - target_pos)
 
         if dist_to_target.x >= en.targetting.min_dist && 
-          dist_to_target.x <= en.targetting.max_dist
+           dist_to_target.x <= en.targetting.max_dist
         {
           en.vel.x += dir.x * ACC * dt
           en.vel.x = clamp(en.vel.x, -en.movement_speed, en.movement_speed)
@@ -346,7 +354,7 @@ update_game :: proc(gm: ^Game, dt: f32)
         }
 
         if dist_to_target.y >= en.targetting.min_dist && 
-          dist_to_target.y <= en.targetting.max_dist
+           dist_to_target.y <= en.targetting.max_dist
         {
           en.vel.y += dir.y * ACC * dt
           en.vel.y = clamp(en.vel.y, -en.movement_speed, en.movement_speed)
@@ -388,7 +396,7 @@ update_game :: proc(gm: ^Game, dt: f32)
   // - Player attack ---
   {
     weapon := entity_child_at(player, 1)
-    debug_circle(tt.global_pos(weapon.shot_point), 4, {1, 0, 0, 0})
+    // debug_circle(tt.global_pos(weapon.shot_point), 4, {1, 0, 0, 0})
     
     // - Rotate equipped weapon ---
     if player.equipped.weapon_kind != .NIL
@@ -461,24 +469,26 @@ update_game :: proc(gm: ^Game, dt: f32)
   }
 
   // - Update colliders ---
-  for &en in gm.entities do if en.flags.update && en.collider.kind != .NIL
+  for &en in gm.entities do if en.flags.update && en.collider != nil
   {
-    update_entity_collider(&en)
+    entity_update_collider(&en, dt)
   }
 
   // - Collision detection ---
   for &en_a in gm.entities do if en_a.flags.update
   {
+    if en_a.collider == nil do continue
+
     for &en_b in gm.entities 
     {
-      if !en_b.flags.render ||
-         en_a.ref.idx == en_b.ref.idx ||
+      if en_b.collider == nil ||
+         entity_is_same(en_a, en_b) || 
          en_b.col_layer not_in COLLISION_MATRIX[en_a.col_layer]
       {
         continue
       }
 
-      if entity_collision(&en_a, &en_b) && !get_entities_collided_cache(en_a.ref, en_b.ref)
+      if !get_entities_collided_cache(en_a.ref, en_b.ref) && entity_collision(&en_a, &en_b)
       {
         set_entities_collided_cache(en_a.ref, en_b.ref)
 
@@ -490,11 +500,14 @@ update_game :: proc(gm: ^Game, dt: f32)
       }
     }
 
-    if point_in_polygon(cursor_pos, en_a.collider.vertices[:])
+    if circle, ok := en_a.collider.(Circle); ok
     {
-      if platform.mouse_btn_just_pressed(.RIGHT)
+      if point_in_circle(cursor_pos, circle)
       {
-        global.debug_target_entity = en_a.ref
+        if platform.mouse_btn_just_pressed(.RIGHT)
+        {
+          global.debug_target_entity = en_a.ref
+        }
       }
     }
   }
@@ -503,7 +516,7 @@ update_game :: proc(gm: ^Game, dt: f32)
   {
     if .LOOK_AT_TARGET in en.props
     {
-      target_pos: v2f32
+      target_pos: f32x2
       target_en, ok := entity_from_ref(en.targetting.target_en)
       if ok
       {
@@ -528,7 +541,7 @@ update_game :: proc(gm: ^Game, dt: f32)
   }
 
   // - Animate entities ---
-  for &en in gm.entities do if en.flags.update && en.anim.state != .NIL
+  for &en in gm.entities do if en.flags.update
   {
     // - Update animation state ---
     {
@@ -687,25 +700,31 @@ update_game :: proc(gm: ^Game, dt: f32)
   free_all(mem.allocator(&global.frame_arena))
 }
 
-update_debug_ui :: proc(gm: ^Game, dt: f32)
+update_debug_gui :: proc(gm: ^Game, dt: f32)
 {
   set_current_game(gm)
   defer set_current_game(nil)
 
-  when true
+  if true
   {
     imgui.Begin("General")
 
     cursor_pos := platform.cursor_position()
     player := gm.special_entities[.PLAYER]
     player_pos := tt.global_pos(player)
-    player_pos_local := world_to_region_space(player_pos)
+    player_pos_local := region_pos_from_world_pos(player_pos)
 
     imgui.Text("Time elapsed: %.f s", gm.t)
+    imgui.Text("Time delta: %.4f s", dt)
+    
+    imgui.PushID("Time multiplier")
     imgui.PushItemWidth(85)
-    imgui.InputFloat("Time multiplier", &gm.t_mult, 0.1, format="%.2f")
+    imgui.Text("Time multiplier:"); imgui.SameLine()
+    imgui.InputFloat("", &gm.t_mult, 0.1, format="%.2f")
     gm.t_mult = clamp(gm.t_mult, 0, 3)
     imgui.PopItemWidth()
+    imgui.PopID()
+
     imgui.Spacing()
 
     world_pos := screen_to_world_space(cursor_pos)
@@ -721,19 +740,19 @@ update_debug_ui :: proc(gm: ^Game, dt: f32)
     imgui.Spacing()
     imgui.Spacing()
 
-    imgui.Checkbox("Show colliders", &global.debug_enabled)
-    if imgui.Button("Spawn enemy")
-    {
-      if gm.entities_cnt < len(gm.entities)
-      {
-        spawn_creature(.NIL)
-      }
-    }
+    imgui.Checkbox("Show debug", &global.debug_enabled)
+    // if imgui.Button("Spawn enemy")
+    // {
+    //   if gm.entities_cnt < len(gm.entities)
+    //   {
+    //     spawn_creature(.NIL)
+    //   }
+    // }
 
     imgui.End()
   }
 
-  when false
+  if true
   {
     imgui.Begin("Entity Inspector")
 
@@ -769,7 +788,7 @@ update_debug_ui :: proc(gm: ^Game, dt: f32)
     imgui.End()
   }
 
-  when true
+  if true
   {
     imgui.Begin("Player Inspector")
 
@@ -815,6 +834,7 @@ render_game :: proc(gm: ^Game)
   render_world_region(gm, region_idx_from_coord(gm.active_region))
 
   // - Draw entities ---
+  // TODO(dg): We can speed this up by only copying renderable entities
   en_targets: [len(gm.entities)]^Entity
   for i in 0..<len(gm.entities)
   {
@@ -830,12 +850,13 @@ render_game :: proc(gm: ^Game)
     {
       return i.z_layer < j.z_layer
     }
+    // return tt.global_pos(i).y < tt.global_pos(j).y
   })
 
   // - Draw entities ---
   for en in en_targets do if en.flags.render
   {
-    flip: v2f32
+    flip: f32x2
     flip.x = -1 if .FLIP_H in en.props else 1
     flip.y = -1 if .FLIP_V in en.props else 1
 
@@ -861,6 +882,7 @@ render_game :: proc(gm: ^Game)
       den_pos := tt.global_pos(den)
       den_scl := tt.global_scl(den)
       den_rot := tt.global_rot(den)
+      println(den_pos, den_scl)
       draw_sprite(den_pos, den_scl, den_rot, den.tint, den.color, den.sprite)
     }
   }
@@ -956,7 +978,7 @@ interpolate_games :: proc(curr_gm, prev_gm, res_gm: ^Game, alpha: f32)
   }
 }
 
-camera_follow_point_bounded :: proc(point: v2f32)
+camera_follow_point_bounded :: proc(point: f32x2)
 {
   gm := current_game()
   point := point - {WORLD_WIDTH, WORLD_HEIGHT}/2
@@ -971,7 +993,7 @@ camera_follow_point_bounded :: proc(point: v2f32)
   gm.camera.pos.y = clamp(point.y, bounds_min.y, bounds_max.y)
 }
 
-screen_to_world_space :: proc(pos: v2f32) -> (result: v2f32)
+screen_to_world_space :: proc(pos: f32x2) -> (result: f32x2)
 {
   gm := current_game()
 
@@ -981,20 +1003,6 @@ screen_to_world_space :: proc(pos: v2f32) -> (result: v2f32)
   }
 
   return result + gm.camera.pos
-}
-
-move_to_point :: proc(a, b: [2]f32, r: f32) -> [2]f32
-{
-  dx := b.x - a.x
-  dy := b.y - a.y
-  dist := math.sqrt(dx*dx + dy*dy)
-
-  if dist == 0 do return a
-
-  if r > dist do return b
-
-  factor := r / dist
-  return {a.x + (dx * factor), a.y + (dy * factor)} 
 }
 
 // Entity ////////////////////////////////////////////////////////////////////////////////
@@ -1015,12 +1023,12 @@ Entity :: struct
   },
   props:            bit_set[Entity_Prop],
   #subtype xform:   tt.Transform,
-  vel:              v2f32,
+  vel:              f32x2,
   radius:           f32,
-  input_dir:        v2f32,
+  input_dir:        f32x2,
   movement_speed:   f32,
-  tint:             v4f32,
-  color:            v4f32,
+  tint:             f32x4,
+  color:            f32x4,
   sprite:           Sprite_Name,
   collider:         Collider,
   col_layer:        Collision_Layer,
@@ -1073,7 +1081,7 @@ Entity :: struct
   targetting:       struct
   {
     target_en:      Entity_Ref,
-    target_pos:     v2f32,
+    target_pos:     f32x2,
     min_dist:       f32,
     max_dist:       f32,
   },
@@ -1123,7 +1131,7 @@ Creature_State_Data :: struct #raw_union
   wander:  struct
   {
     state:      enum{CHOOSE, MOVE, WAIT},
-    point:      v2f32,
+    point:      f32x2,
     wait_timer: Timer,
   },
 }
@@ -1231,6 +1239,13 @@ kill_entity :: proc(en: ^Entity)
 {
   en.flags.update = false
   en.props += {.MARKED_FOR_DEATH}
+
+  for child in en.children
+  {
+    child := entity_from_ref(child) or_continue
+    child.flags.update = false
+    child.props += {.MARKED_FOR_DEATH}
+  }
 }
 
 entity_attach_child :: proc(parent, child: ^Entity) -> bool
@@ -1268,7 +1283,6 @@ setup_player :: proc(en: ^Entity)
   setup_sprite_entity(en, .PLAYER_IDLE_1)
   // en.props += {.INTERPOLATE}
   en.z_layer = .PLAYER
-  en.collider.kind = .POLYGON
   en.movement_speed = res.player.speed
   en.anim.state = .IDLE
   en.anim.data[.IDLE] = .PLAYER_IDLE
@@ -1350,7 +1364,9 @@ spawn_creature :: proc(kind: Creature_Kind) -> ^Entity
     }
   }
 
-  en.collider.kind = collider_map[en.sprite].kind
+  en.collider = Circle{
+    radius = 8,
+  }
 
   return en
 }
@@ -1384,15 +1400,19 @@ spawn_projectile :: proc(kind: Projectile_Kind) -> ^Entity
   en.z_layer = .PROJECTILE
   en.col_layer = .PLAYER
 
+  collider_radius: f32
+
   switch kind
   {
   case .BULLET:
     setup_sprite_entity(en, .BULLET)
-    en.collider.radius = 4
+    collider_radius = 3
   case .NIL:
   }
 
-  en.collider.kind = collider_map[en.sprite].kind
+  en.collider = Circle{
+    radius = collider_radius,
+  }
 
   return en
 }
@@ -1408,7 +1428,7 @@ entity_animate :: proc(
   en.anim.reverse = reverse
 }
 
-entity_rotate_to_target :: proc(en: ^Entity, target: v2f32)
+entity_rotate_to_target :: proc(en: ^Entity, target: f32x2)
 {
   diff := target - tt.global_pos(en)
   tt.local(en).rot = math.atan2(diff.y, diff.x)
@@ -1418,7 +1438,7 @@ entity_rotate_to_target :: proc(en: ^Entity, target: v2f32)
   }
 }
 
-entity_flip_to_target :: proc(en: ^Entity, target: v2f32)
+entity_flip_to_target :: proc(en: ^Entity, target: f32x2)
 {
   en_pos := tt.global_pos(en)
   if en_pos.x > target.x
@@ -1431,20 +1451,20 @@ entity_flip_to_target :: proc(en: ^Entity, target: v2f32)
   }
 }
 
-entity_top_left :: proc(en: ^Entity) -> v2f32
+entity_top_left :: proc(en: ^Entity) -> f32x2
 {
   pivot := res.sprites[en.sprite].pivot
   dim := dim_from_entity(en)
-  local_pos := vmath.rotation_2x2f(tt.local(en).rot) * (v2f32{-dim.x, -dim.y} * pivot)
+  local_pos := vmath.rotation_2x2f(tt.local(en).rot) * (f32x2{-dim.x, -dim.y} * pivot)
   return local_pos + tt.local(en).pos
 }
 
-dim_from_entity :: proc(en: ^Entity) -> v2f32
+dim_from_entity :: proc(en: ^Entity) -> f32x2
 {
-  return tt.local(en).scl * v2f32{16, 16}
+  return tt.local(en).scl * f32x2{16, 16}
 }
 
-xform_from_entity :: proc(en: ^Entity) -> m3x3f32
+xform_from_entity :: proc(en: ^Entity) -> m3f32
 {
   result := vmath.scale_3x3f(tt.local(en).scl)
   result = vmath.rotation_3x3f(tt.local(en).rot) * result
@@ -1452,58 +1472,53 @@ xform_from_entity :: proc(en: ^Entity) -> m3x3f32
   return result
 }
 
-entity_collider_vertex_pos :: proc(en: ^Entity, v: v2f32) -> v2f32
+entity_collider_vertex_pos :: proc(en: ^Entity, v: f32x2) -> f32x2
 {
   local_pos := vmath.rotation_2x2f(tt.local(en).rot) * v * 2
   return entity_top_left(en) + local_pos
 }
 
-update_entity_collider :: proc(en: ^Entity)
+entity_update_collider :: proc(en: ^Entity, dt: f32)
 {
-  switch en.collider.kind
+  switch &collider in en.collider
   {
-  case .CIRCLE:
-    origin := xform_from_entity(en) * vmath.concat(collider_map[en.sprite].origin, 1)
-    en.collider.origin = origin.xy
-    // debug_circle(en.collider.origin, en.collider.radius, alpha=0.25)
-  case .POLYGON:
-    en.collider.vertices_cnt = cast(u8) collider_map[en.sprite].vertex_count
-    for i in 0..<en.collider.vertices_cnt
-    {
-      v := xform_from_entity(en) * vmath.concat(collider_map[en.sprite].vertices[i], 1)
-      en.collider.vertices[i] = v.xy
-    }
+  case Circle:
+    collider.origin = tt.global_pos(en)
+    debug_circle(collider.origin, collider.radius, alpha=0.25)
+  case Polygon:
+    // en.collider.vertices_cnt = cast(u8) collider_map[en.sprite].vertex_count
+    // for i in 0..<en.collider.vertices_cnt
+    // {
+    //   v := xform_from_entity(en) * vmath.concat(collider_map[en.sprite].vertices[i], 1)
+    //   en.collider.vertices[i] = v.xy
+    // }
 
     // for vert in en.collider.vertices[:en.collider.vertices_cnt]
     // {
-      // debug_circle(vert, 4, color={0, 1, 0, 0}, alpha=0.75)
+    //   debug_circle(vert, 4, color={0, 1, 0, 0}, alpha=0.75)
     // }
-  case .NIL:
   }
 }
 
 entity_collision :: proc(en_a, en_b: ^Entity) -> bool
 {
-  result: bool
-
-  if en_a.collider.kind == .CIRCLE && en_b.collider.kind == .CIRCLE
+  switch &a in en_a.collider
   {
-    result = circle_circle_overlap(&en_a.collider, &en_b.collider)
-  }
-  else if en_a.collider.kind == .POLYGON && en_b.collider.kind == .POLYGON
-  { 
-    result = polygon_polygon_overlap(&en_a.collider, &en_b.collider)
-  }
-  else if en_a.collider.kind == .CIRCLE && en_b.collider.kind == .POLYGON
-  {
-    result = circle_polygon_overlap(&en_a.collider, &en_b.collider)
-  }
-  else if en_a.collider.kind == .POLYGON && en_b.collider.kind == .CIRCLE
-  {
-    result = circle_polygon_overlap(&en_b.collider, &en_a.collider)
+  case Circle:
+    switch &b in en_b.collider
+    {
+    case Polygon: return circle_polygon_overlap(a, b)
+    case Circle:  return circle_circle_overlap(a, b)
+    }
+  case Polygon:
+    switch &b in en_b.collider
+    {
+    case Polygon: return polygon_polygon_overlap(a, b)
+    case Circle:  return circle_polygon_overlap(b, a)
+    }
   }
 
-  return result
+  panic("Unhandled collision for collider types!")
 }
 
 @(thread_local, private="file")
@@ -1527,7 +1542,7 @@ reset_entity_collision_cache :: proc()
 
 entity_move_to_point :: proc(
   en:    ^Entity, 
-  p:     v2f32, 
+  p:     f32x2, 
   speed: f32, 
   flip:  bool = true
 ) -> (
@@ -1597,22 +1612,30 @@ entity_creature_wander :: proc(en: ^Entity, dt: f32)
 {
   creature_desc := &res.creatures[en.creature_kind]
   wander := &en.creature.data.wander
+  en_pos := tt.global_pos(en)
 
   switch wander.state
   {
   case .CHOOSE:
-    point := basic.array_cast(rand.range_2i31(creature_desc.wander_range), f32)
-    point.x *= -1 if rand.boolean() else 1
-    point.y *= -1 if rand.boolean() else 1
-    point += tt.global_pos(en)
+    point: [2]f32
+    for
+    {
+      point = array_cast(rand.range_2i31(creature_desc.wander_range), f32)
+      point.x *= -1 if rand.boolean() else 1
+      point.y *= -1 if rand.boolean() else 1
+      point += en_pos
+
+      if point_in_region_bounds(point, region_from_world_pos(en_pos)) do break
+    }
 
     wander.point = point
     wander.state = .MOVE
 
   case .MOVE:
     entity_animate(en, .WALK)
+    debug_circle(wander.point, 4)
 
-    arrived := entity_move_to_point(en, wander.point, dt*25)
+    arrived := entity_move_to_point(en, wander.point, creature_desc.speed*dt)
     if arrived
     {
       wander.state = .WAIT
@@ -1623,7 +1646,7 @@ entity_creature_wander :: proc(en: ^Entity, dt: f32)
 
     if !wander.wait_timer.ticking
     {
-      duration := rand.range_f32({0.5, 3})
+      duration := rand.range_f32({0.5, 5})
       timer_start(&wander.wait_timer, duration)
     }
 
@@ -1673,15 +1696,13 @@ pop_debug_entity :: proc(den: ^Debug_Entity)
 }
 
 debug_rect :: proc(
-  pos:    v2f32,
-  scale:  v2f32, 
-  color:  v4f32 = {1, 1, 1, 0},
+  pos:    f32x2,
+  scale:  f32x2, 
+  color:  f32x4 = {1, 1, 1, 0},
   alpha:  f32 = 0.65,
   sprite: Sprite_Name = .SQUARE,
 ) -> ^Debug_Entity
 {
-  gm := current_game()
-
   result := push_debug_entity()
   tt.local(result).pos = pos
   tt.local(result).scale = scale
@@ -1693,18 +1714,16 @@ debug_rect :: proc(
 }
 
 debug_circle :: proc(
-  pos:    v2f32,
+  pos:    f32x2,
   radius: f32, 
-  color:  v4f32 = {0, 1, 0, 0},
+  color:  f32x4 = {0, 1, 0, 0},
   alpha:  f32 = 0.65,
 ) -> (
   ^Debug_Entity,
 ){
-  gm := current_game()
-
   result := push_debug_entity()
   tt.local(result).pos = pos
-  tt.local(result).scale = {radius/16, radius/16}
+  tt.local(result).scl = {radius/8, radius/8}
   result.color = color
   result.tint = {1, 1, 1, alpha}
   result.sprite = .CIRCLE
@@ -1726,27 +1745,49 @@ Tile :: struct
   rot:    f16,
 }
 
-tile_idx_from_coord :: proc(coord: [2]f32, region_coord: v2f32 = {}) -> int
+Tile_Coord   :: distinct [2]f32
+Region_Coord :: distinct [2]f32
+
+tile_idx_from_coord :: proc(coord: Tile_Coord) -> int
 {
   return int(coord.x + (coord.y * f32(REGION_SPAN_TILES)))
 }
 
-tile_coord_from_idx :: proc(idx: int) -> [2]f32
+tile_coord_from_idx :: proc(idx: int) -> Tile_Coord
 {
   return {f32(idx % REGION_SPAN_TILES), f32(idx / REGION_SPAN_TILES)}
 }
 
-region_idx_from_coord :: proc(coord: [2]f32) -> int
+region_idx_from_coord :: proc(coord: Region_Coord) -> int
 {
   return int(coord.x + (coord.y * 3))
 }
 
-region_coord_from_idx :: proc(idx: int) -> [2]f32
+region_coord_from_idx :: proc(idx: int) -> Region_Coord
 {
   return {f32(idx % 3), f32(idx / 3)}
 }
 
-region_to_world_space :: proc(coord: v2f32, region: v2f32 = {-1, -1}) -> v2f32
+region_from_world_pos :: proc(pos: f32x2) -> Region_Coord
+{
+  return {
+    f32(int(pos.x) / REGION_SPAN),
+    f32(int(pos.y) / REGION_SPAN),
+  }
+}
+
+region_pos_from_world_pos :: proc(pos: f32x2) -> f32x2
+{
+  gm := current_game()
+  region_pos := region_pos_to_world_pos({0, 0})
+
+  return {
+    region_pos.x != 0 ? f32(int(pos.x) % int(region_pos.x)) : pos.x,
+    region_pos.y != 0 ? f32(int(pos.y) % int(region_pos.y)) : pos.y,
+  }
+}
+
+region_pos_to_world_pos :: proc(pos: f32x2, region: Region_Coord = {-1, -1}) -> f32x2
 {
   gm := current_game()
 
@@ -1756,21 +1797,16 @@ region_to_world_space :: proc(coord: v2f32, region: v2f32 = {-1, -1}) -> v2f32
     region = gm.active_region
   }
 
-  return coord + {REGION_SPAN, REGION_SPAN} * region
+  return pos + {REGION_SPAN, REGION_SPAN} * f32x2(region)
 }
 
-world_to_region_space :: proc(coord: v2f32) -> (result: v2f32)
+point_in_region_bounds :: proc(point: f32x2, region: Region_Coord) -> bool
 {
-  gm := current_game()
-  region_pos := region_to_world_space({0, 0})
-
-  result.x = region_pos.x != 0 ? f32(int(coord.x) % int(region_pos.x)) : coord.x
-  result.y = region_pos.y != 0 ? f32(int(coord.y) % int(region_pos.y)) : coord.y
-
-  return
+  region_pos := region_pos_from_world_pos(point)
+  return point_in_bounds(region_pos, Range(f32){REGION_GAP, REGION_SPAN-REGION_GAP})
 }
 
-set_active_region :: proc(gm: ^Game, coord: v2f32)
+set_active_region :: proc(gm: ^Game, coord: Region_Coord)
 {
   gm.active_region = coord
   gm.camera.pos = {WORLD_WIDTH * coord.x, WORLD_HEIGHT * coord.y}
@@ -1824,7 +1860,7 @@ generate_world_region :: proc(gm: ^Game)
 
       rot: f16
       rot_roll := rand.range_i31({0, 4})
-      rot = cast(f16) i32(rot_roll)*math.PI/2.0
+      rot = cast(f16) i32(rot_roll) * math.PI/2.0
 
       gm.regions[region_idx][tile_idx] = Tile{
         sprite = sprite,
@@ -1843,9 +1879,9 @@ render_world_region :: proc(gm: ^Game, region_idx: int)
     tile := &gm.regions[region_idx][tile_idx]
     if tile.sprite != .NIL
     {
-      pos: v2f32 = basic.array_cast(tile_coord_from_idx(tile_idx), f32)
+      pos: f32x2 = basic.array_cast(tile_coord_from_idx(tile_idx), f32)
       pos *= TILE_SIZE
-      pos += ({REGION_SPAN, REGION_SPAN}) * region_coord
+      pos += ({REGION_SPAN, REGION_SPAN}) * f32x2(region_coord)
       pos += {TILE_SIZE/2.0, TILE_SIZE/2.0}
       draw_sprite(pos, scl={1.01, 1.01}, rot=f32(tile.rot), sprite=tile.sprite)
     }
@@ -1861,11 +1897,11 @@ Particle :: struct
   gen:           u16,
   kind:          Particle_Name,
   kill_timer:    Timer,
-  tint:          v4f32,
-  color:         v4f32,
-  pos:           v2f32,
-  scl:           v2f32,
-  vel:           v2f32,
+  tint:          f32x4,
+  color:         f32x4,
+  pos:           f32x2,
+  scl:           f32x2,
+  vel:           f32x2,
   dir:           f32,
   rot:           f32,
   sprite:        Sprite_Name,
@@ -1919,7 +1955,7 @@ kill_particle :: proc(par: ^Particle)
   par.props -= {.ACTIVE}
 }
 
-spawn_particles :: proc(kind: Particle_Name, pos: v2f32)
+spawn_particles :: proc(kind: Particle_Name, pos: f32x2)
 {
   gm := current_game()
   desc := &res.particles[kind]

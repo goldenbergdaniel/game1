@@ -8,6 +8,11 @@ Range :: struct($T: typeid) where intrinsics.type_is_numeric(T)
   max: T,
 }
 
+range_overlap :: proc(a, b: Range($T)) -> bool
+{
+  return a.min <= b.max && a.max >= b.min
+}
+
 @(require_results)
 approx :: #force_inline proc "contextless" (val, tar, tol: $T) -> T
   where intrinsics.type_is_numeric(T)

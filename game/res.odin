@@ -22,7 +22,7 @@ Sprite :: struct
 {
   coords:  [2]f32,
   grid:    [2]f32,
-  pivot:   v2f32,
+  pivot:   f32x2,
   texture: render.Texture_ID,
 }
 
@@ -101,12 +101,12 @@ Particle_Desc :: struct
   count:         u16,
   lifetime:      f32,
   spread:        f32,
-  color_a:       v4f32,
-  color_b:       v4f32,
+  color_a:       f32x4,
+  color_b:       f32x4,
   speed:         f32,
   speed_dt:      f32,
-  scl:           v2f32,
-  scl_dt:        v2f32,
+  scl:           f32x2,
+  scl_dt:        f32x2,
   dir:           f32,
   dir_dt:        f32,
   rot:           f32,
@@ -116,7 +116,7 @@ Particle_Desc :: struct
 Weapon_Desc :: struct
 {
   sprite:      Sprite_Name,
-  shot_point:  v2f32,
+  shot_point:  f32x2,
   shot_time:   f32,
   reload_time: f32,
   damage:      f32,
@@ -133,6 +133,7 @@ Creature_Desc :: struct
 {
   animations:   [Animation_State]Animation_Name,
   wander_range: Range(i32),
+  speed:        f32,
 }
 
 res: Resources
@@ -216,27 +217,27 @@ init_resources :: proc(arena: ^mem.Arena)
       },
       .PLAYER_WALK = {
         frames = {
-          {sprite=.PLAYER_WALK_0, duration=0.15},
-          {sprite=.PLAYER_WALK_1, duration=0.15},
-          {sprite=.PLAYER_WALK_2, duration=0.15},
-          {sprite=.PLAYER_WALK_3, duration=0.15},
-          {sprite=.PLAYER_WALK_4, duration=0.15},
+          {sprite=.PLAYER_WALK_0, duration=0.1},
+          {sprite=.PLAYER_WALK_1, duration=0.1},
+          {sprite=.PLAYER_WALK_2, duration=0.1},
+          {sprite=.PLAYER_WALK_3, duration=0.1},
+          {sprite=.PLAYER_WALK_4, duration=0.1},
         },
       },
       .DEER_IDLE = {
         frames = {
-          {sprite=.DEER_IDLE_0, duration=0.4}, 
-          {sprite=.DEER_IDLE_1, duration=0.4},
-          {sprite=.DEER_IDLE_2, duration=0.4},
-          {sprite=.DEER_IDLE_3, duration=0.4},
+          {sprite=.DEER_IDLE_0, duration=0.3}, 
+          {sprite=.DEER_IDLE_1, duration=0.3},
+          {sprite=.DEER_IDLE_2, duration=0.3},
+          {sprite=.DEER_IDLE_3, duration=0.3},
         },
       },
       .DEER_WALK = {
         frames = {
-          {sprite=.DEER_WALK_0, duration=0.3}, 
-          {sprite=.DEER_WALK_1, duration=0.3},
-          {sprite=.DEER_WALK_2, duration=0.3},
-          {sprite=.DEER_WALK_3, duration=0.3},
+          {sprite=.DEER_WALK_0, duration=0.15}, 
+          {sprite=.DEER_WALK_1, duration=0.15},
+          {sprite=.DEER_WALK_2, duration=0.15},
+          {sprite=.DEER_WALK_3, duration=0.15},
         },
       },
     }
@@ -275,6 +276,7 @@ init_resources :: proc(arena: ^mem.Arena)
           .WALK = .DEER_WALK,
         },
         wander_range = {10, 50},
+        speed = 35,
       },
     }
   }

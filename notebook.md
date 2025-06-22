@@ -29,20 +29,28 @@
 +world regions
 
 # DAY 8 (6.4)
-+overhaul packages and cleanup 
++overhaul packages and cleanup
 
 # DAY 9 (6.6)
 +overhaul world regions
 
 # DAY 10 (6.10)
-+first creature (female deer)
++first creature: female deer
 
 # Day 11 (6.19)
++state machines
++improved animation (speed and reverse)
+
+# Day 12 (6.20)
++improve wander
 
 
 # - UP NEXT -
-~state machines
--drops and inventory
+~rework colliders
+-basic creature death and item drops
+-inventory
+-map decorations (trees, bushes, grass, mushrooms)
+-sort sprites by y
 -fix edge bleeding
 -audio system
 -day/night cycle
@@ -50,4 +58,4 @@
 
 
 # - IDEAS -
--bounties on animals or cryptids that can expire. give partial reward for partial completion. 
+-bounties on animals or cryptids that can expire

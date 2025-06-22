@@ -25,9 +25,9 @@ Collider_Map_Entry :: struct
 COLLIDER_MAP_ENTRY_STRUCT_STR :: `
 Collider_Map_Entry :: struct
 {
-  vertices:     [6]v2f32,
+  vertices:     [6]f32x2,
   vertex_count: int,
-  origin:       v2f32,
+  origin:       f32x2,
   kind:         type_of(Collider{}.kind),
 }
 

@@ -17,7 +17,7 @@ WORLD_STEP   :: 1.0/40
 user: struct
 {
   window:      platform.Window,
-  viewport:    v4f32,
+  viewport:    f32x4,
   perm_arena:  mem.Arena,
   frame_arena: mem.Arena,
   show_imgui:  bool,
@@ -96,7 +96,7 @@ main :: proc()
 
     if user.show_imgui
     {
-      update_debug_ui(&curr_game, WORLD_STEP * curr_game.t_mult)
+      update_debug_gui(&curr_game, WORLD_STEP * curr_game.t_mult)
     }
 
     alpha := accumulator / WORLD_STEP
@@ -112,14 +112,18 @@ main :: proc()
   }
 }
 
-v2f32 :: [2]f32
-v3f32 :: [3]f32
-v4f32 :: [4]f32
+f32x2 :: [2]f32
+f32x3 :: [3]f32
+f32x4 :: [4]f32
 
-m2x2f32 :: matrix[2,2]f32
-m3x3f32 :: matrix[3,3]f32
+m2f32 :: matrix[2,2]f32
+m3f32 :: matrix[3,3]f32
 
 Range :: basic.Range
+
+range_overlap :: basic.range_overlap
+array_cast    :: basic.array_cast
+approc        :: basic.approx
 
 printf  :: fmt.printf
 println :: fmt.println

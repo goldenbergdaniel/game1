@@ -17,7 +17,7 @@ GL_Renderer :: struct
   index_count:  int,
   camera:       m3x3f32,
   projection:   m3x3f32,
-  viewport:     v4i32,
+  viewport:     i32x4,
   texture:      ^Texture,
   uniforms:     struct
   {
@@ -36,7 +36,7 @@ gl_renderer: GL_Renderer
 
 gl_init :: proc(
   window:     ^platform.Window, 
-  projection: v4f32,
+  projection: f32x4,
   textures:   ^[Texture_ID]Texture,
 ){
   gl.load_up_to(4, 6, platform.gl_set_proc_address)
@@ -124,7 +124,7 @@ gl_init :: proc(
                      gl.DYNAMIC_DRAW)
 }
 
-gl_clear :: proc(color: v4f32)
+gl_clear :: proc(color: f32x4)
 {
   gl.ClearColor(color.r, color.g, color.b, color.a)
   gl.Clear(gl.COLOR_BUFFER_BIT);
