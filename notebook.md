@@ -44,9 +44,14 @@
 # Day 12 (6.20)
 +improve wander
 
+# Day 13 (6.22)
++rework colliders
++optimization
+
+# Day 14
+
 
 # - UP NEXT -
-~rework colliders
 -basic creature death and item drops
 -inventory
 -map decorations (trees, bushes, grass, mushrooms)

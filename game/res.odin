@@ -11,19 +11,12 @@ Resources :: struct
 {
   textures:   [render.Texture_ID]render.Texture,
   sprites:    [Sprite_Name]Sprite,
+  sounds:     [Sound_Name]Sound,
   animations: [Animation_Name]Animation_Desc,
   particles:  [Particle_Name]Particle_Desc,
   player:     Player_Desc,
   creatures:  [Creature_Kind]Creature_Desc,
   weapons:    [Weapon_Kind]Weapon_Desc,
-}
-
-Sprite :: struct
-{
-  coords:  [2]f32,
-  grid:    [2]f32,
-  pivot:   f32x2,
-  texture: render.Texture_ID,
 }
 
 Sprite_Name :: enum u16
@@ -60,6 +53,12 @@ Sprite_Name :: enum u16
   TILE_STONE_0,
   TILE_STONE_1,
   TILE_WALL,
+}
+
+Sound_Name :: enum
+{
+  NIL,
+  TEST,
 }
 
 Animation_Name :: enum

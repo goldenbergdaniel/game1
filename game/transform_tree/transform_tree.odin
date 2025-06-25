@@ -48,7 +48,7 @@ create_tree :: proc(n: int, allocator := context.allocator) -> Transform_Tree
   result.data = make([dynamic]Transform_Data, 1, n+1, allocator)
   return result
 }
-
+// import "core:fmt"
 copy_tree :: proc(dst, src: ^Transform_Tree)
 {
   temp := dst.data
@@ -65,6 +65,8 @@ copy_tree :: proc(dst, src: ^Transform_Tree)
     curr^ = &dst.data[(curr^)._ref.id]
     curr = prev
   }
+
+  // fmt.println(len(src.data), len(dst.data))
 }
 
 clear_tree :: proc(tree: ^Transform_Tree)
@@ -126,6 +128,8 @@ alloc_transform_no_parent :: #force_inline proc(tree: ^Transform_Tree) -> Transf
 
 free_transform :: proc(tree: ^Transform_Tree, xform: Transform)
 {
+  if xform.id == 0 do return
+
   tree.data[xform.id]._prev_free = tree.last_free
   tree.last_free = &tree.data[xform.id]
   

@@ -37,32 +37,32 @@ init_global_game_memory :: proc()
 
 Game :: struct
 {
-  t:                   f32,
-  t_mult:              f32,
-  interpolate:         bool,
+  t:                  f32,
+  t_mult:             f32,
+  interpolate:        bool,
 
-  camera:              struct
+  camera:             struct
   {
-    pos:               f32x2,
-    scl:               f32x2,
-    rot:               f32,
+    pos:              f32x2,
+    scl:              f32x2,
+    rot:              f32,
   },
-  regions:             [9][REGION_SPAN_TILES*REGION_SPAN_TILES]Tile,
-  active_region:       Region_Coord,
+  regions:            [9][REGION_SPAN_TILES*REGION_SPAN_TILES]Tile,
+  active_region:      Region_Coord,
  
-  transform_tree:      tt.Transform_Tree,
-  entities:            [MAX_ENTITIES]Entity,
-  entities_cnt:        int,
-  debug_entities:      [128]Debug_Entity,
-  debug_entities_pos:  int,
-  particles:           [MAX_PARTICLES]Particle,
-  particles_pos:       int,
+  transform_tree:     tt.Transform_Tree,
+  entities:           [MAX_ENTITIES]Entity,
+  entities_cnt:       int,
+  debug_entities:     [256]Debug_Entity,
+  debug_entities_pos: int,
+  particles:          [MAX_PARTICLES]Particle,
+  particles_pos:      int,
 
-  special_entities:    [enum{PLAYER}]^Entity,
+  special_entities:   [enum{PLAYER}]^Entity,
 
-  weapon:              struct
+  weapon:             struct
   {
-    kind:              Weapon_Kind,
+    kind:             Weapon_Kind,
   },
 }
 
@@ -118,9 +118,10 @@ start_game :: proc(gm: ^Game)
 
   gm.special_entities[.PLAYER] = player
 
-  deer := spawn_creature(.DEER)
-  deer.creature.state = .WANDER
-  tt.set_global_position(deer.xform, region_pos_to_world_pos({100, 100}, region))
+  for _ in 0..<128
+  {
+    spawn_creature(.DEER, region_pos_to_world_pos({200, 200}, region))
+  }
 }
 
 update_game :: proc(gm: ^Game, dt: f32)
@@ -170,7 +171,7 @@ update_game :: proc(gm: ^Game, dt: f32)
 
     if platform.key_just_pressed(.TAB) && !platform.key_pressed(.LEFT_CTRL)
     {
-      user.show_imgui = !user.show_imgui
+      user.show_dbgui = !user.show_dbgui
     }
 
     if platform.key_pressed(.LEFT_CTRL)
@@ -488,9 +489,10 @@ update_game :: proc(gm: ^Game, dt: f32)
         continue
       }
 
-      if !get_entities_collided_cache(en_a.ref, en_b.ref) && entity_collision(&en_a, &en_b)
+      // if !get_entities_collided_cache(en_a.ref, en_b.ref) && entity_collision(&en_a, &en_b)
+      if entity_collision(&en_a, &en_b)
       {
-        set_entities_collided_cache(en_a.ref, en_b.ref)
+        // set_entities_collided_cache(en_a.ref, en_b.ref)
 
         if en_a.projectile_kind != .NIL || en_b.projectile_kind != .NIL
         {
@@ -696,7 +698,7 @@ update_game :: proc(gm: ^Game, dt: f32)
     update_particle(&par, dt)
   }
 
-  reset_entity_collision_cache()
+  // reset_entity_collision_cache()
   free_all(mem.allocator(&global.frame_arena))
 }
 
@@ -735,12 +737,17 @@ update_debug_gui :: proc(gm: ^Game, dt: f32)
 
     imgui.Spacing()
     diff := time.tick_diff(update_start_tick, update_end_tick)
-    durr_us := time.duration_microseconds(diff)
-    imgui.Text("Update: %.f us", durr_us)
-    imgui.Spacing()
+    update_durr_ms := time.duration_milliseconds(diff)
+    imgui.Text("Update: %.3f ms", update_durr_ms)
+    diff = time.tick_diff(render_start_tick, render_end_tick)
+    render_durr_ms := time.duration_milliseconds(diff)
+    imgui.Text("Render: %.3f ms", render_durr_ms)
+    total_durr_ms := update_durr_ms + render_durr_ms
+    imgui.Text(" Total: %.3f ms", total_durr_ms)
+    imgui.Text("   FPS: %.f", 1.0/(total_durr_ms/1000))
     imgui.Spacing()
 
-    imgui.Checkbox("Show debug", &global.debug_enabled)
+    // imgui.Checkbox("Show debug", &global.debug_enabled)
     // if imgui.Button("Spawn enemy")
     // {
     //   if gm.entities_cnt < len(gm.entities)
@@ -836,12 +843,14 @@ render_game :: proc(gm: ^Game)
   // - Draw entities ---
   // TODO(dg): We can speed this up by only copying renderable entities
   en_targets: [len(gm.entities)]^Entity
-  for i in 0..<len(gm.entities)
+  en_count: int
+  for i in 0..<len(gm.entities) do if gm.entities[i].flags.render
   {
-    en_targets[i] = &gm.entities[i]
+    en_targets[en_count] = &gm.entities[i]
+    en_count += 1
   }
 
-  slice.stable_sort_by(en_targets[:], proc(i, j: ^Entity) -> bool {
+  slice.sort_by(en_targets[:en_count], proc(i, j: ^Entity) -> bool {
     if i.z_layer == j.z_layer
     {
       return i.z_index < j.z_index
@@ -854,7 +863,7 @@ render_game :: proc(gm: ^Game)
   })
 
   // - Draw entities ---
-  for en in en_targets do if en.flags.render
+  for en in en_targets[:en_count]
   {
     flip: f32x2
     flip.x = -1 if .FLIP_H in en.props else 1
@@ -867,10 +876,8 @@ render_game :: proc(gm: ^Game)
   }
 
   // - Draw particles ---
-  for &par in gm.particles
+  for &par in gm.particles do if .ACTIVE in par.props
   {
-    if .ACTIVE not_in par.props do continue
-    
     draw_sprite(par.pos, par.scl, par.rot, par.tint, par.color, par.sprite)
   }
 
@@ -1007,7 +1014,7 @@ screen_to_world_space :: proc(pos: f32x2) -> (result: f32x2)
 
 // Entity ////////////////////////////////////////////////////////////////////////////////
 
-MAX_ENTITIES  :: 1024 + 1
+MAX_ENTITIES  :: 4 << 10
 
 Entity :: struct
 {
@@ -1228,6 +1235,7 @@ free_entity :: proc(gm: ^Game, en: ^Entity)
 {
   assert(entity_is_valid(en))
 
+  tt.free_transform(&gm.transform_tree, en.xform)
   gen := en.gen
   en^ = {}
   en.gen = gen + 1
@@ -1328,7 +1336,7 @@ setup_player :: proc(en: ^Entity)
   }
 }
 
-spawn_creature :: proc(kind: Creature_Kind) -> ^Entity
+spawn_creature :: proc(kind: Creature_Kind, pos: f32x2) -> ^Entity
 {
   gm := current_game()
 
@@ -1341,6 +1349,8 @@ spawn_creature :: proc(kind: Creature_Kind) -> ^Entity
   en.targetting.target_en = gm.special_entities[.PLAYER].ref
   en.targetting.min_dist = 8
   en.targetting.max_dist = 1000
+  en.creature.state = .WANDER
+  tt.local(en).pos = pos
 
   switch kind
   {
@@ -1522,23 +1532,23 @@ entity_collision :: proc(en_a, en_b: ^Entity) -> bool
 }
 
 @(thread_local, private="file")
-_entity_collision_cache: [MAX_ENTITIES][MAX_ENTITIES]bool
+_entity_collision_cache: [MAX_ENTITIES*2]bool
 
-get_entities_collided_cache :: proc(a, b: Entity_Ref) -> bool
-{
-  return _entity_collision_cache[a.idx][b.idx] && _entity_collision_cache[b.idx][a.idx]
-}
+// get_entities_collided_cache :: proc(a, b: Entity_Ref) -> bool
+// {
+//   return _entity_collision_cache[a.idx] && _entity_collision_cache[b.idx]
+// }
 
-set_entities_collided_cache :: proc(a, b: Entity_Ref)
-{
-  _entity_collision_cache[a.idx][b.idx] = true
-  _entity_collision_cache[b.idx][a.idx] = true
-}
+// set_entities_collided_cache :: proc(a, b: Entity_Ref)
+// {
+//   _entity_collision_cache[a.idx] = true
+//   _entity_collision_cache[int(b.idx) + MAX_ENTITIES] = true
+// }
 
-reset_entity_collision_cache :: proc()
-{
-  mem.set(&_entity_collision_cache, 0, MAX_ENTITIES * MAX_ENTITIES)
-}
+// reset_entity_collision_cache :: proc()
+// {
+  // mem.set(&_entity_collision_cache, 0, MAX_ENTITIES * MAX_ENTITIES)
+// }
 
 entity_move_to_point :: proc(
   en:    ^Entity, 
@@ -1670,6 +1680,8 @@ push_debug_entity :: proc() -> ^Debug_Entity
   result.flags.update = true
   result.flags.render = true
   result.props += {.INTERPOLATE, .MARKED_FOR_DEATH}
+
+  tt.free_transform(&gm.transform_tree, result.xform)
   result.xform = tt.alloc_transform(&gm.transform_tree)
 
   gm.debug_entities_pos += 1
@@ -1684,7 +1696,8 @@ push_debug_entity :: proc() -> ^Debug_Entity
 pop_debug_entity :: proc(den: ^Debug_Entity)
 {
   gm := current_game()
-  tt.free_transform(&gm.transform_tree, den)
+  
+  tt.free_transform(&gm.transform_tree, den.xform)
   den^ = {}
   gm.debug_entities_pos -= 1
 
@@ -1701,8 +1714,9 @@ debug_rect :: proc(
   color:  f32x4 = {1, 1, 1, 0},
   alpha:  f32 = 0.65,
   sprite: Sprite_Name = .SQUARE,
-) -> ^Debug_Entity
-{
+) -> (
+  ^Debug_Entity,
+){
   result := push_debug_entity()
   tt.local(result).pos = pos
   tt.local(result).scale = scale
@@ -1890,7 +1904,7 @@ render_world_region :: proc(gm: ^Game, region_idx: int)
 
 // Particle //////////////////////////////////////////////////////////////////////////////
 
-MAX_PARTICLES :: 2048
+MAX_PARTICLES :: 8 << 10
 
 Particle :: struct
 {

@@ -8,22 +8,26 @@ import "basic"
 import "basic/mem"
 import "platform"
 import "render"
+import tt "transform_tree"
 
 WORLD_WIDTH  :: 320.0
 WORLD_HEIGHT :: 180.0
 WORLD_TEXEL  :: 16.0
 WORLD_STEP   :: 1.0/40
 
-user: struct
+User :: struct
 {
   window:      platform.Window,
   viewport:    f32x4,
   perm_arena:  mem.Arena,
   frame_arena: mem.Arena,
-  show_imgui:  bool,
+  show_dbgui:  bool,
 }
 
+user: User
+
 update_start_tick, update_end_tick: time.Tick
+render_start_tick, render_end_tick: time.Tick
 curr_game, prev_game, res_game: Game
 
 main :: proc()
@@ -38,12 +42,34 @@ main :: proc()
     props = {.FULLSCREEN},
   }
 
+  // tree1 := tt.create_tree(1024)
+  // for _ in 0..<16
+  // {
+  //   _ = tt.alloc_transform(&tree1)
+  // }
+
+  // tree2 := tt.create_tree(1024)
+  // for _ in 0..<16
+  // {
+  //   _ = tt.alloc_transform(&tree2)
+  // }
+
+  // for _ in 0..<2
+  // {
+  //   tt.copy_tree(&tree1, &tree2)
+  // }
+
+  // if true do return
+
   user.window = platform.create_window(window_desc, &user.perm_arena)
   defer platform.destroy_window(&user.window)
 
   init_resources(&user.perm_arena)
   render.init(&user.window, {0, WORLD_WIDTH, 0, WORLD_HEIGHT}, &res.textures)
   init_global_game_memory()
+  init_audio()
+
+  thunk := create_sound("res/sounds/thunk.wav")
 
   init_game(&curr_game)
   start_game(&curr_game)
@@ -81,34 +107,35 @@ main :: proc()
     for accumulator >= WORLD_STEP
     {
       update_start_tick = time.tick_now()
+      
       copy_game(&prev_game, &curr_game)
       update_game(&curr_game, WORLD_STEP * curr_game.t_mult)
       platform.save_input()
-      update_end_tick = time.tick_now()
  
       // if frame_time * 1000 > 20 do printf("%.0f ms\n", frame_time * 1000)
 
       curr_game.t += WORLD_STEP * curr_game.t_mult
       accumulator -= WORLD_STEP
-    }
-    
-    platform.imgui_begin()
 
-    if user.show_imgui
-    {
-      update_debug_gui(&curr_game, WORLD_STEP * curr_game.t_mult)
+      update_end_tick = time.tick_now()
     }
+
+    render_start_tick = time.tick_now()
 
     alpha := accumulator / WORLD_STEP
     interpolate_games(&curr_game, &prev_game, &res_game, f32(alpha))
     render_game(&res_game)
 
-    platform.imgui_end()
+    render_end_tick = time.tick_now()
 
-    // start_tick := time.tick_now()
+    if user.show_dbgui
+    {
+      platform.imgui_begin()
+      update_debug_gui(&curr_game, WORLD_STEP * curr_game.t_mult)
+      platform.imgui_end()
+    }
+
     platform.window_swap(&user.window)
-    // end_tick := time.tick_now()
-    // printf("%.f\n", time.duration_milliseconds(time.tick_diff(start_tick, end_tick)))
   }
 }
 
