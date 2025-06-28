@@ -1,18 +1,17 @@
 package game
 
-import "core:fmt"
 import "core:strings"
 
 import ma "ext:miniaudio"
-import sdl "ext:sdl"
+// import sdl "ext:sdl"
 
 import "basic/mem"
 
 // AUDIO_CHANNELS    :: 2
 // AUDIO_SAMPLE_FREQ :: 48000
 
-AUDIO_MAX_EFFECTS :: 1 << 10
-AUDIO_WORLD_SCALE :: 1.0/100
+AUDIO_MAX_EFFECTS :: 512
+AUDIO_WORLD_SCALE :: 0.01
 
 Sound :: struct
 {
@@ -70,7 +69,6 @@ init_audio :: proc()
 
 uninit_audio :: proc()
 {
-  if !global_audio.enabled do return
   ma.engine_uninit(&global_audio.engine)
 }
 
@@ -108,21 +106,21 @@ play_sound :: proc(
     sound: ^ma.sound
     #partial switch sound_desc.group
     {
-    case .AMBIENCE: sound := &global_audio.ambience
-    case .MUSIC:    sound := &global_audio.music
+    case .AMBIENCE: sound = &global_audio.ambience
+    case .MUSIC:    sound = &global_audio.music
     }
 
     if !ma.sound_is_playing(sound) && !ma.sound_at_end(sound)
     {
       ma_sound_init(sound, res.sounds[name].path) or_return
-
       ma.sound_set_looping(sound, true)
       ma.sound_set_spatialization_enabled(sound, false)
 
       result = ma.sound_start(sound)
       if result != .SUCCESS
       {
-        fmt.panicf("Error: Failed to start sound %s with error %s!", name, result)
+        printf("Error: Failed to start sound %s! %s\n", name, result)
+        return false
       }
     }
   
@@ -147,7 +145,8 @@ play_sound :: proc(
     result = ma.sound_start(sound)
     if result != .SUCCESS
     {
-      fmt.panicf("Error: Failed to start sound %s with error %s!", result)
+      printf("Error: Failed to start sound %s! %s\n", result)
+      return false
     }
   }
 
@@ -178,7 +177,7 @@ pause_sound :: proc(
 
   if result != .SUCCESS
   {
-    fmt.printf("Error: Failed to stop sound %s with error %s!\n", name, result)
+    printf("Error: Failed to pause sound %s! %s\n", name, result)
     ok = false
   }
 
@@ -209,7 +208,7 @@ reset_sound :: proc(
 
   if result != .SUCCESS
   {
-    fmt.printf("Error: Failed to reset sound %s with error %s!\n", name, result)
+    printf("Error: Failed to reset sound %s! %s\n", name, result)
     ok = false
   }
 
@@ -244,7 +243,7 @@ ma_sound_init :: proc(ma_sound: ^ma.sound, path: string) -> (ok: bool)
   ma_res := ma.sound_init_from_file(&global_audio.engine, path_cstr, 0, nil, nil, ma_sound)
   if ma_res != .SUCCESS
   {
-    fmt.printf("Error: Failed to init sound %s with error %s!\n", path, ma_res)
+    printf("Error: Failed to init sound %s! %s\n", path, ma_res)
     return false
   }
 
