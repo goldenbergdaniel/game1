@@ -118,7 +118,7 @@ start_game :: proc(gm: ^Game)
 
   gm.special_entities[.PLAYER] = player
 
-  for _ in 0..<128
+  for _ in 0..<3
   {
     spawn_creature(.DEER, region_pos_to_world_pos({200, 200}, region))
   }
@@ -392,6 +392,8 @@ update_game :: proc(gm: ^Game, dt: f32)
     }
 
     camera_follow_point_bounded(tt.global_pos(player))
+
+    set_audio_listener_pos(tt.global_pos(player))
   }
 
   // - Player attack ---
@@ -448,6 +450,8 @@ update_game :: proc(gm: ^Game, dt: f32)
         muzzle_flash.flags.render = true
         entity_distort_h(weapon, tt.local(weapon).scl.x*0.8, 5*dt)
         spawn_particles(.GUN_SMOKE, tt.global_pos(weapon.shot_point))
+
+        play_sound(.THUNK, volume=0.5, pitch=0.5)
       }
 
       // - Position effects ---
@@ -699,6 +703,7 @@ update_game :: proc(gm: ^Game, dt: f32)
   }
 
   // reset_entity_collision_cache()
+  clean_audio()
   free_all(mem.allocator(&global.frame_arena))
 }
 
@@ -1946,20 +1951,16 @@ particle_has_props :: proc(par: Particle, props: bit_set[Particle_Prop]) -> bool
 
 push_particle :: proc(gm: ^Game) -> ^Particle
 {
-  result := &gm.particles[gm.particles_pos]
+  idx := gm.particles_pos % len(gm.particles)
+  result := &gm.particles[idx]
+  gm.particles_pos += 1
+
   old_gen := result.gen
   result^ = {}
-
-  result.gen = old_gen + (old_gen == 0 ? 0 : 1)
+  result.gen = old_gen + 1
   result.props += {.ACTIVE, .INTERPOLATE}
   result.tint = {1, 1, 1, 1}
   result.color = {0, 0, 0, 1}
-
-  gm.particles_pos += 1
-  if gm.particles_pos == len(gm.particles)
-  {
-    gm.particles_pos = 0
-  }
 
   return result
 }

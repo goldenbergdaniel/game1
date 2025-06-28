@@ -42,35 +42,14 @@ main :: proc()
     props = {.FULLSCREEN},
   }
 
-  // tree1 := tt.create_tree(1024)
-  // for _ in 0..<16
-  // {
-  //   _ = tt.alloc_transform(&tree1)
-  // }
-
-  // tree2 := tt.create_tree(1024)
-  // for _ in 0..<16
-  // {
-  //   _ = tt.alloc_transform(&tree2)
-  // }
-
-  // for _ in 0..<2
-  // {
-  //   tt.copy_tree(&tree1, &tree2)
-  // }
-
-  // if true do return
-
   user.window = platform.create_window(window_desc, &user.perm_arena)
   defer platform.destroy_window(&user.window)
 
   init_resources(&user.perm_arena)
   render.init(&user.window, {0, WORLD_WIDTH, 0, WORLD_HEIGHT}, &res.textures)
-  init_global_game_memory()
   init_audio()
-
-  thunk := create_sound("res/sounds/thunk.wav")
-
+  init_global_game_memory()
+  
   init_game(&curr_game)
   start_game(&curr_game)
 

@@ -58,7 +58,15 @@ Sprite_Name :: enum u16
 Sound_Name :: enum
 {
   NIL,
-  TEST,
+  THUNK,
+}
+
+Sound_Group :: enum
+{
+  NIL,
+  AMBIENCE,
+  MUSIC,
+  EFFECT,
 }
 
 Animation_Name :: enum
@@ -201,6 +209,14 @@ init_resources :: proc(arena: ^mem.Arena)
     {
       sprite.texture = .SPRITE_MAP
       sprite.pivot /= basic.array_cast(sprite.grid, f32) * 16
+    }
+  }
+
+  // - Sound ---
+  {
+    res.sounds = [Sound_Name]Sound{
+      .NIL = {},
+      .THUNK = {path="res/sounds/thunk.wav", group=.EFFECT},
     }
   }
 
