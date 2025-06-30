@@ -96,8 +96,8 @@ sdl_mouse_btn_map := [?]Mouse_Btn_Kind{
 }
 
 sdl_create_window :: proc(
-	desc:		Window_Desc,
-	arena:  ^mem.Arena,
+	desc:	 Window_Desc,
+	arena: ^mem.Arena,
 ) -> (
 	result: Window,
 ){

@@ -9,31 +9,6 @@ import gl "ext:opengl"
 import vmath "../basic/vector_math"
 import "../platform"
 
-GL_Renderer :: struct
-{
-  vertices:     [40000]Vertex,
-  vertex_count: int,
-  indices:      [60000]u16,
-  index_count:  int,
-  camera:       m3x3f32,
-  projection:   m3x3f32,
-  viewport:     i32x4,
-  texture:      ^Texture,
-  uniforms:     struct
-  {
-    projection: m4x4f32,
-    camera:     m4x4f32,
-  },
-  window:       ^platform.Window,
-  shader:       u32,
-  textures:     [Texture_ID]u32,
-  ubo:          u32,
-  ssbo:         u32,
-  ibo:          u32,
-}
-
-gl_renderer: GL_Renderer
-
 gl_init :: proc(
   window:     ^platform.Window, 
   projection: f32x4,
@@ -41,8 +16,8 @@ gl_init :: proc(
 ){
   gl.load_up_to(4, 6, platform.gl_set_proc_address)
 
-  gl_renderer.window = window
-  gl_renderer.projection = vmath.orthographic_3x3f(expand_values(projection))
+  renderer.window = window
+  renderer.projection = vmath.orthographic_3x3f(expand_values(projection))
 
   // - Vertex array object ---
   vao: u32
@@ -56,10 +31,10 @@ gl_init :: proc(
 		gl.Enable(gl.MULTISAMPLE)
 
     gl.CreateTextures(gl.TEXTURE_2D, 
-                      len(gl_renderer.textures), 
-                      raw_data(&gl_renderer.textures))
+                      len(renderer.textures), 
+                      raw_data(&renderer.textures))
 
-    for tex, id in gl_renderer.textures
+    for tex, id in renderer.textures
     {
       gl.TextureStorage2D(tex, 1, gl.RGBA8, textures[id].width, textures[id].height)
       gl.TextureSubImage2D(tex, 
@@ -91,36 +66,36 @@ gl_init :: proc(
     gl.CompileShader(fs)
     gl_verify_shader(fs, gl.COMPILE_STATUS)
 
-    gl_renderer.shader = gl.CreateProgram()
-    gl.AttachShader(gl_renderer.shader, vs)
-    gl.AttachShader(gl_renderer.shader, fs)
-    gl.LinkProgram(gl_renderer.shader)
-    gl_verify_shader(gl_renderer.shader, gl.LINK_STATUS)
+    renderer.shader = gl.CreateProgram()
+    gl.AttachShader(renderer.shader, vs)
+    gl.AttachShader(renderer.shader, fs)
+    gl.LinkProgram(renderer.shader)
+    gl_verify_shader(renderer.shader, gl.LINK_STATUS)
   }
 
   // - Uniform buffer ---
-  gl.CreateBuffers(1, &gl_renderer.ubo)
-  gl.UniformBlockBinding(gl_renderer.shader, 0, 0)
-  gl.BindBufferBase(gl.UNIFORM_BUFFER, 0, gl_renderer.ubo)
-  gl.NamedBufferStorage(gl_renderer.ubo, 
-                        size_of(gl_renderer.uniforms),
-                        &gl_renderer.uniforms, 
+  gl.CreateBuffers(1, &renderer.ubo)
+  gl.UniformBlockBinding(renderer.shader, 0, 0)
+  gl.BindBufferBase(gl.UNIFORM_BUFFER, 0, renderer.ubo)
+  gl.NamedBufferStorage(renderer.ubo, 
+                        size_of(renderer.uniforms),
+                        &renderer.uniforms, 
                         gl.DYNAMIC_STORAGE_BIT)
 
   // - Storage buffer ---
-  gl.CreateBuffers(1, &gl_renderer.ssbo)
-  gl.BindBufferBase(gl.SHADER_STORAGE_BUFFER, 1, gl_renderer.ssbo)
-  gl.NamedBufferStorage(gl_renderer.ssbo, 
-                        size_of(gl_renderer.vertices),
-                        raw_data(&gl_renderer.vertices), 
+  gl.CreateBuffers(1, &renderer.ssbo)
+  gl.BindBufferBase(gl.SHADER_STORAGE_BUFFER, 1, renderer.ssbo)
+  gl.NamedBufferStorage(renderer.ssbo, 
+                        size_of(renderer.vertices),
+                        raw_data(&renderer.vertices), 
                         gl.DYNAMIC_STORAGE_BIT)
 
   // - Index buffer ---
-  gl.CreateBuffers(1, &gl_renderer.ibo)
-  gl.VertexArrayElementBuffer(vao, gl_renderer.ibo)
-  gl.NamedBufferData(gl_renderer.ibo,
-                     size_of(gl_renderer.indices),
-                     raw_data(&gl_renderer.indices),
+  gl.CreateBuffers(1, &renderer.ibo)
+  gl.VertexArrayElementBuffer(vao, renderer.ibo)
+  gl.NamedBufferData(renderer.ibo,
+                     size_of(renderer.indices),
+                     raw_data(&renderer.indices),
                      gl.DYNAMIC_DRAW)
 }
 
@@ -132,38 +107,38 @@ gl_clear :: proc(color: f32x4)
 
 gl_flush :: proc()
 {
-  if gl_renderer.vertex_count == 0 do return
+  if renderer.vertex_count == 0 do return
 
-  gl_renderer.uniforms.projection = cast(m4x4f32) gl_renderer.projection
-  gl_renderer.uniforms.camera = cast(m4x4f32) gl_renderer.camera
+  renderer.uniforms.projection = cast(m4x4f32) renderer.projection
+  renderer.uniforms.camera = cast(m4x4f32) renderer.camera
 
-  gl.Viewport(expand_values(gl_renderer.viewport))
+  gl.Viewport(expand_values(renderer.viewport))
 
-  gl.NamedBufferSubData(buffer=gl_renderer.ssbo,
+  gl.NamedBufferSubData(buffer=renderer.ssbo,
                         offset=0,
-                        size=gl_renderer.vertex_count * size_of(Vertex),
-                        data=&gl_renderer.vertices[0])
+                        size=renderer.vertex_count * size_of(Vertex),
+                        data=&renderer.vertices[0])
 
-  gl.NamedBufferSubData(buffer=gl_renderer.ibo,
+  gl.NamedBufferSubData(buffer=renderer.ibo,
                         offset=0,
-                        size=gl_renderer.index_count * size_of(u16),
-                        data=&gl_renderer.indices[0])
+                        size=renderer.index_count * size_of(u16),
+                        data=&renderer.indices[0])
 
-  gl.UseProgram(gl_renderer.shader)
+  gl.UseProgram(renderer.shader)
 
-  u_tex_loc := gl.GetUniformLocation(gl_renderer.shader, "u_tex")
+  u_tex_loc := gl.GetUniformLocation(renderer.shader, "u_tex")
   gl.Uniform1i(u_tex_loc, i32(Texture_ID.SPRITE_MAP))
-  gl.NamedBufferSubData(buffer=gl_renderer.ubo,
+  gl.NamedBufferSubData(buffer=renderer.ubo,
                         offset=0,
-                        size=size_of(gl_renderer.uniforms),
-                        data=&gl_renderer.uniforms)
+                        size=size_of(renderer.uniforms),
+                        data=&renderer.uniforms)
 
-  gl.DrawElements(gl.TRIANGLES, i32(gl_renderer.index_count), gl.UNSIGNED_SHORT, nil)
+  gl.DrawElements(gl.TRIANGLES, i32(renderer.index_count), gl.UNSIGNED_SHORT, nil)
 
   gl.UseProgram(0)
 
-  gl_renderer.vertex_count = 0
-  gl_renderer.index_count = 0
+  renderer.vertex_count = 0
+  renderer.index_count = 0
 }
 
 gl_verify_shader :: proc(id, type: u32)

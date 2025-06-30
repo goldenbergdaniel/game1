@@ -149,15 +149,14 @@ Input :: struct
   mouse_pos:       [2]f32,
 }
 
-@(private)
-input: Input
+global_input: ^Input = &{}
 
-global: struct
-{
-  d3d11_device_ctx: rawptr,
-  d3d11_device:     rawptr,
-  metal_device:     rawptr,
-}
+// global: struct
+// {
+//   d3d11_device_ctx: rawptr,
+//   d3d11_device:     rawptr,
+//   metal_device:     rawptr,
+// }
 
 create_window :: #force_inline proc(
 	desc:  Window_Desc,
@@ -230,13 +229,13 @@ pump_events :: #force_inline proc(window: ^Window)
     case .QUIT: 
       window.should_close = true
     case .KEY_DOWN:
-      input.keys[event.key_kind] = true
+      global_input.keys[event.key_kind] = true
     case .KEY_UP:
-      input.keys[event.key_kind] = false
+      global_input.keys[event.key_kind] = false
     case .MOUSE_BTN_DOWN:
-      input.mouse_btns[event.mouse_btn_kind] = true
+      global_input.mouse_btns[event.mouse_btn_kind] = true
     case .MOUSE_BTN_UP:
-      input.mouse_btns[event.mouse_btn_kind] = false
+      global_input.mouse_btns[event.mouse_btn_kind] = false
     }
   }
 }
@@ -297,53 +296,53 @@ save_input :: proc()
 {
   for key in Key_Kind
   {
-    input.prev_keys[key] = input.keys[key]
+    global_input.prev_keys[key] = global_input.keys[key]
   }
 
   for btn in Mouse_Btn_Kind
   {
-    input.prev_mouse_btns[btn] = input.mouse_btns[btn]
+    global_input.prev_mouse_btns[btn] = global_input.mouse_btns[btn]
   }
 }
 
 key_pressed :: #force_inline proc(key: Key_Kind) -> bool
 {
-  return input.keys[key]
+  return global_input.keys[key]
 }
 
 key_just_pressed :: #force_inline proc(key: Key_Kind) -> bool
 {
-  return input.keys[key] && !input.prev_keys[key]
+  return global_input.keys[key] && !global_input.prev_keys[key]
 }
 
 key_released :: #force_inline proc(key: Key_Kind) -> bool
 {
-  return !input.keys[key]
+  return !global_input.keys[key]
 }
 
 key_just_released :: #force_inline proc(key: Key_Kind) -> bool
 {
-  return !input.keys[key] && input.prev_keys[key]
+  return !global_input.keys[key] && global_input.prev_keys[key]
 }
 
 mouse_btn_pressed :: #force_inline proc(btn: Mouse_Btn_Kind) -> bool
 {
-  return input.mouse_btns[btn]
+  return global_input.mouse_btns[btn]
 }
 
 mouse_btn_just_pressed :: #force_inline proc(btn: Mouse_Btn_Kind) -> bool
 {
-  return input.mouse_btns[btn] && !input.prev_mouse_btns[btn]
+  return global_input.mouse_btns[btn] && !global_input.prev_mouse_btns[btn]
 }
 
 mouse_btn_released :: #force_inline proc(btn: Mouse_Btn_Kind) -> bool
 {
-  return !input.mouse_btns[btn]
+  return !global_input.mouse_btns[btn]
 }
 
 mouse_btn_just_released :: #force_inline proc(btn: Mouse_Btn_Kind) -> bool
 {
-  return !input.mouse_btns[btn] && input.prev_mouse_btns[btn]
+  return !global_input.mouse_btns[btn] && global_input.prev_mouse_btns[btn]
 }
 
 cursor_position :: #force_inline proc() -> [2]f32

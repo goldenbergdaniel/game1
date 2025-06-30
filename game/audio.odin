@@ -19,15 +19,17 @@ Sound :: struct
   group: Sound_Group,
 }
 
+@(private="file")
 Audio_Data :: struct
 {
-  engine:      ma.engine,
-  enabled:     bool,
+  engine:          ma.engine,
+  initialized:     bool,
 
-  ambience:    ma.sound,
-  music:       ma.sound,
-  effects:     [AUDIO_MAX_EFFECTS]ma.sound,
-  effects_pos: int,
+  ambience:        ma.sound,
+  music:           ma.sound,
+  effects:         [AUDIO_MAX_EFFECTS]ma.sound,
+  effects_pos:     int,
+  looping_effects: [dynamic]ma.sound,
 }
 
 global_audio: Audio_Data
@@ -64,7 +66,7 @@ init_audio :: proc()
     return
   }
 
-  global_audio.enabled = true
+  global_audio.initialized = true
 }
 
 uninit_audio :: proc()
@@ -74,7 +76,7 @@ uninit_audio :: proc()
 
 clean_audio :: proc()
 {
-  if !global_audio.enabled do return
+  if !global_audio.initialized do return
 
   for &sound in global_audio.effects
   {
@@ -93,7 +95,7 @@ play_sound :: proc(
 ) -> (
   ok: bool,
 ){
-  if !global_audio.enabled do return false
+  if !global_audio.initialized do return false
 
   result: ma.result
 
@@ -110,7 +112,7 @@ play_sound :: proc(
     case .MUSIC:    sound = &global_audio.music
     }
 
-    if !ma.sound_is_playing(sound) && !ma.sound_at_end(sound)
+    if !ma.sound_is_playing(sound) && ma.sound_at_end(sound)
     {
       ma_sound_init(sound, res.sounds[name].path) or_return
       ma.sound_set_looping(sound, true)
@@ -153,17 +155,28 @@ play_sound :: proc(
   return true
 }
 
-pause_sound :: proc(
-  name: Sound_Name,
+// TODO(dg): Maybe implement this, maybe not.
+play_sound_looping :: proc(
+  name:   Sound_Name,
+  pos:    Maybe(f32x2) = nil,
+  volume: f32 = 1.0,
+  pitch:  f32 = 1.0,
 ) -> (
   ok: bool,
 ){
-  if !global_audio.enabled do return false
+  return false
+}
+
+pause_sound_group :: proc(
+  group: Sound_Group,
+) -> (
+  ok: bool,
+){
+  if !global_audio.initialized do return false
 
   result: ma.result
 
-  sound_desc := res.sounds[name]
-  switch sound_desc.group
+  switch group
   {
   case .NIL, .EFFECT:
     ok = false
@@ -177,24 +190,23 @@ pause_sound :: proc(
 
   if result != .SUCCESS
   {
-    printf("Error: Failed to pause sound %s! %s\n", name, result)
+    printf("Error: Failed to pause sound group %s! %s\n", group, result)
     ok = false
   }
 
   return
 }
 
-reset_sound :: proc(
-  name: Sound_Name, 
+reset_sound_group :: proc(
+  group: Sound_Group, 
 ) -> (
   ok: bool,
 ){
-  if !global_audio.enabled do return false
+  if !global_audio.initialized do return false
 
   result: ma.result
 
-  sound_desc := res.sounds[name]
-  switch sound_desc.group
+  switch group
   {
   case .NIL, .EFFECT:
     ok = false
@@ -208,7 +220,7 @@ reset_sound :: proc(
 
   if result != .SUCCESS
   {
-    printf("Error: Failed to reset sound %s! %s\n", name, result)
+    printf("Error: Failed to reset sound group %s! %s\n", group, result)
     ok = false
   }
 
@@ -217,8 +229,7 @@ reset_sound :: proc(
 
 set_audio_listener_pos :: proc(pos: f32x2)
 {
-  if !global_audio.enabled do return
-
+  if !global_audio.initialized do return
   pos := pos * AUDIO_WORLD_SCALE
   ma.engine_listener_set_position(&global_audio.engine, 0, pos.x, pos.y , 0)
 }

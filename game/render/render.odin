@@ -37,11 +37,30 @@ Texture_ID :: enum
   SPRITE_MAP,
 }
 
-when BACKEND == "opengl"
+Renderer :: struct
 {
-  @(private="file")
-  renderer := &gl_renderer
+  vertices:     [40000]Vertex,
+  vertex_count: int,
+  indices:      [60000]u16,
+  index_count:  int,
+  camera:       m3x3f32,
+  projection:   m3x3f32,
+  viewport:     i32x4,
+  texture:      ^Texture,
+  uniforms:     struct
+  {
+    projection: m4x4f32,
+    camera:     m4x4f32,
+  },
+  window:       ^platform.Window,
+  shader:       u32,
+  textures:     [Texture_ID]u32,
+  ubo:          u32,
+  ssbo:         u32,
+  ibo:          u32,
 }
+
+renderer: ^Renderer = &{}
 
 init :: #force_inline proc(
   window: ^platform.Window, 
