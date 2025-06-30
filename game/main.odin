@@ -49,7 +49,7 @@ main :: proc()
   render.init(&user.window, {0, WORLD_WIDTH, 0, WORLD_HEIGHT}, &res.textures)
   init_audio()
   init_global_game_memory()
-  
+
   init_game(&curr_game)
   start_game(&curr_game)
 

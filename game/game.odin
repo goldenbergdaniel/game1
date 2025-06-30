@@ -49,7 +49,6 @@ Game :: struct
   },
   regions:            [9][REGION_SPAN_TILES*REGION_SPAN_TILES]Tile,
   active_region:      Region_Coord,
- 
   transform_tree:     tt.Transform_Tree,
   entities:           [MAX_ENTITIES]Entity,
   entities_cnt:       int,
@@ -59,7 +58,6 @@ Game :: struct
   particles_pos:      int,
 
   special_entities:   [enum{PLAYER}]^Entity,
-
   weapon:             struct
   {
     kind:             Weapon_Kind,
@@ -118,10 +116,12 @@ start_game :: proc(gm: ^Game)
 
   gm.special_entities[.PLAYER] = player
 
-  for _ in 0..<3
+  for _ in 0..<9
   {
     spawn_creature(.DEER, region_pos_to_world_pos({200, 200}, region))
   }
+
+  play_sound(.MINECRAFT, volume=0.05)
 }
 
 update_game :: proc(gm: ^Game, dt: f32)
@@ -271,14 +271,14 @@ update_game :: proc(gm: ^Game, dt: f32)
       {
         player.vel.x = 0
         player.input_dir.x = 0
-        entity_animate(player, .IDLE)
+        entity_play_animation(player, .IDLE, looping=true)
       }
 
       if !(platform.key_pressed(.W) || platform.key_pressed(.S))
       {
         player.vel.y = 0
         player.input_dir.y = 0
-        entity_animate(player, .IDLE)
+        entity_play_animation(player, .IDLE, looping=true)
       }
 
       bwd: bool
@@ -290,7 +290,7 @@ update_game :: proc(gm: ^Game, dt: f32)
         dir_factor = bwd ? BWD_MULT : 1.0
 
         player.input_dir.x = -1
-        entity_animate(player, .WALK, speed=(bwd ? BWD_MULT : 1), reverse=bwd)
+        entity_play_animation(player, .WALK, speed=(bwd ? BWD_MULT : 1), looping=true, reverse=bwd)
       }
       
       if platform.key_pressed(.D) && !platform.key_pressed(.A)
@@ -299,19 +299,19 @@ update_game :: proc(gm: ^Game, dt: f32)
         dir_factor = bwd ? BWD_MULT : 1.0
         
         player.input_dir.x = 1
-        entity_animate(player, .WALK, speed=(bwd ? BWD_MULT : 1), reverse=bwd)
+        entity_play_animation(player, .WALK, speed=(bwd ? BWD_MULT : 1), looping=true, reverse=bwd)
       }
 
       if platform.key_pressed(.W) && !platform.key_pressed(.S)
       {
         player.input_dir.y = -1
-        entity_animate(player, .WALK, speed=(bwd ? BWD_MULT : 1), reverse=bwd)
+        entity_play_animation(player, .WALK, speed=(bwd ? BWD_MULT : 1), looping=true, reverse=bwd)
       }
 
       if platform.key_pressed(.S) && !platform.key_pressed(.W)
       {
         player.input_dir.y = 1
-        entity_animate(player, .WALK, speed=(bwd ? BWD_MULT : 1), reverse=bwd)
+        entity_play_animation(player, .WALK, speed=(bwd ? BWD_MULT : 1), looping=true, reverse=bwd)
       }
 
       player.movement_speed = res.player.speed * dir_factor
@@ -451,7 +451,8 @@ update_game :: proc(gm: ^Game, dt: f32)
         entity_distort_h(weapon, tt.local(weapon).scl.x*0.8, 5*dt)
         spawn_particles(.GUN_SMOKE, tt.global_pos(weapon.shot_point))
 
-        play_sound(.THUNK, volume=0.5, pitch=0.5)
+        pitch := rand.range_f32({0.8, 1.2})
+        play_sound(.GUN_SHOT, volume=0.5, pitch=pitch)
       }
 
       // - Position effects ---
@@ -502,6 +503,10 @@ update_game :: proc(gm: ^Game, dt: f32)
         {
           kill_entity(&en_a)
           kill_entity(&en_b)
+
+          spawn_particles(.DEATH_BLOOD, tt.global_pos(&en_a))
+          spawn_corpse(&en_a)
+          spawn_corpse(&en_b)
         }
       }
     }
@@ -551,13 +556,13 @@ update_game :: proc(gm: ^Game, dt: f32)
   {
     // - Update animation state ---
     {
-      if en.anim.state != en.anim.next_state
+      prev_state := en.anim.state
+      en.anim.state = en.anim.next_state
+      if prev_state != en.anim.next_state
       {
         en.anim.duration = 0
-        en.anim.frame_idx = 0
+        en.anim.frame_idx = entity_animation_last_frame(&en) if en.anim.reverse else 0
       }
-
-      en.anim.state = en.anim.next_state
     }
 
     if .ROTATE_OVER_TIME in en.props
@@ -573,7 +578,7 @@ update_game :: proc(gm: ^Game, dt: f32)
       switch en.distort_h.state
       {
       case .HOLD: 
-        break
+      
       case .DISTORT:
         if distort_up
         {
@@ -593,6 +598,7 @@ update_game :: proc(gm: ^Game, dt: f32)
             en.distort_h.state = .RETURN
           }
         }
+      
       case .RETURN:
         if distort_up
         {
@@ -617,8 +623,7 @@ update_game :: proc(gm: ^Game, dt: f32)
       distort_up = en.distort_v.target > en.distort_v.saved
       switch en.distort_v.state
       {
-      case .HOLD: 
-        break
+      case .HOLD:
 
       case .DISTORT:
         if distort_up
@@ -676,20 +681,30 @@ update_game :: proc(gm: ^Game, dt: f32)
 
         if en.anim.reverse
         {
-          if en.anim.frame_idx == 0
+          if entity_animation_at_end(&en)
           {
-            en.anim.frame_idx = cast(u16) len(desc.frames) - 1
+            if en.anim.looping
+            {
+              en.anim.frame_idx = entity_animation_last_frame(&en)
+            }
           }
-
-          en.anim.frame_idx -= 1
+          else
+          {
+            en.anim.frame_idx -= 1
+          }
         }
         else
         {
-          en.anim.frame_idx += 1
-
-          if en.anim.frame_idx == cast(u16) len(desc.frames)
+          if entity_animation_at_end(&en)
           {
-            en.anim.frame_idx = 0
+            if en.anim.looping
+            {
+              en.anim.frame_idx = 0
+            }
+          }
+          else
+          {
+            en.anim.frame_idx += 1
           }
         }
       }
@@ -846,7 +861,7 @@ render_game :: proc(gm: ^Game)
   render_world_region(gm, region_idx_from_coord(gm.active_region))
 
   // - Draw entities ---
-  // TODO(dg): We can speed this up by only copying renderable entities
+  @(static)
   en_targets: [len(gm.entities)]^Entity
   en_count: int
   for i in 0..<len(gm.entities) do if gm.entities[i].flags.render
@@ -855,7 +870,8 @@ render_game :: proc(gm: ^Game)
     en_count += 1
   }
 
-  slice.sort_by(en_targets[:en_count], proc(i, j: ^Entity) -> bool {
+  // slice.sort_by(en_targets[:en_count], proc(i, j: ^Entity) -> bool {
+  slice.stable_sort_by(en_targets[:en_count], proc(i, j: ^Entity) -> bool {
     if i.z_layer == j.z_layer
     {
       return i.z_index < j.z_index
@@ -894,7 +910,6 @@ render_game :: proc(gm: ^Game)
       den_pos := tt.global_pos(den)
       den_scl := tt.global_scl(den)
       den_rot := tt.global_rot(den)
-      println(den_pos, den_scl)
       draw_sprite(den_pos, den_scl, den_rot, den.tint, den.color, den.sprite)
     }
   }
@@ -1054,9 +1069,10 @@ Entity :: struct
   creature_kind:    Creature_Kind,
   creature:         struct
   {
-    state:          Creature_State,
-    data:           Creature_State_Data,
+    state:          Entity_State,
+    data:           Entity_State_Data,
   },
+  decoration_kind:  Decoration_Kind,
   weapon_kind:      Weapon_Kind,
   projectile_kind:  Projectile_Kind,
 
@@ -1068,6 +1084,7 @@ Entity :: struct
     speed:          f32,
     duration:       f32,
     reverse:        bool,
+    looping:        bool,
     frame_idx:      u16,
   },
   distort_h:        struct
@@ -1118,6 +1135,24 @@ Entity_Prop :: enum
   ROTATE_OVER_TIME,
 }
 
+Entity_State :: enum
+{
+  NIL,
+  IDLE,
+  EXPAND,
+  WANDER,
+}
+
+Entity_State_Data :: struct #raw_union
+{
+  wander:  struct
+  {
+    state:      enum{CHOOSE, MOVE, WAIT},
+    point:      f32x2,
+    wait_timer: Timer,
+  },
+}
+
 Collision_Layer :: enum
 {
   NIL,
@@ -1131,21 +1166,10 @@ Creature_Kind :: enum
   DEER,
 }
 
-Creature_State :: enum
+Decoration_Kind :: enum
 {
   NIL,
-  IDLE,
-  WANDER,
-}
-
-Creature_State_Data :: struct #raw_union
-{
-  wander:  struct
-  {
-    state:      enum{CHOOSE, MOVE, WAIT},
-    point:      f32x2,
-    wait_timer: Timer,
-  },
+  CORPSE,
 }
 
 Weapon_Kind :: enum
@@ -1281,7 +1305,7 @@ entity_child_at :: proc(en: ^Entity, idx: int) -> ^Entity
   return entity_from_ref(en.children[idx])
 }
 
-setup_sprite_entity :: proc(en: ^Entity, sprite: Sprite_Name)
+entity_setup_sprite :: proc(en: ^Entity, sprite: Sprite_Name)
 {
   en.sprite = sprite
   en.flags.render = true
@@ -1293,7 +1317,7 @@ setup_player :: proc(en: ^Entity)
 {
   gm := current_game()
 
-  setup_sprite_entity(en, .PLAYER_IDLE_1)
+  entity_setup_sprite(en, .PLAYER_IDLE_1)
   // en.props += {.INTERPOLATE}
   en.z_layer = .PLAYER
   en.movement_speed = res.player.speed
@@ -1304,7 +1328,7 @@ setup_player :: proc(en: ^Entity)
   // - Shadow ---
   {
     shadow := alloc_entity(gm)
-    setup_sprite_entity(shadow, .SHADOW_PLAYER)
+    entity_setup_sprite(shadow, .SHADOW_PLAYER)
     tt.set_parent(shadow, en)
     tt.local(shadow).pos = {0, 7}
     shadow.color = {0.3, 0.3, 0.3, 0}
@@ -1316,7 +1340,7 @@ setup_player :: proc(en: ^Entity)
   // - Weapon ---
   {
     weapon := alloc_entity(gm)
-    setup_sprite_entity(weapon, .RIFLE)
+    entity_setup_sprite(weapon, .RIFLE)
     tt.set_parent(weapon, en)
     weapon.weapon_kind = .RIFLE
     weapon.z_layer = .PLAYER
@@ -1326,7 +1350,7 @@ setup_player :: proc(en: ^Entity)
     // - Muzzle flash ---
     {
       muzzle_flash := alloc_entity(gm)
-      setup_sprite_entity(muzzle_flash, .MUZZLE_FLASH)
+      entity_setup_sprite(muzzle_flash, .MUZZLE_FLASH)
       tt.set_parent(muzzle_flash, weapon)
       muzzle_flash.z_layer = .PLAYER
       muzzle_flash.z_index = 2
@@ -1361,7 +1385,7 @@ spawn_creature :: proc(kind: Creature_Kind, pos: f32x2) -> ^Entity
   {
   case .NIL:
   case .DEER:
-    setup_sprite_entity(en, .DEER_IDLE_0)
+    entity_setup_sprite(en, .DEER_IDLE_0)
     en.anim.state = .IDLE
     en.anim.data[.IDLE] = .DEER_IDLE
     en.anim.data[.WALK] = .DEER_WALK
@@ -1369,7 +1393,7 @@ spawn_creature :: proc(kind: Creature_Kind, pos: f32x2) -> ^Entity
     // - Shadow ---
     {
       shadow := alloc_entity(gm)
-      setup_sprite_entity(shadow, .SHADOW_DEER)
+      entity_setup_sprite(shadow, .SHADOW_DEER)
       tt.set_parent(shadow, en)
       tt.local(shadow).pos = {-2, 7}
       shadow.color = {0.3, 0.3, 0.3, 0}
@@ -1380,7 +1404,7 @@ spawn_creature :: proc(kind: Creature_Kind, pos: f32x2) -> ^Entity
   }
 
   en.collider = Circle{
-    radius = 8,
+    radius = 6,
   }
 
   return en
@@ -1420,7 +1444,7 @@ spawn_projectile :: proc(kind: Projectile_Kind) -> ^Entity
   switch kind
   {
   case .BULLET:
-    setup_sprite_entity(en, .BULLET)
+    entity_setup_sprite(en, .BULLET)
     collider_radius = 3
   case .NIL:
   }
@@ -1432,15 +1456,58 @@ spawn_projectile :: proc(kind: Projectile_Kind) -> ^Entity
   return en
 }
 
-entity_animate :: proc(
+spawn_corpse :: proc(en: ^Entity) -> ^Entity
+{
+  if en.creature_kind == .NIL do return nil
+
+  gm := current_game()
+
+  corpse := alloc_entity(gm)
+  tt.local(corpse).pos = tt.global_pos(en) + {0, 5}
+  corpse.props += en.props & {.FLIP_H}
+
+  switch en.creature_kind
+  {
+  case .NIL:
+  case .DEER: entity_setup_sprite(corpse, .DEER_CORPSE)
+  }
+
+  blood_pool := alloc_entity(gm)
+  entity_setup_sprite(blood_pool, .BLOOD_POOL_0)
+  blood_pool.z_index = -1
+  blood_pool.anim.state = .IDLE
+  blood_pool.anim.data[.IDLE] = .BLOOD_POOL_IDLE
+  blood_pool.anim.data[.EXPAND] = .BLOOD_POOL_EXPAND
+  entity_play_animation(blood_pool, .EXPAND, looping=false)
+
+  entity_attach_child(corpse, blood_pool)
+  tt.attach_child(corpse, blood_pool)
+
+  return corpse
+}
+
+entity_play_animation :: proc(
   en:      ^Entity, 
   anim:    Animation_State, 
+  looping: bool,
+  reverse: bool = false,
   speed:   f32 = 1.0,
-  reverse: bool = false
 ){
   en.anim.next_state = anim
-  en.anim.speed = speed
+  en.anim.looping = looping
   en.anim.reverse = reverse
+  en.anim.speed = speed
+}
+
+entity_animation_last_frame :: proc(en: ^Entity) -> u16
+{
+  return cast(u16) len(res.animations[en.anim.data[en.anim.state]].frames) - 1
+}
+
+entity_animation_at_end :: proc(en: ^Entity) -> bool
+{
+  return (!en.anim.reverse && en.anim.frame_idx == entity_animation_last_frame(en)) ||
+         (en.anim.reverse && en.anim.frame_idx == 0)
 }
 
 entity_rotate_to_target :: proc(en: ^Entity, target: f32x2)
@@ -1536,8 +1603,8 @@ entity_collision :: proc(en_a, en_b: ^Entity) -> bool
   panic("Unhandled collision for collider types!")
 }
 
-@(thread_local, private="file")
-_entity_collision_cache: [MAX_ENTITIES*2]bool
+// @(thread_local, private="file")
+// _entity_collision_cache: [MAX_ENTITIES*2]bool
 
 // get_entities_collided_cache :: proc(a, b: Entity_Ref) -> bool
 // {
@@ -1620,7 +1687,7 @@ entity_equip_weapon :: proc(en: ^Entity, kind: Weapon_Kind)
 
 entity_creature_idle :: proc(en: ^Entity)
 {
-  entity_animate(en, .IDLE)
+  entity_play_animation(en, .IDLE, looping=true)
 }
 
 entity_creature_wander :: proc(en: ^Entity, dt: f32)
@@ -1647,7 +1714,7 @@ entity_creature_wander :: proc(en: ^Entity, dt: f32)
     wander.state = .MOVE
 
   case .MOVE:
-    entity_animate(en, .WALK)
+    entity_play_animation(en, .WALK, looping=true)
     debug_circle(wander.point, 4)
 
     arrived := entity_move_to_point(en, wander.point, creature_desc.speed*dt)
@@ -1657,7 +1724,7 @@ entity_creature_wander :: proc(en: ^Entity, dt: f32)
     }
 
   case .WAIT:
-    entity_animate(en, .IDLE)
+    entity_play_animation(en, .IDLE, looping=true)
 
     if !wander.wait_timer.ticking
     {
@@ -1921,8 +1988,10 @@ Particle :: struct
   pos:           f32x2,
   scl:           f32x2,
   vel:           f32x2,
+  acc:           f32x2,
   dir:           f32,
   rot:           f32,
+  rot_dt:        f32,
   sprite:        Sprite_Name,
   emmision_kind: Particle_Emmision_Kind,
   props:         bit_set[Particle_Prop],
@@ -1982,10 +2051,12 @@ spawn_particles :: proc(kind: Particle_Name, pos: f32x2)
     par.props = {.ACTIVE, .INTERPOLATE, .KILL_AFTER_TIME}
     par.sprite = desc.sprite
     par.pos = pos
-    par.scl = desc.scl
+    par.scl = desc.scl + rand.range_f32(Range(f32){-desc.scl_var, desc.scl_var})
     par.rot = desc.rot
-    par.vel = desc.speed
-    par.color = desc.color_a
+    par.rot_dt = desc.rot_dt
+    par.vel = desc.vel
+    par.acc = desc.vel_dt
+    par.color = rand.choice_slice(desc.colors[:])
 
     timer_start(&par.kill_timer, desc.lifetime)
 
@@ -2003,7 +2074,7 @@ spawn_particles :: proc(kind: Particle_Name, pos: f32x2)
 
 update_particle :: proc(par: ^Particle, dt: f32)
 { 
-  par.vel.y -= 150 * dt
+  par.vel += par.acc * dt
   par.pos += par.vel * dt
 
   if .ROTATE_OVER_TIME in par.props

@@ -38,6 +38,7 @@ Sprite_Name :: enum u16
   MUZZLE_FLASH,
   BULLET,
   SMOKE_PARTICLE,
+  BLOOD_PARTICLE,
   DEER_IDLE_0,
   DEER_IDLE_1,
   DEER_IDLE_2,
@@ -46,6 +47,13 @@ Sprite_Name :: enum u16
   DEER_WALK_1,
   DEER_WALK_2,
   DEER_WALK_3,
+  DEER_CORPSE,
+  BLOOD_POOL_0,
+  BLOOD_POOL_1,
+  BLOOD_POOL_2,
+  BLOOD_POOL_3,
+  BLOOD_POOL_4,
+  BLOOD_POOL_5,
   TILE_DIRT,
   TILE_GRASS_0,
   TILE_GRASS_1,
@@ -59,6 +67,8 @@ Sound_Name :: enum
 {
   NIL,
   THUNK,
+  GUN_SHOT,
+  MINECRAFT,
 }
 
 Sound_Group :: enum
@@ -76,6 +86,8 @@ Animation_Name :: enum
   PLAYER_WALK,
   DEER_IDLE,
   DEER_WALK,
+  BLOOD_POOL_IDLE,
+  BLOOD_POOL_EXPAND,
 }
 
 Animation_State :: enum
@@ -83,6 +95,7 @@ Animation_State :: enum
   NIL,
   IDLE,
   WALK,
+  EXPAND,
 }
 
 Animation_Desc :: struct
@@ -98,6 +111,7 @@ Particle_Name :: enum
 {
   NIL,
   GUN_SMOKE,
+  DEATH_BLOOD,
 }
 
 Particle_Desc :: struct
@@ -108,12 +122,12 @@ Particle_Desc :: struct
   count:         u16,
   lifetime:      f32,
   spread:        f32,
-  color_a:       f32x4,
-  color_b:       f32x4,
-  speed:         f32,
-  speed_dt:      f32,
+  colors:        [dynamic]f32x4,
   scl:           f32x2,
   scl_dt:        f32x2,
+  scl_var:       f32,
+  vel:           f32x2,
+  vel_dt:        f32x2,
   dir:           f32,
   dir_dt:        f32,
   rot:           f32,
@@ -188,6 +202,7 @@ init_resources :: proc(arena: ^mem.Arena)
       .MUZZLE_FLASH   = {coords={0, 3}, grid={1, 1}, pivot={8.5, 8.5}},
       .BULLET         = {coords={1, 3}, grid={1, 1}, pivot={8.5, 8.5}},
       .SMOKE_PARTICLE = {coords={2, 3}, grid={1, 1}, pivot={8.5, 8.5}},
+      .BLOOD_PARTICLE = {coords={3, 3}, grid={1, 1}, pivot={8.5, 8.5}},
       .DEER_IDLE_0    = {coords={0, 4}, grid={1, 1}, pivot={7.5, 8.5}},
       .DEER_IDLE_1    = {coords={1, 4}, grid={1, 1}, pivot={7.5, 8.5}},
       .DEER_IDLE_2    = {coords={2, 4}, grid={1, 1}, pivot={7.5, 8.5}},
@@ -196,13 +211,20 @@ init_resources :: proc(arena: ^mem.Arena)
       .DEER_WALK_1    = {coords={5, 4}, grid={1, 1}, pivot={7.5, 8.5}},
       .DEER_WALK_2    = {coords={6, 4}, grid={1, 1}, pivot={7.5, 8.5}},
       .DEER_WALK_3    = {coords={7, 4}, grid={1, 1}, pivot={7.5, 8.5}},
-      .TILE_DIRT      = {coords={0, 6}, grid={1, 1}, pivot={8.0, 8.0}},
-      .TILE_GRASS_0   = {coords={1, 6}, grid={1, 1}, pivot={8.0, 8.0}},
-      .TILE_GRASS_1   = {coords={2, 6}, grid={1, 1}, pivot={8.0, 8.0}},
-      .TILE_GRASS_2   = {coords={3, 6}, grid={1, 1}, pivot={8.0, 8.0}},
-      .TILE_STONE_0   = {coords={4, 6}, grid={1, 1}, pivot={8.0, 8.0}},
-      .TILE_STONE_1   = {coords={5, 6}, grid={1, 1}, pivot={8.0, 8.0}},
-      .TILE_WALL      = {coords={6, 6}, grid={1, 1}, pivot={8.0, 8.0}},
+      .DEER_CORPSE    = {coords={8, 4}, grid={2, 1}, pivot={15.0, 15.0}},
+      .BLOOD_POOL_0   = {coords={0, 6}, grid={1, 1}, pivot={8, 10}},
+      .BLOOD_POOL_1   = {coords={1, 6}, grid={1, 1}, pivot={8, 10}},
+      .BLOOD_POOL_2   = {coords={2, 6}, grid={1, 1}, pivot={8, 10}},
+      .BLOOD_POOL_3   = {coords={3, 6}, grid={1, 1}, pivot={8, 10}},
+      .BLOOD_POOL_4   = {coords={4, 6}, grid={1, 1}, pivot={8, 10}},
+      .BLOOD_POOL_5   = {coords={5, 6}, grid={1, 1}, pivot={8, 10}},
+      .TILE_DIRT      = {coords={0, 7}, grid={1, 1}, pivot={8.0, 8.0}},
+      .TILE_GRASS_0   = {coords={1, 7}, grid={1, 1}, pivot={8.0, 8.0}},
+      .TILE_GRASS_1   = {coords={2, 7}, grid={1, 1}, pivot={8.0, 8.0}},
+      .TILE_GRASS_2   = {coords={3, 7}, grid={1, 1}, pivot={8.0, 8.0}},
+      .TILE_STONE_0   = {coords={4, 7}, grid={1, 1}, pivot={8.0, 8.0}},
+      .TILE_STONE_1   = {coords={5, 7}, grid={1, 1}, pivot={8.0, 8.0}},
+      .TILE_WALL      = {coords={6, 7}, grid={1, 1}, pivot={8.0, 8.0}},
     }
 
     for &sprite in res.sprites
@@ -215,8 +237,10 @@ init_resources :: proc(arena: ^mem.Arena)
   // - Sound ---
   {
     res.sounds = [Sound_Name]Sound{
-      .NIL = {},
-      .THUNK = {path="res/sounds/thunk.wav", group=.EFFECT},
+      .NIL       = {},
+      .THUNK     = {path="res/sounds/thunk.wav", group=.EFFECT},
+      .GUN_SHOT  = {path="res/sounds/gun_shot.wav", group=.EFFECT},
+      .MINECRAFT = {path="res/sounds/minecraft.wav", group=.MUSIC},
     }
   }
 
@@ -255,6 +279,21 @@ init_resources :: proc(arena: ^mem.Arena)
           {sprite=.DEER_WALK_3, duration=0.15},
         },
       },
+      .BLOOD_POOL_IDLE = {
+        frames = {
+          {sprite=.BLOOD_POOL_4},
+        },
+      },
+      .BLOOD_POOL_EXPAND = {
+        frames = {
+          {sprite=.BLOOD_POOL_0, duration=0.2},
+          {sprite=.BLOOD_POOL_1, duration=0.2},
+          {sprite=.BLOOD_POOL_2, duration=0.2},
+          {sprite=.BLOOD_POOL_3, duration=0.2},
+          {sprite=.BLOOD_POOL_4, duration=0.2},
+          {sprite=.BLOOD_POOL_5, duration=0.2},
+        },
+      },
     }
   }
 
@@ -264,13 +303,25 @@ init_resources :: proc(arena: ^mem.Arena)
       .NIL = {},
       .GUN_SMOKE = {
         sprite = .SMOKE_PARTICLE,
-        color_a = {0.4, 0.4, 0.4, 0},
-        count = 3,
+        emmision_kind = .BURST,
+        colors = {{0.5, 0.5, 0.5, 0}, {0.4, 0.4, 0.4, 0}, {0.3, 0.3, 0.3, 0}},
+        count = 4,
         lifetime = 3.0,
         scl = {0.7, 0.7},
         scl_dt = -{0.7, 0.7},
-        speed = 48.0,
+        vel = {48.0, 48.0},
+        vel_dt = {0, -120},
+      },
+      .DEATH_BLOOD = {
+        sprite = .BLOOD_PARTICLE,
         emmision_kind = .BURST,
+        colors = {{0.5, 0, 0, 0}, {0.4, 0, 0, 0}, {0.3, 0, 0, 0}},
+        count = 10,
+        lifetime = 0.3,
+        scl = {0.5, 0.5},
+        scl_var = 0.2,
+        vel = {96, 96},
+        vel_dt = {0, 256},
       },
     }
   }

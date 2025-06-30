@@ -23,7 +23,7 @@
   [
     {
       "name": "main", 
-      "checker_path": ["game", "game/audio", "game/render", "game/platform", "game/vecmath"]
+      "checker_path": ["game", "game/entry", "game/render", "game/platform"]
     }
   ]
 }

@@ -48,16 +48,22 @@
 +rework colliders
 +optimization
 
-# Day 14
+# Day 14 (6.25)
++learn miniaudio and play a sound
+
+# Day 15 (6.27)
++audio system
+
+# Day 16 (6.29)
++creature death and pool of blood
 
 
 # - UP NEXT -
--basic creature death and item drops
+-basic item drops
 -inventory
 -map decorations (trees, bushes, grass, mushrooms)
 -sort sprites by y
 -fix edge bleeding
--audio system
 -day/night cycle
 -town
 
