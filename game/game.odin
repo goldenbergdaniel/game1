@@ -2,6 +2,7 @@ package game
 
 import "core:math"
 import "core:math/noise"
+import "core:reflect"
 import "core:slice"
 import "core:time"
 
@@ -22,13 +23,19 @@ global: struct
   world_mem:           mem.Heap,
   debug_enabled:       bool,
   debug_target_entity: Entity_Ref,
+  temp:                struct
+  {
+    noise_sources:     [dynamic]Noise_Source,
+  },
 }
 
 init_global_game_memory :: proc()
 {
-  // WARN(dg): What if multiple games running on same thread? This needs to change. 
+  // WARN(dg): What if multiple games running on same thread? This needs to change.
   _ = mem.arena_init_growing(&global.frame_arena)
   _ = mem.heap_init(&global.world_mem, mem.default_allocator(), mem.MIB * 16)
+
+  global.temp.noise_sources.allocator = mem.allocator(&global.frame_arena)
 
   fnl.noise_2d(fnl.State{}, expand_values([2]f32{1, 1}))
 }
@@ -121,19 +128,19 @@ start_game :: proc(gm: ^Game)
     spawn_creature(.DEER, region_pos_to_world_pos({200, 200}, region))
   }
 
-  play_sound(.MINECRAFT, volume=0.05)
+  // play_sound(.MINECRAFT, volume=1)
 }
 
 update_game :: proc(gm: ^Game, dt: f32)
 {
   set_current_game(gm)
   defer set_current_game(nil)
-  
+
   player := gm.special_entities[.PLAYER]
   cursor_pos := screen_to_world_space(platform.cursor_position())
 
   gm.interpolate = true
- 
+
   // - Kill entities ---
   for &en in gm.entities do if (en.ref != {})
   {
@@ -161,6 +168,8 @@ update_game :: proc(gm: ^Game, dt: f32)
   {
     debug_circle(cursor_pos, 4, {1, 0, 0, 0})
   }
+
+  // printf("%.2f\n", noise_at_test(cursor_pos, 60, tt.global_pos(player)))
 
   // - Global keybinds ---
   {
@@ -229,10 +238,10 @@ update_game :: proc(gm: ^Game, dt: f32)
   {
     region_pos := region_pos_to_world_pos({0, 0})
     relative_player_pos := tt.global_pos(player) - region_pos
-    
+
     if gm.active_region.x < 2 && relative_player_pos.x > REGION_SPAN
     {
-      // - Move right --- 
+      // - Move right ---
       gm.active_region.x += 1
       // gm.camera.pos.x += WORLD_WIDTH - REGION_GAP
       gm.interpolate = false
@@ -244,7 +253,7 @@ update_game :: proc(gm: ^Game, dt: f32)
       // gm.camera.pos.x -= WORLD_WIDTH - REGION_GAP
       gm.interpolate = false
     }
-    
+
     if gm.active_region.y < 2 && relative_player_pos.y > REGION_SPAN
     {
       // - Move down ---
@@ -267,14 +276,14 @@ update_game :: proc(gm: ^Game, dt: f32)
     {
       BWD_MULT :: 0.7
 
-      if !(platform.key_pressed(.A) || platform.key_pressed(.D))
+      if !platform.input_pressed(res.actions[.LEFT]) && !platform.input_pressed(res.actions[.RIGHT])
       {
         player.vel.x = 0
         player.input_dir.x = 0
         entity_play_animation(player, .IDLE, looping=true)
       }
 
-      if !(platform.key_pressed(.W) || platform.key_pressed(.S))
+      if !platform.input_pressed(res.actions[.UP]) && !platform.input_pressed(res.actions[.DOWN])
       {
         player.vel.y = 0
         player.input_dir.y = 0
@@ -284,7 +293,7 @@ update_game :: proc(gm: ^Game, dt: f32)
       bwd: bool
       dir_factor: f32 = 1.0
 
-      if platform.key_pressed(.A) && !platform.key_pressed(.D)
+      if platform.input_pressed(res.actions[.LEFT]) && !platform.input_pressed(res.actions[.RIGHT])
       {
         bwd = cursor_pos.x > tt.local(player).pos.x
         dir_factor = bwd ? BWD_MULT : 1.0
@@ -292,23 +301,23 @@ update_game :: proc(gm: ^Game, dt: f32)
         player.input_dir.x = -1
         entity_play_animation(player, .WALK, speed=(bwd ? BWD_MULT : 1), looping=true, reverse=bwd)
       }
-      
-      if platform.key_pressed(.D) && !platform.key_pressed(.A)
+
+      if platform.input_pressed(res.actions[.RIGHT]) && !platform.input_pressed(res.actions[.LEFT])
       {
         bwd = cursor_pos.x < tt.local(player).pos.x
         dir_factor = bwd ? BWD_MULT : 1.0
-        
+
         player.input_dir.x = 1
         entity_play_animation(player, .WALK, speed=(bwd ? BWD_MULT : 1), looping=true, reverse=bwd)
       }
 
-      if platform.key_pressed(.W) && !platform.key_pressed(.S)
+      if platform.input_pressed(res.actions[.UP]) && !platform.input_pressed(res.actions[.DOWN])
       {
         player.input_dir.y = -1
         entity_play_animation(player, .WALK, speed=(bwd ? BWD_MULT : 1), looping=true, reverse=bwd)
       }
 
-      if platform.key_pressed(.S) && !platform.key_pressed(.W)
+      if platform.input_pressed(res.actions[.DOWN]) && !platform.input_pressed(res.actions[.UP])
       {
         player.input_dir.y = 1
         entity_play_animation(player, .WALK, speed=(bwd ? BWD_MULT : 1), looping=true, reverse=bwd)
@@ -342,7 +351,7 @@ update_game :: proc(gm: ^Game, dt: f32)
         dir := vmath.normalize(target_pos - en_pos)
         dist_to_target := vmath.abs(en_pos - target_pos)
 
-        if dist_to_target.x >= en.targetting.min_dist && 
+        if dist_to_target.x >= en.targetting.min_dist &&
            dist_to_target.x <= en.targetting.max_dist
         {
           en.vel.x += dir.x * ACC * dt
@@ -354,7 +363,7 @@ update_game :: proc(gm: ^Game, dt: f32)
           en.vel.x = basic.approx(en.vel.x, 0, 1)
         }
 
-        if dist_to_target.y >= en.targetting.min_dist && 
+        if dist_to_target.y >= en.targetting.min_dist &&
            dist_to_target.y <= en.targetting.max_dist
         {
           en.vel.y += dir.y * ACC * dt
@@ -375,12 +384,14 @@ update_game :: proc(gm: ^Game, dt: f32)
       {
       case .NIL:
       case .DEER:
-        #partial switch en.creature.state
+        #partial switch en.state
         {
         case .IDLE:
           entity_creature_idle(&en)
         case .WANDER:
           entity_creature_wander(&en, dt)
+        case .FLEE:
+          entity_creature_flee(&en, tt.global_pos(player), dt)
         }
       }
     }
@@ -400,7 +411,7 @@ update_game :: proc(gm: ^Game, dt: f32)
   {
     weapon := entity_child_at(player, 1)
     // debug_circle(tt.global_pos(weapon.shot_point), 4, {1, 0, 0, 0})
-    
+
     // - Rotate equipped weapon ---
     if player.equipped.weapon_kind != .NIL
     {
@@ -433,8 +444,8 @@ update_game :: proc(gm: ^Game, dt: f32)
         timer_start(&player.attack_timer, weapon_desc.shot_time)
       }
 
-      should_shoot := platform.mouse_btn_pressed(.LEFT) && 
-                      timer_timeout(&player.attack_timer) && 
+      should_shoot := platform.input_pressed(res.actions[.ATTACK]) &&
+                      timer_timeout(&player.attack_timer) &&
                       gm.weapon.kind != .NIL
       if should_shoot
       {
@@ -452,7 +463,8 @@ update_game :: proc(gm: ^Game, dt: f32)
         spawn_particles(.GUN_SMOKE, tt.global_pos(weapon.shot_point))
 
         pitch := rand.range_f32({0.8, 1.2})
-        play_sound(.GUN_SHOT, volume=0.5, pitch=pitch)
+        play_sound(.GUN_SHOT, volume=0.1, pitch=pitch)
+        emit_noise(60, tt.global_pos(weapon.shot_point))
       }
 
       // - Position effects ---
@@ -485,10 +497,10 @@ update_game :: proc(gm: ^Game, dt: f32)
   {
     if en_a.collider == nil do continue
 
-    for &en_b in gm.entities 
+    for &en_b in gm.entities
     {
       if en_b.collider == nil ||
-         entity_is_same(en_a, en_b) || 
+         entity_is_same(en_a, en_b) ||
          en_b.col_layer not_in COLLISION_MATRIX[en_a.col_layer]
       {
         continue
@@ -507,6 +519,8 @@ update_game :: proc(gm: ^Game, dt: f32)
           spawn_particles(.DEATH_BLOOD, tt.global_pos(&en_a))
           spawn_corpse(&en_a)
           spawn_corpse(&en_b)
+
+          break
         }
       }
     }
@@ -549,6 +563,24 @@ update_game :: proc(gm: ^Game, dt: f32)
         kill_entity(&en)
       }
     }
+
+    if .HEAR_NOISE in en.props
+    {
+      noise := noise_at(tt.global_pos(en))
+      if noise > 30
+      {
+        if !en.flee_timer.ticking
+        {
+          timer_start(&en.flee_timer, 0.1)
+        }
+      }
+
+      if timer_timeout(&en.flee_timer)
+      {
+        en.flee_timer.ticking = false
+        entity_set_state(&en, .FLEE)
+      }
+    }
   }
 
   // - Animate entities ---
@@ -573,12 +605,12 @@ update_game :: proc(gm: ^Game, dt: f32)
     // - Distort scale ---
     {
       distort_up: bool
-      
+
       distort_up = en.distort_h.target > en.distort_h.saved
       switch en.distort_h.state
       {
-      case .HOLD: 
-      
+      case .HOLD:
+
       case .DISTORT:
         if distort_up
         {
@@ -598,7 +630,7 @@ update_game :: proc(gm: ^Game, dt: f32)
             en.distort_h.state = .RETURN
           }
         }
-      
+
       case .RETURN:
         if distort_up
         {
@@ -670,7 +702,7 @@ update_game :: proc(gm: ^Game, dt: f32)
     // - Animate sprite ---
     {
       desc := &res.animations[en.anim.data[en.anim.state]]
-      
+
       if len(desc.frames) <= 0 do continue
 
       en.anim.duration -= dt
@@ -718,6 +750,7 @@ update_game :: proc(gm: ^Game, dt: f32)
   }
 
   // reset_entity_collision_cache()
+  clear(&global.temp.noise_sources)
   clean_audio()
   free_all(mem.allocator(&global.frame_arena))
 }
@@ -738,7 +771,7 @@ update_debug_gui :: proc(gm: ^Game, dt: f32)
 
     imgui.Text("Time elapsed: %.f s", gm.t)
     imgui.Text("Time delta: %.4f s", dt)
-    
+
     imgui.PushID("Time multiplier")
     imgui.PushItemWidth(85)
     imgui.Text("Time multiplier:"); imgui.SameLine()
@@ -937,21 +970,21 @@ interpolate_games :: proc(curr_gm, prev_gm, res_gm: ^Game, alpha: f32)
     if curr_en.gen == prev_en.gen &&
        curr_en.flags.interpolate
     {
-      tt.set_global_pos(res_gm.entities[i], 
-                        vmath.lerp(tt.global_pos(prev_en, prev_tt), 
-                                   tt.global_pos(curr_en, curr_tt), 
+      tt.set_global_pos(res_gm.entities[i],
+                        vmath.lerp(tt.global_pos(prev_en, prev_tt),
+                                   tt.global_pos(curr_en, curr_tt),
                                    alpha),
                         &res_gm.transform_tree)
 
-      tt.set_global_scl(res_gm.entities[i], 
-                        vmath.lerp(tt.global_scl(prev_en, prev_tt), 
-                                   tt.global_scl(curr_en, curr_tt), 
+      tt.set_global_scl(res_gm.entities[i],
+                        vmath.lerp(tt.global_scl(prev_en, prev_tt),
+                                   tt.global_scl(curr_en, curr_tt),
                                    alpha),
                         &res_gm.transform_tree)
 
-      tt.set_global_rot(res_gm.entities[i], 
-                        vmath.lerp_angle(tt.global_rot(prev_en, prev_tt), 
-                                         tt.global_rot(curr_en, curr_tt), 
+      tt.set_global_rot(res_gm.entities[i],
+                        vmath.lerp_angle(tt.global_rot(prev_en, prev_tt),
+                                         tt.global_rot(curr_en, curr_tt),
                                          alpha),
                         &res_gm.transform_tree)
     }
@@ -967,21 +1000,21 @@ interpolate_games :: proc(curr_gm, prev_gm, res_gm: ^Game, alpha: f32)
 
       if entity_is_same(curr_den^, prev_den^) && curr_den.flags.interpolate
       {
-        tt.set_global_pos(res_gm.debug_entities[i], 
-                          vmath.lerp(tt.global_pos(prev_den, prev_tt), 
-                                  tt.global_pos(curr_den, curr_tt), 
+        tt.set_global_pos(res_gm.debug_entities[i],
+                          vmath.lerp(tt.global_pos(prev_den, prev_tt),
+                                  tt.global_pos(curr_den, curr_tt),
                                   alpha),
                           &res_gm.transform_tree)
 
-        tt.set_global_scl(res_gm.debug_entities[i], 
-                          vmath.lerp(tt.global_scl(prev_den, prev_tt), 
-                                  tt.global_scl(curr_den, curr_tt), 
+        tt.set_global_scl(res_gm.debug_entities[i],
+                          vmath.lerp(tt.global_scl(prev_den, prev_tt),
+                                  tt.global_scl(curr_den, curr_tt),
                                   alpha),
                           &res_gm.transform_tree)
 
-        tt.set_global_rot(res_gm.debug_entities[i], 
-                          vmath.lerp_angle(tt.global_rot(prev_den, prev_tt), 
-                                        tt.global_rot(curr_den, curr_tt), 
+        tt.set_global_rot(res_gm.debug_entities[i],
+                          vmath.lerp_angle(tt.global_rot(prev_den, prev_tt),
+                                        tt.global_rot(curr_den, curr_tt),
                                         alpha),
                           &res_gm.transform_tree)
       }
@@ -995,7 +1028,7 @@ interpolate_games :: proc(curr_gm, prev_gm, res_gm: ^Game, alpha: f32)
     prev_par := &prev_gm.particles[i]
 
     if curr_par.gen == prev_par.gen &&
-       particle_has_props(curr_par^, {.ACTIVE, .INTERPOLATE}) && 
+       particle_has_props(curr_par^, {.ACTIVE, .INTERPOLATE}) &&
        particle_has_props(prev_par^, {.ACTIVE})
     {
       res_gm.particles[i].pos = vmath.lerp(prev_par.pos, curr_par.pos, alpha)
@@ -1010,7 +1043,7 @@ camera_follow_point_bounded :: proc(point: f32x2)
   gm := current_game()
   point := point - {WORLD_WIDTH, WORLD_HEIGHT}/2
   bounds_min, bounds_max: [2]f32
-  
+
   bounds_min.x = REGION_SPAN * gm.active_region.x
   bounds_max.x = REGION_SPAN * (gm.active_region.x + 1) - WORLD_WIDTH
   gm.camera.pos.x = clamp(point.x, bounds_min.x, bounds_max.x)
@@ -1030,6 +1063,44 @@ screen_to_world_space :: proc(pos: f32x2) -> (result: f32x2)
   }
 
   return result + gm.camera.pos
+}
+
+Noise_Source :: struct
+{
+  value: f32,
+  pos:   f32x2,
+}
+
+emit_noise :: proc(value: f32, pos: f32x2)
+{
+  append(&global.temp.noise_sources, Noise_Source{
+    value = value,
+    pos = pos,
+  })
+}
+
+noise_at :: proc(pos: f32x2) -> (value: f32)
+{
+  for source in global.temp.noise_sources
+  {
+    K :: 5.0
+    dist := vmath.distance(pos, source.pos)
+    value += max(source.value - dist/K, 0)
+  }
+
+  return
+}
+
+noise_at_test :: proc(pos: f32x2, val: f32, pos2: f32x2) -> (value: f32)
+{
+  // for source in global.temp.noise_sources
+  {
+    K :: 5.0
+    dist := vmath.distance(pos, pos2)
+    value += max(val - dist/K, 0)
+  }
+
+  return
 }
 
 // Entity ////////////////////////////////////////////////////////////////////////////////
@@ -1065,13 +1136,11 @@ Entity :: struct
   death_timer:      Timer,
   hurt_timer:       Timer,
   hurt_grace_timer: Timer,
+  flee_timer:       Timer,
 
+  state:            Entity_State,
+  state_data:       Entity_State_Data,
   creature_kind:    Creature_Kind,
-  creature:         struct
-  {
-    state:          Entity_State,
-    data:           Entity_State_Data,
-  },
   decoration_kind:  Decoration_Kind,
   weapon_kind:      Weapon_Kind,
   projectile_kind:  Projectile_Kind,
@@ -1133,6 +1202,7 @@ Entity_Prop :: enum
   KILL_AFTER_TIME,
   FOLLOW_ENTITY,
   ROTATE_OVER_TIME,
+  HEAR_NOISE,
 }
 
 Entity_State :: enum
@@ -1141,6 +1211,7 @@ Entity_State :: enum
   IDLE,
   EXPAND,
   WANDER,
+  FLEE,
 }
 
 Entity_State_Data :: struct #raw_union
@@ -1150,6 +1221,11 @@ Entity_State_Data :: struct #raw_union
     state:      enum{CHOOSE, MOVE, WAIT},
     point:      f32x2,
     wait_timer: Timer,
+  },
+  flee:    struct
+  {
+    state:      enum{CHOOSE, MOVE},
+    point:      f32x2,
   },
 }
 
@@ -1251,7 +1327,7 @@ alloc_entity :: proc(gm: ^Game) -> ^Entity
       en.xform = tt.alloc_transform(&gm.transform_tree)
 
       result = &en
-      
+
       gm.entities_cnt += 1
       break
     }
@@ -1324,14 +1400,14 @@ setup_player :: proc(en: ^Entity)
   en.anim.state = .IDLE
   en.anim.data[.IDLE] = .PLAYER_IDLE
   en.anim.data[.WALK] = .PLAYER_WALK
-  
+
   // - Shadow ---
   {
     shadow := alloc_entity(gm)
     entity_setup_sprite(shadow, .SHADOW_PLAYER)
     tt.set_parent(shadow, en)
     tt.local(shadow).pos = {0, 7}
-    shadow.color = {0.3, 0.3, 0.3, 0}
+    shadow.color = {0.2, 0.2, 0.2, 0}
     shadow.tint.a = 0.5
 
     entity_attach_child(en, shadow)
@@ -1371,14 +1447,14 @@ spawn_creature :: proc(kind: Creature_Kind, pos: f32x2) -> ^Entity
 
   en := alloc_entity(gm)
   en.creature_kind = kind
-  en.props += {.FOLLOW_ENTITY}
+  en.props += {.FOLLOW_ENTITY, .HEAR_NOISE}
   en.tint = {1, 1, 1, 1}
   en.z_layer = .ENEMY
   en.col_layer = .ENEMY
   en.targetting.target_en = gm.special_entities[.PLAYER].ref
   en.targetting.min_dist = 8
   en.targetting.max_dist = 1000
-  en.creature.state = .WANDER
+  entity_set_state(en, .WANDER)
   tt.local(en).pos = pos
 
   switch kind
@@ -1389,6 +1465,10 @@ spawn_creature :: proc(kind: Creature_Kind, pos: f32x2) -> ^Entity
     en.anim.state = .IDLE
     en.anim.data[.IDLE] = .DEER_IDLE
     en.anim.data[.WALK] = .DEER_WALK
+
+    en.collider = Circle{
+      radius = 5,
+    }
 
     // - Shadow ---
     {
@@ -1401,29 +1481,6 @@ spawn_creature :: proc(kind: Creature_Kind, pos: f32x2) -> ^Entity
 
       entity_attach_child(en, shadow)
     }
-  }
-
-  en.collider = Circle{
-    radius = 6,
-  }
-
-  return en
-}
-
-spawn_weapon :: proc(kind: Weapon_Kind) -> ^Entity
-{
-  gm := current_game()
-
-  en := alloc_entity(gm)
-  en.weapon_kind = kind
-  en.tint = {1, 1, 1, 1}
-  en.z_layer = .DECORATION
-
-  switch kind
-  {
-  case .RIFLE:
-    en.sprite = .RIFLE
-  case .NIL:
   }
 
   return en
@@ -1445,7 +1502,7 @@ spawn_projectile :: proc(kind: Projectile_Kind) -> ^Entity
   {
   case .BULLET:
     entity_setup_sprite(en, .BULLET)
-    collider_radius = 3
+    collider_radius = 2
   case .NIL:
   }
 
@@ -1487,8 +1544,8 @@ spawn_corpse :: proc(en: ^Entity) -> ^Entity
 }
 
 entity_play_animation :: proc(
-  en:      ^Entity, 
-  anim:    Animation_State, 
+  en:      ^Entity,
+  anim:    Animation_State,
   looping: bool,
   reverse: bool = false,
   speed:   f32 = 1.0,
@@ -1623,9 +1680,9 @@ entity_collision :: proc(en_a, en_b: ^Entity) -> bool
 // }
 
 entity_move_to_point :: proc(
-  en:    ^Entity, 
-  p:     f32x2, 
-  speed: f32, 
+  en:    ^Entity,
+  p:     f32x2,
+  speed: f32,
   flip:  bool = true
 ) -> (
   done: bool,
@@ -1685,6 +1742,16 @@ entity_equip_weapon :: proc(en: ^Entity, kind: Weapon_Kind)
   gm.weapon.kind = kind
 }
 
+entity_set_state :: proc(en: ^Entity, st: Entity_State, reset := false)
+{
+  if en.state != st || reset
+  {
+    en.state_data = {}
+  }
+
+  en.state = st
+}
+
 entity_creature_idle :: proc(en: ^Entity)
 {
   entity_play_animation(en, .IDLE, looping=true)
@@ -1693,7 +1760,7 @@ entity_creature_idle :: proc(en: ^Entity)
 entity_creature_wander :: proc(en: ^Entity, dt: f32)
 {
   creature_desc := &res.creatures[en.creature_kind]
-  wander := &en.creature.data.wander
+  wander := &en.state_data.wander
   en_pos := tt.global_pos(en)
 
   switch wander.state
@@ -1740,6 +1807,42 @@ entity_creature_wander :: proc(en: ^Entity, dt: f32)
   }
 }
 
+entity_creature_flee :: proc(en: ^Entity, target_pos: f32x2, dt: f32)
+{
+  creature_desc := &res.creatures[en.creature_kind]
+  flee := &en.state_data.flee
+  en_pos := tt.global_pos(en)
+
+  switch flee.state
+  {
+  case .CHOOSE:
+    point: [2]f32
+    for
+    {
+      point = array_cast(rand.range_2i31(creature_desc.flee_range), f32)
+      point.x *= -1 if rand.boolean() else 1
+      point.y *= -1 if rand.boolean() else 1
+      point += en_pos
+
+      if point_in_region_bounds(point, region_from_world_pos(en_pos)) do break
+    }
+
+    flee.point = point
+    flee.state = .MOVE
+
+  case .MOVE:
+    entity_play_animation(en, .WALK, looping=true, speed=1.5)
+    debug_circle(flee.point, 4)
+
+    arrived := entity_move_to_point(en, flee.point, creature_desc.speed*2*dt)
+    if arrived
+    {
+      flee^ = {}
+      entity_set_state(en, .WANDER)
+    }
+  }
+}
+
 // Debug_Entity //////////////////////////////////////////////////////////////////////////
 
 Debug_Entity :: distinct Entity
@@ -1768,12 +1871,12 @@ push_debug_entity :: proc() -> ^Debug_Entity
 pop_debug_entity :: proc(den: ^Debug_Entity)
 {
   gm := current_game()
-  
+
   tt.free_transform(&gm.transform_tree, den.xform)
   den^ = {}
   gm.debug_entities_pos -= 1
 
-  // NOTE(dg): This is not a good solution because it breaks interpolation. 
+  // NOTE(dg): This is not a good solution because it breaks interpolation.
   if gm.debug_entities_pos == -1
   {
     gm.debug_entities_pos = len(gm.debug_entities)-1
@@ -1782,7 +1885,7 @@ pop_debug_entity :: proc(den: ^Debug_Entity)
 
 debug_rect :: proc(
   pos:    f32x2,
-  scale:  f32x2, 
+  scale:  f32x2,
   color:  f32x4 = {1, 1, 1, 0},
   alpha:  f32 = 0.65,
   sprite: Sprite_Name = .SQUARE,
@@ -1801,7 +1904,7 @@ debug_rect :: proc(
 
 debug_circle :: proc(
   pos:    f32x2,
-  radius: f32, 
+  radius: f32,
   color:  f32x4 = {0, 1, 0, 0},
   alpha:  f32 = 0.65,
 ) -> (
@@ -1935,7 +2038,7 @@ generate_world_region :: proc(gm: ^Game)
         }
       }
 
-      if coord.x < REGION_GAP_TILES || REGION_SPAN_TILES - coord.x <= REGION_GAP_TILES || 
+      if coord.x < REGION_GAP_TILES || REGION_SPAN_TILES - coord.x <= REGION_GAP_TILES ||
          coord.y < REGION_GAP_TILES || REGION_SPAN_TILES - coord.y <= REGION_GAP_TILES
       {
         if !(coord.x == REGION_SPAN_TILES/2 || coord.y == REGION_SPAN_TILES/2)
@@ -1950,7 +2053,7 @@ generate_world_region :: proc(gm: ^Game)
 
       gm.regions[region_idx][tile_idx] = Tile{
         sprite = sprite,
-        rot = rot, 
+        rot = rot,
       }
     }
   }
@@ -2073,7 +2176,7 @@ spawn_particles :: proc(kind: Particle_Name, pos: f32x2)
 }
 
 update_particle :: proc(par: ^Particle, dt: f32)
-{ 
+{
   par.vel += par.acc * dt
   par.pos += par.vel * dt
 
@@ -2096,9 +2199,8 @@ update_particle :: proc(par: ^Particle, dt: f32)
 
 Timer :: struct
 {
-  ticking:  bool,
-  duration: f32,
   end_time: f32,
+  ticking:  b32,
 }
 
 timer_start :: proc(timer: ^Timer, duration: f32)
@@ -2108,7 +2210,7 @@ timer_start :: proc(timer: ^Timer, duration: f32)
   timer.ticking = true
 }
 
-timer_timeout :: proc(timer: ^Timer) -> bool
+timer_timeout :: proc(timer: ^Timer) -> b32
 {
   gm := current_game()
   return timer.ticking && gm.t >= timer.end_time

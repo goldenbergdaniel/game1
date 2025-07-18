@@ -5,10 +5,12 @@ import "core:image/qoi"
 
 import "basic"
 import "basic/mem"
+import "platform"
 import "render"
 
 Resources :: struct
 {
+  actions:    [Action_Name]platform.Input_Source,
   textures:   [render.Texture_ID]render.Texture,
   sprites:    [Sprite_Name]Sprite,
   sounds:     [Sound_Name]Sound,
@@ -77,6 +79,17 @@ Sound_Group :: enum
   AMBIENCE,
   MUSIC,
   EFFECT,
+}
+
+Action_Name :: enum
+{
+  NIL,
+  UP,
+  DOWN,
+  RIGHT,
+  LEFT,
+  SNEAK,
+  ATTACK,
 }
 
 Animation_Name :: enum
@@ -154,6 +167,7 @@ Creature_Desc :: struct
 {
   animations:   [Animation_State]Animation_Name,
   wander_range: Range(i32),
+  flee_range:   Range(i32),
   speed:        f32,
 }
 
@@ -162,6 +176,21 @@ res: Resources
 init_resources :: proc(arena: ^mem.Arena)
 {
   context.allocator = mem.allocator(arena)
+
+  // - Actions ---
+  {
+    using platform
+
+    res.actions = [Action_Name]Input_Source{
+      .NIL = nil,
+      .UP = Key_Kind.W,
+      .DOWN = Key_Kind.S,
+      .RIGHT = Key_Kind.D,
+      .LEFT = Key_Kind.A,
+      .SNEAK = Key_Kind.C,
+      .ATTACK = Mouse_Btn_Kind.LEFT,
+    }
+  }
 
   // - Textures ---
   {
@@ -342,6 +371,7 @@ init_resources :: proc(arena: ^mem.Arena)
           .WALK = .DEER_WALK,
         },
         wander_range = {10, 50},
+        flee_range = {100, 200},
         speed = 35,
       },
     }

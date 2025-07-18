@@ -4,6 +4,7 @@ import "base:intrinsics"
 import "core:fmt"
 import "core:time"
 
+import ft "ext:freetype"
 import "basic"
 import "basic/mem"
 import "platform"
@@ -13,7 +14,7 @@ import tt "transform_tree"
 WORLD_WIDTH  :: 320.0
 WORLD_HEIGHT :: 180.0
 WORLD_TEXEL  :: 16.0
-WORLD_STEP   :: 1.0/40
+WORLD_STEP   :: 1.0/50
 
 User :: struct
 {
@@ -30,10 +31,33 @@ update_start_tick, update_end_tick: time.Tick
 render_start_tick, render_end_tick: time.Tick
 curr_game, prev_game, res_game: Game
 
+freetype_test :: proc()
+{
+  err: ft.Error
+  
+  library: ft.Library
+  err = ft.init_free_type(&library)
+  if err != nil
+  {
+    println("Error initializing freetype!", err)
+  }
+
+  face: ft.Face
+  ft.new_face(library, "res/fonts/Jersey10.ttf", 0, &face)
+  if err != nil
+  {
+    println("Error reading font file!", err)
+  }
+
+  // println(face)
+}
+
 main :: proc()
 {
   _ = mem.arena_init_static(&user.perm_arena)
   _ = mem.arena_init_growing(&user.frame_arena)
+
+  freetype_test()
 
   window_desc := platform.Window_Desc{
     title = "GAME",

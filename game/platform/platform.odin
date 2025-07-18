@@ -149,6 +149,12 @@ Input :: struct
   mouse_pos:       [2]f32,
 }
 
+Input_Source :: union
+{
+  Key_Kind,
+  Mouse_Btn_Kind,
+}
+
 global_input: ^Input = &{}
 
 // global: struct
@@ -343,6 +349,46 @@ mouse_btn_released :: #force_inline proc(btn: Mouse_Btn_Kind) -> bool
 mouse_btn_just_released :: #force_inline proc(btn: Mouse_Btn_Kind) -> bool
 {
   return !global_input.mouse_btns[btn] && global_input.prev_mouse_btns[btn]
+}
+
+input_pressed :: proc(input: Input_Source) -> bool
+{
+  switch v in input
+  {
+  case:                return false
+  case Key_Kind:       return key_pressed(v)
+  case Mouse_Btn_Kind: return mouse_btn_pressed(v)
+  }
+}
+
+input_just_pressed :: proc(input: Input_Source) -> bool
+{
+  switch v in input
+  {
+  case:                return false
+  case Key_Kind:       return key_just_pressed(v)
+  case Mouse_Btn_Kind: return mouse_btn_just_pressed(v)
+  }
+}
+
+input_released :: proc(input: Input_Source) -> bool
+{
+  switch v in input
+  {
+  case:                return false
+  case Key_Kind:       return key_released(v)
+  case Mouse_Btn_Kind: return mouse_btn_released(v)
+  }
+}
+
+input_just_released :: proc(input: Input_Source) -> bool
+{
+  switch v in input
+  {
+  case:                return false
+  case Key_Kind:       return key_just_released(v)
+  case Mouse_Btn_Kind: return mouse_btn_just_released(v)
+  }
 }
 
 cursor_position :: #force_inline proc() -> [2]f32
