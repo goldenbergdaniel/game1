@@ -113,7 +113,7 @@ main :: proc()
       
       copy_game(&prev_game, &curr_game)
       update_game(&curr_game, WORLD_STEP * curr_game.t_mult)
-      platform.save_input()
+      platform.remember_prev_input()
  
       // if frame_time * 1000 > 20 do printf("%.0f ms\n", frame_time * 1000)
 
@@ -155,6 +155,7 @@ range_overlap :: basic.range_overlap
 array_cast    :: basic.array_cast
 approc        :: basic.approx
 
+print   :: fmt.print
 printf  :: fmt.printf
 println :: fmt.println
 panicf  :: fmt.panicf

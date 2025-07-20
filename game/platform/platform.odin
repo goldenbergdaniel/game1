@@ -1,5 +1,6 @@
 package platform
 
+import "core:fmt"
 import "../basic/mem"
 
 @(private)
@@ -226,9 +227,12 @@ pump_events :: #force_inline proc(window: ^Window)
   when ODIN_OS == .Windows do windows_pump_events(window)
 	else                     do sdl_pump_events()
 
+  count: int
+
   event: Event
   for poll_event(window, &event)
   {
+    count += 1
     switch event.kind
     {
     case .NIL:
@@ -298,7 +302,7 @@ pop_event :: proc(queue: ^Event_Queue) -> ^Event
   return result
 }
 
-save_input :: proc()
+remember_prev_input :: proc()
 {
   for key in Key_Kind
   {
@@ -311,86 +315,120 @@ save_input :: proc()
   }
 }
 
-key_pressed :: #force_inline proc(key: Key_Kind) -> bool
+@(require_results)
+key_pressed :: proc(key: Key_Kind) -> bool
 {
   return global_input.keys[key]
 }
 
-key_just_pressed :: #force_inline proc(key: Key_Kind) -> bool
+@(require_results)
+key_just_pressed :: proc(key: Key_Kind) -> bool
 {
   return global_input.keys[key] && !global_input.prev_keys[key]
 }
 
-key_released :: #force_inline proc(key: Key_Kind) -> bool
+@(require_results)
+key_released :: proc(key: Key_Kind) -> bool
 {
   return !global_input.keys[key]
 }
 
-key_just_released :: #force_inline proc(key: Key_Kind) -> bool
+@(require_results)
+key_just_released :: proc(key: Key_Kind) -> bool
 {
   return !global_input.keys[key] && global_input.prev_keys[key]
 }
 
-mouse_btn_pressed :: #force_inline proc(btn: Mouse_Btn_Kind) -> bool
+consume_key :: proc(key: Key_Kind)
+{
+  global_input.keys[key] = false
+  // global_input.prev_keys[key] = false
+}
+
+@(require_results)
+mouse_btn_pressed :: proc(btn: Mouse_Btn_Kind) -> bool
 {
   return global_input.mouse_btns[btn]
 }
 
-mouse_btn_just_pressed :: #force_inline proc(btn: Mouse_Btn_Kind) -> bool
+@(require_results)
+mouse_btn_just_pressed :: proc(btn: Mouse_Btn_Kind) -> bool
 {
   return global_input.mouse_btns[btn] && !global_input.prev_mouse_btns[btn]
 }
 
-mouse_btn_released :: #force_inline proc(btn: Mouse_Btn_Kind) -> bool
+@(require_results)
+mouse_btn_released :: proc(btn: Mouse_Btn_Kind) -> bool
 {
   return !global_input.mouse_btns[btn]
 }
 
-mouse_btn_just_released :: #force_inline proc(btn: Mouse_Btn_Kind) -> bool
+@(require_results)
+mouse_btn_just_released :: proc(btn: Mouse_Btn_Kind) -> bool
 {
   return !global_input.mouse_btns[btn] && global_input.prev_mouse_btns[btn]
 }
 
+consume_mouse_btn :: proc(btn: Mouse_Btn_Kind)
+{
+  global_input.mouse_btns[btn] = false
+  global_input.prev_mouse_btns[btn] = false
+}
+
+@(require_results)
 input_pressed :: proc(input: Input_Source) -> bool
 {
   switch v in input
   {
-  case:                return false
   case Key_Kind:       return key_pressed(v)
   case Mouse_Btn_Kind: return mouse_btn_pressed(v)
+  case:                return false
   }
 }
 
+@(require_results)
 input_just_pressed :: proc(input: Input_Source) -> bool
 {
   switch v in input
   {
-  case:                return false
   case Key_Kind:       return key_just_pressed(v)
   case Mouse_Btn_Kind: return mouse_btn_just_pressed(v)
+  case:                return false
   }
 }
 
+@(require_results)
 input_released :: proc(input: Input_Source) -> bool
 {
   switch v in input
   {
-  case:                return false
   case Key_Kind:       return key_released(v)
   case Mouse_Btn_Kind: return mouse_btn_released(v)
+  case:                return false
   }
 }
 
+@(require_results)
 input_just_released :: proc(input: Input_Source) -> bool
 {
   switch v in input
   {
-  case:                return false
   case Key_Kind:       return key_just_released(v)
   case Mouse_Btn_Kind: return mouse_btn_just_released(v)
+  case:                return false
   }
 }
 
+consume_input :: proc(input: Input_Source)
+{
+  switch v in input
+  {
+  case Key_Kind:       consume_key(v)
+  case Mouse_Btn_Kind: consume_mouse_btn(v)
+  }
+}
+
+@(require_results)
 cursor_position :: #force_inline proc() -> [2]f32
 {
   result: [2]f32

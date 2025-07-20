@@ -198,6 +198,8 @@ sdl_poll_event :: proc(window: ^Window, event: ^Event) -> bool
 		event.kind = .NIL
 	}
 
+	// if event.kind != .NIL do fmt.println(event.key_kind)
+
 	return result
 }
 
