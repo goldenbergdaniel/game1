@@ -173,6 +173,7 @@ Creature_Desc :: struct
   animations:   [Animation_State]Animation_Name,
   wander_range: Range(i32),
   flee_range:   Range(i32),
+  health:       int,
   speed:        f32,
 }
 
@@ -379,6 +380,7 @@ init_resources :: proc(arena: ^mem.Arena)
         },
         wander_range = {10, 50},
         flee_range = {50, 100},
+        health = 2,
         speed = 35,
       },
     }

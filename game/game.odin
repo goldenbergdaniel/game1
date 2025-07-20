@@ -507,50 +507,63 @@ update_game :: proc(gm: ^Game, dt: f32)
   }
 
   // - Collision detection ---
-  for &en_a in gm.entities do if en_a.flags.update
   {
-    if en_a.collider == nil do continue
+    Collision :: struct {a, b: u32}
 
-    for &en_b in gm.entities
+    @(static)
+    collided_cache: [dynamic]Collision
+    
+    in_collided_cache :: proc(a, b: Entity_Ref) -> bool
     {
-      if en_b.collider == nil ||
-         entity_is_same(en_a, en_b) ||
-         en_b.col_layer not_in COLLISION_MATRIX[en_a.col_layer]
+      for col in collided_cache
       {
-        continue
+        if col.a == a.idx && col.b == b.idx
+        {
+          return true
+        }
       }
 
-      // if !get_entities_collided_cache(en_a.ref, en_b.ref) && entity_collision(&en_a, &en_b)
-      if entity_collision(&en_a, &en_b)
+      return false
+    }
+
+    for &en_a in gm.entities do if en_a.flags.update
+    {
+      if en_a.collider == nil do continue
+
+      for &en_b in gm.entities do if en_b.flags.update
       {
-        // set_entities_collided_cache(en_a.ref, en_b.ref)
-
-        if en_a.projectile_kind != .NIL || en_b.projectile_kind != .NIL
+        if en_b.collider == nil || 
+           entity_is_same(en_a, en_b) ||
+           en_b.col_layer not_in COLLISION_MATRIX[en_a.col_layer]
         {
-          kill_entity(&en_a)
-          kill_entity(&en_b)
+          continue
+        }
 
-          spawn_particles(.DEATH_BLOOD, tt.global_pos(&en_a))
-          spawn_corpse(&en_a)
-          spawn_corpse(&en_b)
+        if !in_collided_cache(en_a.ref, en_b.ref) && entity_collision(&en_a, &en_b)
+        {
+          append(&collided_cache, Collision{en_a.ref.idx, en_b.ref.idx})
+          
+          en_a->resolve_collision(.PROJECTILE_HIT)
+          en_b->resolve_collision(.PROJECTILE_HIT)
+        }
+      }
 
-          break
+      if circle, ok := en_a.collider.(Circle); ok
+      {
+        if point_in_circle(cursor_pos, circle)
+        {
+          if platform.mouse_btn_just_pressed(.RIGHT)
+          {
+            global.debug_target_entity = en_a.ref
+          }
         }
       }
     }
 
-    if circle, ok := en_a.collider.(Circle); ok
-    {
-      if point_in_circle(cursor_pos, circle)
-      {
-        if platform.mouse_btn_just_pressed(.RIGHT)
-        {
-          global.debug_target_entity = en_a.ref
-        }
-      }
-    }
+    clear(&collided_cache)
   }
 
+  // - Misc behavior ---
   for &en in gm.entities do if en.flags.update
   {
     if .LOOK_AT_TARGET in en.props
@@ -605,6 +618,19 @@ update_game :: proc(gm: ^Game, dt: f32)
       {
         en.anim.duration = 0
         en.anim.frame_idx = entity_animation_last_frame(&en) if en.anim.reverse else 0
+      }
+    }
+
+    if .FLASH_COLOR in en.props
+    {
+      if timer_timeout(&en.flash_color_timer)
+      {
+        en.color = {0, 0, 0, 0}
+        en.props -= {.FLASH_COLOR}
+      }
+      else
+      {
+        en.color = en.flash_color
       }
     }
 
@@ -765,7 +791,6 @@ update_game :: proc(gm: ^Game, dt: f32)
     update_particle(&par, dt)
   }
 
-  // reset_entity_collision_cache()
   clear(&global.temp.noise_sources)
   clean_audio()
   free_all(mem.allocator(&global.frame_arena))
@@ -1121,81 +1146,84 @@ MAX_ENTITIES  :: 4 << 10
 
 Entity :: struct
 {
-  ref:              Entity_Ref,
-  gen:              u32,
-  parent:           Entity_Ref,
-  children:         [4]Entity_Ref,
-  flags:            bit_field u8
+  ref:               Entity_Ref,
+  gen:               u32,
+  parent:            Entity_Ref,
+  children:          [4]Entity_Ref,
+  flags:             bit_field u8
   {
-    update:         bool | 1,
-    render:         bool | 1,
-    interpolate:    bool | 1,
+    update:          bool | 1,
+    render:          bool | 1,
+    interpolate:     bool | 1,
   },
-  props:            bit_set[Entity_Prop],
-  #subtype xform:   tt.Transform,
-  vel:              f32x2,
-  radius:           f32,
-  input_dir:        f32x2,
-  movement_speed:   f32,
-  tint:             f32x4,
-  color:            f32x4,
-  sprite:           Sprite_Name,
-  collider:         Collider,
-  col_layer:        Collision_Layer,
-  z_index:          i16,
-  z_layer:          enum{NIL, DECORATION, ENEMY, PLAYER, PROJECTILE},
-  attack_timer:     Timer,
-  death_timer:      Timer,
-  hurt_timer:       Timer,
-  hurt_grace_timer: Timer,
-  flee_timer:       Timer,
+  props:             bit_set[Entity_Prop],
+  #subtype xform:    tt.Transform,
+  vel:               f32x2,
+  radius:            f32,
+  input_dir:         f32x2,
+  movement_speed:    f32,
+  health:            u32,
+  tint:              f32x4,
+  color:             f32x4,
+  sprite:            Sprite_Name,
+  collider:          Collider,
+  col_layer:         Collision_Layer,
+  resolve_collision: proc(en: ^Entity, kind: Collision_Kind),
+  z_index:           i16,
+  z_layer:           enum{NIL, DECORATION, ENEMY, PLAYER, PROJECTILE},
+  attack_timer:      Timer,
+  death_timer:       Timer,
+  flash_color_timer: Timer,
+  flash_color:       f32x4,
+  hurt_grace_timer:  Timer,
+  flee_timer:        Timer,
 
-  state:            Entity_State,
-  state_data:       Entity_State_Data,
-  creature_kind:    Creature_Kind,
-  decoration_kind:  Decoration_Kind,
-  weapon_kind:      Weapon_Kind,
-  projectile_kind:  Projectile_Kind,
+  state:             Entity_State,
+  state_data:        Entity_State_Data,
+  creature_kind:     Creature_Kind,
+  decoration_kind:   Decoration_Kind,
+  weapon_kind:       Weapon_Kind,
+  projectile_kind:   Projectile_Kind,
 
-  anim:             struct
+  anim:              struct
   {
-    data:           [Animation_State]union#shared_nil{Sprite_Name, Animation_Name},
-    state:          Animation_State,
-    next_state:     Animation_State,
-    speed:          f32,
-    duration:       f32,
-    reverse:        bool,
-    looping:        bool,
-    frame_idx:      u16,
+    data:            [Animation_State]union#shared_nil{Sprite_Name, Animation_Name},
+    state:           Animation_State,
+    next_state:      Animation_State,
+    speed:           f32,
+    duration:        f32,
+    reverse:         bool,
+    looping:         bool,
+    frame_idx:       u16,
   },
-  distort_h:        struct
+  distort_h:         struct
   {
-    saved:          f32,
-    target:         f32,
-    rate:           f32,
-    state:          enum{HOLD, DISTORT, RETURN},
+    saved:           f32,
+    target:          f32,
+    rate:            f32,
+    state:           enum{HOLD, DISTORT, RETURN},
   },
-  distort_v:        struct
+  distort_v:         struct
   {
-    saved:          f32,
-    target:         f32,
-    rate:           f32,
-    state:          enum{HOLD, DISTORT, RETURN},
+    saved:           f32,
+    target:          f32,
+    rate:            f32,
+    state:           enum{HOLD, DISTORT, RETURN},
   },
 
-  equipped:         struct
+  equipped:          struct
   {
-    weapon_kind:    Weapon_Kind,
-    muzzle_timer:   Timer,
+    weapon_kind:     Weapon_Kind,
+    muzzle_timer:    Timer,
   },
-  targetting:       struct
+  targetting:        struct
   {
-    target_en:      Entity_Ref,
-    target_pos:     f32x2,
-    min_dist:       f32,
-    max_dist:       f32,
+    target_en:       Entity_Ref,
+    target_pos:      f32x2,
+    min_dist:        f32,
+    max_dist:        f32,
   },
-  shot_point:       tt.Transform,
+  shot_point:        tt.Transform,
 }
 
 Entity_Ref :: struct
@@ -1216,6 +1244,7 @@ Entity_Prop :: enum
   ROTATE_OVER_TIME,
   SNEAKING,
   FLEE_NOISE,
+  FLASH_COLOR,
 }
 
 Entity_State :: enum
@@ -1338,6 +1367,7 @@ alloc_entity :: proc(gm: ^Game) -> ^Entity
       en.ref.gen = en.gen
       en.flags.update = true
       en.xform = tt.alloc_transform(&gm.transform_tree)
+      en.resolve_collision = entity_resolve_collision_stub
 
       result = &en
 
@@ -1474,6 +1504,7 @@ spawn_creature :: proc(kind: Creature_Kind, pos: f32x2) -> ^Entity
   en.tint = {1, 1, 1, 1}
   en.z_layer = .ENEMY
   en.col_layer = .ENEMY
+  en.resolve_collision = entity_resolve_collision_creature
   en.targetting.target_en = gm.special_entities[.PLAYER].ref
   en.targetting.min_dist = 8
   en.targetting.max_dist = 1000
@@ -1487,6 +1518,7 @@ spawn_creature :: proc(kind: Creature_Kind, pos: f32x2) -> ^Entity
     en.flags.render = true
     en.props += {.INTERPOLATE}
     en.tint = {1, 1, 1, 1}
+    en.health = 2
     en.anim.state = .IDLE
     en.anim.data[.IDLE] = .DEER_IDLE
     en.anim.data[.WALK] = .DEER_WALK
@@ -1523,6 +1555,7 @@ spawn_projectile :: proc(kind: Projectile_Kind) -> ^Entity
   en.props += {.KILL_AFTER_TIME}
   en.z_layer = .PROJECTILE
   en.col_layer = .PLAYER
+  en.resolve_collision = entity_resolve_collision_projectile
 
   collider_radius: f32
 
@@ -1595,6 +1628,48 @@ entity_play_animation :: proc(
   en.anim.looping = looping
   en.anim.reverse = reverse
   en.anim.speed = speed
+}
+
+Collision_Kind :: enum
+{
+  PROJECTILE_HIT,
+}
+
+entity_resolve_collision_stub :: proc(en: ^Entity, kind: Collision_Kind) {}
+
+entity_resolve_collision_creature :: proc(en: ^Entity, kind: Collision_Kind)
+{
+  switch kind
+  {
+  case .PROJECTILE_HIT:
+    en.health -= 1
+    if en.health == 0
+    {
+      kill_entity(en)
+
+      corpse := spawn_corpse(en)
+      corpse.props += {.FLASH_COLOR}
+      corpse.flash_color = {1, 1, 1, 0}
+      timer_start(&corpse.flash_color_timer, 0.05)
+    }
+
+    spawn_particles(.DEATH_BLOOD, tt.global_pos(en))
+
+    en.props += {.FLASH_COLOR}
+    en.flash_color = {1, 1, 1, 0}
+    timer_start(&en.flash_color_timer, 0.05)
+
+    entity_set_state(en, .FLEE)
+  }
+}
+
+entity_resolve_collision_projectile :: proc(en: ^Entity, kind: Collision_Kind)
+{
+  switch kind
+  {
+  case .PROJECTILE_HIT:
+    kill_entity(en)
+  }
 }
 
 entity_animation_last_frame :: proc(en: ^Entity) -> u16
@@ -1702,25 +1777,6 @@ entity_collision :: proc(en_a, en_b: ^Entity) -> bool
 
   panic("Unhandled collision for collider types!")
 }
-
-// @(thread_local, private="file")
-// _entity_collision_cache: [MAX_ENTITIES*2]bool
-
-// get_entities_collided_cache :: proc(a, b: Entity_Ref) -> bool
-// {
-//   return _entity_collision_cache[a.idx] && _entity_collision_cache[b.idx]
-// }
-
-// set_entities_collided_cache :: proc(a, b: Entity_Ref)
-// {
-//   _entity_collision_cache[a.idx] = true
-//   _entity_collision_cache[int(b.idx) + MAX_ENTITIES] = true
-// }
-
-// reset_entity_collision_cache :: proc()
-// {
-  // mem.set(&_entity_collision_cache, 0, MAX_ENTITIES * MAX_ENTITIES)
-// }
 
 entity_move_to_point :: proc(
   en:    ^Entity,
