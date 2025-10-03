@@ -55,10 +55,28 @@
 +audio system
 
 # Day 16 (6.29)
-+creature death and pool of blood
++basic creature death and pool of blood
+
+# Day 17 (6.30)
+~basic creature flee and noise mechanic
+
+# Day 18 (7.17)
++programmable actions instead of hardcoded input keys
+
+# Day 19 (7.19)
++player sneaking mechanic
+
+# Day 20 (7.20)
++collapse sprite and animation into a union
++improved collision resolution system
++milestone: 5k loc
+
+# Day 21 (7.29)
++visual holstered weapon
 
 
 # - UP NEXT -
+-fix missing texture artifact
 -basic item drops
 -inventory
 -map decorations (trees, bushes, grass, mushrooms)

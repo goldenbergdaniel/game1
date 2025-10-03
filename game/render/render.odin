@@ -180,3 +180,8 @@ set_camera :: #force_inline proc(camera: m3x3f32)
 {
   renderer.camera = camera
 }
+
+set_projection :: #force_inline proc(projection: m3x3f32)
+{
+  renderer.projection = projection
+}

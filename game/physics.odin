@@ -1,9 +1,10 @@
 package game
 
 import "core:math"
+import "core:reflect"
 
+import "basic"
 import vmath "basic/vector_math"
-import "render"
 
 Collider :: union
 {
@@ -54,7 +55,7 @@ polygon_polygon_overlap :: proc(a, b: Polygon) -> bool
       max_pb = max(max_pb, p)
     }
 
-    range_overlap(Range(f32){min_pa, max_pa}, Range(f32){min_pb, max_pb}) or_return
+    basic.range_overlap(Range(f32){min_pa, max_pa}, Range(f32){min_pb, max_pb}) or_return
   }
 
   // - Collider B ---
@@ -81,7 +82,7 @@ polygon_polygon_overlap :: proc(a, b: Polygon) -> bool
       max_pb = max(max_pb, p)
     }
 
-    range_overlap(Range(f32){min_pa, max_pa}, Range(f32){min_pb, max_pb}) or_return
+    basic.range_overlap(Range(f32){min_pa, max_pa}, Range(f32){min_pb, max_pb}) or_return
   }
 
   return true
@@ -153,6 +154,24 @@ point_in_polygon :: proc(point: f32x2, polygon: []f32x2) -> bool
   }
 
   return inside
+}
+
+collider_overlap :: proc(a, b: Collider) -> bool
+{
+  types: [2]typeid = {
+    reflect.union_variant_typeid(a),
+    reflect.union_variant_typeid(b),
+  }
+
+  switch types
+  {
+  case {Circle, Circle}:   return circle_circle_overlap(a.(Circle), b.(Circle))
+  case {Circle, Polygon}:  return circle_polygon_overlap(a.(Circle), b.(Polygon))
+  case {Polygon, Circle}:  return circle_polygon_overlap(b.(Circle), a.(Polygon))
+  case {Polygon, Polygon}: return polygon_polygon_overlap(a.(Polygon), b.(Polygon))
+  }
+
+  panic("Unhandled collision for collider types!")
 }
 
 move_to_point :: proc(src, dst: f32x2, r: f32) -> f32x2

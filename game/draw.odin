@@ -18,10 +18,11 @@ draw_sprite :: proc(
   tint:   f32x4 = {1, 1, 1, 1},
   color:  f32x4 = {0, 0, 0, 0},
   sprite: Sprite_Name = .NIL,
+  mult:   f32 = 16,
 ){
   sprite_res := &res.sprites[sprite]
   texture_res := &res.textures[sprite_res.texture]
-  dim := scl * sprite_res.grid * 16
+  dim := scl * sprite_res.grid * mult
 
   xform := vmath.translation_3x3f(pos - dim * sprite_res.pivot)
   xform *= vmath.translation_3x3f(dim * sprite_res.pivot)
@@ -34,7 +35,6 @@ draw_sprite :: proc(
   p3 := xform * f32x3{1, 1, 1}
   p4 := xform * f32x3{0, 1, 1}
 
-  // grid := vm.array_cast(sprite_res.grid, i32)
   tl, tr, br, bl := render.coords_from_texture(texture_res, sprite_res.coords, sprite_res.grid)
 
   render.push_vertex(p1.xy, tint, color, tl)

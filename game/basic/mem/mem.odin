@@ -19,8 +19,10 @@ GIB :: 1 << 30
 global_scratches: [2]Arena
 
 @(init)
-init_scratches :: proc()
+init_scratches :: proc "contextless" ()
 {
+	context = runtime.default_context()
+
 	if err := arena_init_growing(&global_scratches[0]); err != nil
 	{
 		panic("Error initializing scratch arena!")

@@ -2,7 +2,7 @@
 package game
 
 import "core:image/qoi"
-
+import "core:math"
 import "basic"
 import "basic/mem"
 import "platform"
@@ -25,6 +25,7 @@ Sprite_Name :: enum u16
 {
   NIL,
   SQUARE,
+  UI_SQUARE,
   CIRCLE,
   SHADOW_PLAYER,
   SHADOW_DEER,
@@ -95,6 +96,7 @@ Action_Name :: enum
   LEFT,
   SNEAK,
   ATTACK,
+  HOLSTER,
 }
 
 Animation_Name :: enum
@@ -155,7 +157,10 @@ Particle_Desc :: struct
 Weapon_Desc :: struct
 {
   sprite:      Sprite_Name,
-  shot_point:  f32x2,
+  hold_off:    f32x2,
+  holster_off: f32x2,
+  holster_rot: f32,
+  shot_pos:    f32x2,
   shot_time:   f32,
   reload_time: f32,
   damage:      f32,
@@ -195,6 +200,7 @@ init_resources :: proc(arena: ^mem.Arena)
       .LEFT = Key_Kind.A,
       .SNEAK = Key_Kind.LEFT_SHIFT,
       .ATTACK = Mouse_Btn_Kind.LEFT,
+      .HOLSTER = Key_Kind.Q,
     }
   }
 
@@ -222,6 +228,7 @@ init_resources :: proc(arena: ^mem.Arena)
     res.sprites = [Sprite_Name]Sprite{
       .NIL            = {coords={0, 0},  grid={1, 1}, pivot={7.5, 7.5}},
       .SQUARE         = {coords={1, 0},  grid={1, 1}, pivot={7.5, 7.5}},
+      .UI_SQUARE      = {coords={1, 0},  grid={1, 1}, pivot={0.0, 0.0}},
       .CIRCLE         = {coords={2, 0},  grid={1, 1}, pivot={8.5, 8.5}},
       .SHADOW_PLAYER  = {coords={3, 0},  grid={1, 1}, pivot={7.5, 14.5}},
       .SHADOW_DEER    = {coords={4, 0},  grid={1, 1}, pivot={7.5, 14.5}},
@@ -299,11 +306,11 @@ init_resources :: proc(arena: ^mem.Arena)
       },
       .PLAYER_SNEAK_WALK = {
         frames = {
-          {sprite=.PLAYER_SNEAK_0, duration=0.08},
           {sprite=.PLAYER_SNEAK_1, duration=0.08},
           {sprite=.PLAYER_SNEAK_2, duration=0.08},
           {sprite=.PLAYER_SNEAK_3, duration=0.08},
           {sprite=.PLAYER_SNEAK_4, duration=0.08},
+          {sprite=.PLAYER_SNEAK_0, duration=0.08},
         },
       },
       .DEER_IDLE = {
@@ -364,9 +371,9 @@ init_resources :: proc(arena: ^mem.Arena)
     }
   }
 
-  // - Player
+  // - Player ---
   {
-    res.player.speed = 60
+    res.player.speed = 50
   }
 
   // - Creature ---
@@ -392,7 +399,10 @@ init_resources :: proc(arena: ^mem.Arena)
       .NIL = {},
       .RIFLE = {
         sprite = .RIFLE,
-        shot_point = {11.0, 0.0},
+        hold_off = {0, 0},
+        holster_off = {-2, -5},
+        holster_rot = cast(f32) rad_from_deg(90.0),
+        shot_pos = {11.0, 0.0},
         shot_time = 0.35,
         reload_time = 3.0,
         damage = 7,

@@ -1,5 +1,6 @@
 package miniaudio
 
+import "base:runtime"
 import "core:c"
 
 MINIAUDIO_SHARED :: #config(MINIAUDIO_SHARED, false)
@@ -24,7 +25,6 @@ BINDINGS_VERSION_REVISION :: 21
 BINDINGS_VERSION          :: [3]u32{BINDINGS_VERSION_MAJOR, BINDINGS_VERSION_MINOR, BINDINGS_VERSION_REVISION}
 BINDINGS_VERSION_STRING   :: "0.11.21"
 
-@(init)
 version_check :: proc() {
 	v: [3]u32
 	version(&v.x, &v.y, &v.z)

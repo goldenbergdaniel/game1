@@ -23,9 +23,11 @@ Window :: struct
 
 Window_Props :: enum
 {
+  BORDERLESS,
   FULLSCREEN,
   RESIZEABLE,
   MAXIMIZED,
+  VSYNC,
 }
 
 Window_Desc :: struct

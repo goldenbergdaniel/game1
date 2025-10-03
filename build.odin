@@ -34,6 +34,7 @@ main :: proc()
         "-collection:ext=ext", 
         "-debug",
         "-extra-linker-flags:\"-fuse-ld=mold\"",
+        // "-sanitize:address",
       },
       stdout = os2.stdout,
       stderr = os2.stderr,
@@ -50,8 +51,6 @@ main :: proc()
         "-collection:ext=ext", 
         "-vet-style",
         "-o:speed",
-        "-microarch:native",
-        "-ignore-unknown-attributes",
         "-extra-linker-flags:\"-fuse-ld=mold\"",
       },
       stdout = os2.stdout,
@@ -68,10 +67,9 @@ main :: proc()
   fmt.printf("[mode:%s]\n", mode)
   fmt.printf("[%s]\n", PACKAGE)
 
-  os2.set_env("SDL_VIDEO_DRIVER", "wayland")
+  // os2.set_env("SDL_VIDEO_DRIVER", "wayland")
 
   process, start_err := os2.process_start(game_process_desc)
-  if start_err != nil do fmt.eprintln("Error:", start_err)
-
+  if start_err != nil do fmt.panicf("Error: %s\n", start_err)
   _, _ = os2.process_wait(process)
 }

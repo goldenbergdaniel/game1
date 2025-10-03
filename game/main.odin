@@ -3,7 +3,6 @@ package game
 import "base:intrinsics"
 import "core:fmt"
 import "core:time"
-
 import ft "ext:freetype"
 import "basic"
 import "basic/mem"
@@ -63,7 +62,7 @@ main :: proc()
     title = "GAME",
     width = 960,
     height = 540,
-    props = {.FULLSCREEN},
+    props = {.FULLSCREEN, .VSYNC, .RESIZEABLE},
   }
 
   user.window = platform.create_window(window_desc, &user.perm_arena)
@@ -72,7 +71,7 @@ main :: proc()
   init_resources(&user.perm_arena)
   render.init(&user.window, {0, WORLD_WIDTH, 0, WORLD_HEIGHT}, &res.textures)
   init_audio()
-  init_global_game_memory()
+  init_global()
 
   init_game(&curr_game)
   start_game(&curr_game)
@@ -154,6 +153,8 @@ Range :: basic.Range
 range_overlap :: basic.range_overlap
 array_cast    :: basic.array_cast
 approc        :: basic.approx
+rad_from_deg  :: basic.rad_from_deg
+deg_from_rad  :: basic.deg_from_rad
 
 print   :: fmt.print
 printf  :: fmt.printf

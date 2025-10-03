@@ -4,10 +4,9 @@ package platform
 
 import "core:fmt"
 import "core:strings"
-
-import 				   "ext:sdl"
-import imgui     "ext:dear_imgui"
-import imgui_gl  "ext:dear_imgui/imgui_impl_opengl3"
+import "ext:sdl"
+import imgui "ext:dear_imgui"
+import imgui_gl "ext:dear_imgui/imgui_impl_opengl3"
 import imgui_sdl "ext:dear_imgui/imgui_impl_sdl3"
 
 import "../basic/mem"
@@ -106,7 +105,9 @@ sdl_create_window :: proc(
 
 	when ODIN_OS == .Linux
 	{
-		sdl.SetHint("SDL_VIDEO_WAYLAND_ALLOW_LIBDECOR", "1")
+		deco: cstring = .BORDERLESS in desc.props ? "0" : "1"
+		sdl.SetHint("SDL_VIDEO_WAYLAND_ALLOW_LIBDECOR", deco)
+
 		sdl.SetHint("SDL_VIDEO_DOUBLE_BUFFER", "1")
 	}
 	
@@ -130,15 +131,19 @@ sdl_create_window :: proc(
 		window_flags += {.METAL}
 	}
 
-	for prop in desc.props do switch prop
+	for prop in desc.props do #partial switch prop
 	{
-	case .FULLSCREEN: 
+	case .FULLSCREEN:
 		window_flags += {.FULLSCREEN}
-	case .MAXIMIZED:  
+	case .MAXIMIZED:
 		window_flags += {.MAXIMIZED}
-	case .RESIZEABLE: 
+	case .RESIZEABLE:
 		window_flags += {.RESIZABLE}
+	case .BORDERLESS:
+		window_flags += {.BORDERLESS}
 	}
+
+	window_flags += {.TRANSPARENT}
 	
   title_cstr := strings.clone_to_cstring(desc.title, mem.allocator(scratch.arena))
 	sdl_window := sdl.CreateWindow(title_cstr, i32(desc.width), i32(desc.height), window_flags)
@@ -147,7 +152,9 @@ sdl_create_window :: proc(
 	{
 		gl_ctx := sdl.GL_CreateContext(sdl_window)
 		sdl.GL_MakeCurrent(sdl_window, gl_ctx)
-		sdl.GL_SetSwapInterval(1)
+		
+		vsync: i32 = .VSYNC in desc.props ? 1 : 0
+		sdl.GL_SetSwapInterval(vsync)
 
 		when false
 		{
@@ -156,7 +163,7 @@ sdl_create_window :: proc(
 			fmt.println("Dear ImGui Version:", imgui.GetVersion())
 		}
 	}
-
+	
 	imgui.CreateContext()
 	imgui.StyleColorsDark()
 	imgui_sdl.InitForOpenGL(sdl_window, gl_ctx)
@@ -276,3 +283,4 @@ sdl_cursor_pos :: proc() -> [2]f32
 }
 
 sdl_gl_set_proc_address :: sdl.gl_set_proc_address
+

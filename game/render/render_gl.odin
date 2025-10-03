@@ -30,9 +30,7 @@ gl_init :: proc(
     gl.Enable(gl.BLEND)
 		gl.Enable(gl.MULTISAMPLE)
 
-    gl.CreateTextures(gl.TEXTURE_2D, 
-                      len(renderer.textures), 
-                      raw_data(&renderer.textures))
+    gl.CreateTextures(gl.TEXTURE_2D, len(renderer.textures), raw_data(&renderer.textures))
 
     for tex, id in renderer.textures
     {
