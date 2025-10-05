@@ -34,7 +34,7 @@ Texture :: struct
 
 Texture_ID :: enum
 {
-  SPRITE_MAP,
+  Sprite_Map,
 }
 
 Renderer :: struct

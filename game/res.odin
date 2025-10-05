@@ -23,99 +23,99 @@ Resources :: struct
 
 Sprite_Name :: enum u16
 {
-  NIL,
-  SQUARE,
-  UI_SQUARE,
-  CIRCLE,
-  SHADOW_PLAYER,
-  SHADOW_DEER,
-  PLAYER_IDLE_0,
-  PLAYER_IDLE_1,
-  PLAYER_WALK_0,
-  PLAYER_WALK_1,
-  PLAYER_WALK_2,
-  PLAYER_WALK_3,
-  PLAYER_WALK_4,
-  PLAYER_SNEAK_0,
-  PLAYER_SNEAK_1,
-  PLAYER_SNEAK_2,
-  PLAYER_SNEAK_3,
-  PLAYER_SNEAK_4,
-  RIFLE,
-  SHOTGUN,
-  MUZZLE_FLASH,
-  BULLET,
-  SMOKE_PARTICLE,
-  BLOOD_PARTICLE,
-  DEER_IDLE_0,
-  DEER_IDLE_1,
-  DEER_IDLE_2,
-  DEER_IDLE_3,
-  DEER_WALK_0,
-  DEER_WALK_1,
-  DEER_WALK_2,
-  DEER_WALK_3,
-  DEER_CORPSE,
-  BLOOD_POOL_0,
-  BLOOD_POOL_1,
-  BLOOD_POOL_2,
-  BLOOD_POOL_3,
-  BLOOD_POOL_4,
-  BLOOD_POOL_5,
-  TILE_DIRT,
-  TILE_GRASS_0,
-  TILE_GRASS_1,
-  TILE_GRASS_2,
-  TILE_STONE_0,
-  TILE_STONE_1,
-  TILE_WALL,
+  Nil,
+  Square,
+  UI_Square,
+  Circle,
+  Shadow_Player,
+  Shadow_Deer,
+  Player_Idle_0,
+  Player_Idle_1,
+  Player_Walk_0,
+  Player_Walk_1,
+  Player_Walk_2,
+  Player_Walk_3,
+  Player_Walk_4,
+  Player_Sneak_0,
+  Player_Sneak_1,
+  Player_Sneak_2,
+  Player_Sneak_3,
+  Player_Sneak_4,
+  Rifle,
+  Shotgun,
+  Muzzle_Flash,
+  Bullet,
+  Smoke_Particle,
+  Blood_Particle,
+  Deer_Idle_0,
+  Deer_Idle_1,
+  Deer_Idle_2,
+  Deer_Idle_3,
+  Deer_Walk_0,
+  Deer_Walk_1,
+  Deer_Walk_2,
+  Deer_Walk_3,
+  Deer_Corpse,
+  Blood_Pool_0,
+  Blood_Pool_1,
+  Blood_Pool_2,
+  Blood_Pool_3,
+  Blood_Pool_4,
+  Blood_Pool_5,
+  Tile_Dirt,
+  Tile_Grass_0,
+  Tile_Grass_1,
+  Tile_Grass_2,
+  Tile_Stone_0,
+  Tile_Stone_1,
+  Tile_Wall,
 }
 
 Sound_Name :: enum
 {
-  NIL,
-  THUNK,
-  GUN_SHOT,
-  MINECRAFT,
+  Nil,
+  Thunk,
+  Gun_Shot,
+  Minecraft,
 }
 
 Sound_Group :: enum
 {
-  NIL,
-  AMBIENCE,
-  MUSIC,
-  EFFECT,
+  Nil,
+  Ambience,
+  Music,
+  Effect,
 }
 
 Action_Name :: enum
 {
-  NIL,
-  UP,
-  DOWN,
-  RIGHT,
-  LEFT,
-  SNEAK,
-  ATTACK,
-  HOLSTER,
+  Nil,
+  Up,
+  Down,
+  Right,
+  Left,
+  Sneak,
+  Attack,
+  Holster,
 }
 
 Animation_Name :: enum
 {
-  NIL,
-  PLAYER_WALK,
-  PLAYER_SNEAK_WALK,
-  DEER_IDLE,
-  DEER_WALK,
-  BLOOD_POOL_EXPAND,
+  Nil,
+  Player_Walk,
+  Player_Sneak_Walk,
+  Deer_Idle,
+  Deer_Walk,
+  Blood_Pool_Expand,
 }
 
 Animation_State :: enum
 {
-  IDLE,
-  WALK,
-  SNEAK_WALK,
-  SNEAK_IDLE,
-  EXPAND,
+  Idle,
+  Walk,
+  Sneak_Walk,
+  Sneak_Idle,
+  Expand,
 }
 
 Animation_Desc :: struct
@@ -129,9 +129,9 @@ Animation_Desc :: struct
 
 Particle_Name :: enum
 {
-  NIL,
-  GUN_SMOKE,
-  DEATH_BLOOD,
+  Nil,
+  Gun_Smoke,
+  Death_Blood,
 }
 
 Particle_Desc :: struct
@@ -193,14 +193,14 @@ init_resources :: proc(arena: ^mem.Arena)
     using platform
 
     res.actions = [Action_Name]Input_Source{
-      .NIL = nil,
-      .UP = Key_Kind.W,
-      .DOWN = Key_Kind.S,
-      .RIGHT = Key_Kind.D,
-      .LEFT = Key_Kind.A,
-      .SNEAK = Key_Kind.LEFT_SHIFT,
-      .ATTACK = Mouse_Btn_Kind.LEFT,
-      .HOLSTER = Key_Kind.Q,
+      .Nil = nil,
+      .Up = Key_Kind.W,
+      .Down = Key_Kind.S,
+      .Right = Key_Kind.D,
+      .Left = Key_Kind.A,
+      .Sneak = Key_Kind.Left_Shift,
+      .Attack = Mouse_Btn_Kind.Left,
+      .Holster = Key_Kind.Q,
     }
   }
 
@@ -215,7 +215,7 @@ init_resources :: proc(arena: ^mem.Arena)
       panicf("Failed to open texture file!", err)
     }
 
-    res.textures[.SPRITE_MAP] = render.Texture{
+    res.textures[.Sprite_Map] = render.Texture{
       data = img.pixels.buf[:],
       width = cast(i32) img.width,
       height = cast(i32) img.height,
@@ -226,57 +226,57 @@ init_resources :: proc(arena: ^mem.Arena)
   // - Sprites ---
   {
     res.sprites = [Sprite_Name]Sprite{
-      .NIL            = {coords={0, 0},  grid={1, 1}, pivot={7.5, 7.5}},
-      .SQUARE         = {coords={1, 0},  grid={1, 1}, pivot={7.5, 7.5}},
-      .UI_SQUARE      = {coords={1, 0},  grid={1, 1}, pivot={0.0, 0.0}},
-      .CIRCLE         = {coords={2, 0},  grid={1, 1}, pivot={8.5, 8.5}},
-      .SHADOW_PLAYER  = {coords={3, 0},  grid={1, 1}, pivot={7.5, 14.5}},
-      .SHADOW_DEER    = {coords={4, 0},  grid={1, 1}, pivot={7.5, 14.5}},
-      .PLAYER_IDLE_0  = {coords={0, 1},  grid={1, 1}, pivot={7.5, 8.5}},
-      .PLAYER_IDLE_1  = {coords={1, 1},  grid={1, 1}, pivot={7.5, 8.5}},
-      .PLAYER_WALK_0  = {coords={2, 1},  grid={1, 1}, pivot={7.5, 8.5}},
-      .PLAYER_WALK_1  = {coords={3, 1},  grid={1, 1}, pivot={7.5, 8.5}},
-      .PLAYER_WALK_2  = {coords={4, 1},  grid={1, 1}, pivot={7.5, 8.5}},
-      .PLAYER_WALK_3  = {coords={5, 1},  grid={1, 1}, pivot={7.5, 8.5}},
-      .PLAYER_WALK_4  = {coords={6, 1},  grid={1, 1}, pivot={7.5, 8.5}},
-      .PLAYER_SNEAK_0 = {coords={7, 1},  grid={1, 1}, pivot={7.5, 8.5}},
-      .PLAYER_SNEAK_1 = {coords={8, 1},  grid={1, 1}, pivot={7.5, 8.5}},
-      .PLAYER_SNEAK_2 = {coords={9, 1},  grid={1, 1}, pivot={7.5, 8.5}},
-      .PLAYER_SNEAK_3 = {coords={10, 1}, grid={1, 1}, pivot={7.5, 8.5}},
-      .PLAYER_SNEAK_4 = {coords={11, 1}, grid={1, 1}, pivot={7.5, 8.5}},
-      .RIFLE          = {coords={0, 2},  grid={1, 1}, pivot={4.5, 8.5}},
-      .SHOTGUN        = {coords={1, 2},  grid={1, 1}, pivot={4.5, 8.5}},
-      .MUZZLE_FLASH   = {coords={0, 3},  grid={1, 1}, pivot={8.5, 8.5}},
-      .BULLET         = {coords={1, 3},  grid={1, 1}, pivot={8.5, 8.5}},
-      .SMOKE_PARTICLE = {coords={2, 3},  grid={1, 1}, pivot={8.5, 8.5}},
-      .BLOOD_PARTICLE = {coords={3, 3},  grid={1, 1}, pivot={8.5, 8.5}},
-      .DEER_IDLE_0    = {coords={0, 4},  grid={1, 1}, pivot={7.5, 8.5}},
-      .DEER_IDLE_1    = {coords={1, 4},  grid={1, 1}, pivot={7.5, 8.5}},
-      .DEER_IDLE_2    = {coords={2, 4},  grid={1, 1}, pivot={7.5, 8.5}},
-      .DEER_IDLE_3    = {coords={3, 4},  grid={1, 1}, pivot={7.5, 8.5}},
-      .DEER_WALK_0    = {coords={4, 4},  grid={1, 1}, pivot={7.5, 8.5}},
-      .DEER_WALK_1    = {coords={5, 4},  grid={1, 1}, pivot={7.5, 8.5}},
-      .DEER_WALK_2    = {coords={6, 4},  grid={1, 1}, pivot={7.5, 8.5}},
-      .DEER_WALK_3    = {coords={7, 4},  grid={1, 1}, pivot={7.5, 8.5}},
-      .DEER_CORPSE    = {coords={8, 4},  grid={2, 1}, pivot={15.0, 15.0}},
-      .BLOOD_POOL_0   = {coords={0, 6},  grid={1, 1}, pivot={8, 10}},
-      .BLOOD_POOL_1   = {coords={1, 6},  grid={1, 1}, pivot={8, 10}},
-      .BLOOD_POOL_2   = {coords={2, 6},  grid={1, 1}, pivot={8, 10}},
-      .BLOOD_POOL_3   = {coords={3, 6},  grid={1, 1}, pivot={8, 10}},
-      .BLOOD_POOL_4   = {coords={4, 6},  grid={1, 1}, pivot={8, 10}},
-      .BLOOD_POOL_5   = {coords={5, 6},  grid={1, 1}, pivot={8, 10}},
-      .TILE_DIRT      = {coords={0, 7},  grid={1, 1}, pivot={8.0, 8.0}},
-      .TILE_GRASS_0   = {coords={1, 7},  grid={1, 1}, pivot={8.0, 8.0}},
-      .TILE_GRASS_1   = {coords={2, 7},  grid={1, 1}, pivot={8.0, 8.0}},
-      .TILE_GRASS_2   = {coords={3, 7},  grid={1, 1}, pivot={8.0, 8.0}},
-      .TILE_STONE_0   = {coords={4, 7},  grid={1, 1}, pivot={8.0, 8.0}},
-      .TILE_STONE_1   = {coords={5, 7},  grid={1, 1}, pivot={8.0, 8.0}},
-      .TILE_WALL      = {coords={6, 7},  grid={1, 1}, pivot={8.0, 8.0}},
+      .Nil            = {coords={0, 0},  grid={1, 1}, pivot={7.5, 7.5}},
+      .Square         = {coords={1, 0},  grid={1, 1}, pivot={7.5, 7.5}},
+      .UI_Square      = {coords={1, 0},  grid={1, 1}, pivot={0.0, 0.0}},
+      .Circle         = {coords={2, 0},  grid={1, 1}, pivot={8.5, 8.5}},
+      .Shadow_Player  = {coords={3, 0},  grid={1, 1}, pivot={7.5, 14.5}},
+      .Shadow_Deer    = {coords={4, 0},  grid={1, 1}, pivot={7.5, 14.5}},
+      .Player_Idle_0  = {coords={0, 1},  grid={1, 1}, pivot={7.5, 8.5}},
+      .Player_Idle_1  = {coords={1, 1},  grid={1, 1}, pivot={7.5, 8.5}},
+      .Player_Walk_0  = {coords={2, 1},  grid={1, 1}, pivot={7.5, 8.5}},
+      .Player_Walk_1  = {coords={3, 1},  grid={1, 1}, pivot={7.5, 8.5}},
+      .Player_Walk_2  = {coords={4, 1},  grid={1, 1}, pivot={7.5, 8.5}},
+      .Player_Walk_3  = {coords={5, 1},  grid={1, 1}, pivot={7.5, 8.5}},
+      .Player_Walk_4  = {coords={6, 1},  grid={1, 1}, pivot={7.5, 8.5}},
+      .Player_Sneak_0 = {coords={7, 1},  grid={1, 1}, pivot={7.5, 8.5}},
+      .Player_Sneak_1 = {coords={8, 1},  grid={1, 1}, pivot={7.5, 8.5}},
+      .Player_Sneak_2 = {coords={9, 1},  grid={1, 1}, pivot={7.5, 8.5}},
+      .Player_Sneak_3 = {coords={10, 1}, grid={1, 1}, pivot={7.5, 8.5}},
+      .Player_Sneak_4 = {coords={11, 1}, grid={1, 1}, pivot={7.5, 8.5}},
+      .Rifle          = {coords={0, 2},  grid={1, 1}, pivot={4.5, 8.5}},
+      .Shotgun        = {coords={1, 2},  grid={1, 1}, pivot={4.5, 8.5}},
+      .Muzzle_Flash   = {coords={0, 3},  grid={1, 1}, pivot={8.5, 8.5}},
+      .Bullet         = {coords={1, 3},  grid={1, 1}, pivot={8.5, 8.5}},
+      .Smoke_Particle = {coords={2, 3},  grid={1, 1}, pivot={8.5, 8.5}},
+      .Blood_Particle = {coords={3, 3},  grid={1, 1}, pivot={8.5, 8.5}},
+      .Deer_Idle_0    = {coords={0, 4},  grid={1, 1}, pivot={7.5, 8.5}},
+      .Deer_Idle_1    = {coords={1, 4},  grid={1, 1}, pivot={7.5, 8.5}},
+      .Deer_Idle_2    = {coords={2, 4},  grid={1, 1}, pivot={7.5, 8.5}},
+      .Deer_Idle_3    = {coords={3, 4},  grid={1, 1}, pivot={7.5, 8.5}},
+      .Deer_Walk_0    = {coords={4, 4},  grid={1, 1}, pivot={7.5, 8.5}},
+      .Deer_Walk_1    = {coords={5, 4},  grid={1, 1}, pivot={7.5, 8.5}},
+      .Deer_Walk_2    = {coords={6, 4},  grid={1, 1}, pivot={7.5, 8.5}},
+      .Deer_Walk_3    = {coords={7, 4},  grid={1, 1}, pivot={7.5, 8.5}},
+      .Deer_Corpse    = {coords={8, 4},  grid={2, 1}, pivot={15.0, 15.0}},
+      .Blood_Pool_0   = {coords={0, 6},  grid={1, 1}, pivot={8, 10}},
+      .Blood_Pool_1   = {coords={1, 6},  grid={1, 1}, pivot={8, 10}},
+      .Blood_Pool_2   = {coords={2, 6},  grid={1, 1}, pivot={8, 10}},
+      .Blood_Pool_3   = {coords={3, 6},  grid={1, 1}, pivot={8, 10}},
+      .Blood_Pool_4   = {coords={4, 6},  grid={1, 1}, pivot={8, 10}},
+      .Blood_Pool_5   = {coords={5, 6},  grid={1, 1}, pivot={8, 10}},
+      .Tile_Dirt      = {coords={0, 7},  grid={1, 1}, pivot={8.0, 8.0}},
+      .Tile_Grass_0   = {coords={1, 7},  grid={1, 1}, pivot={8.0, 8.0}},
+      .Tile_Grass_1   = {coords={2, 7},  grid={1, 1}, pivot={8.0, 8.0}},
+      .Tile_Grass_2   = {coords={3, 7},  grid={1, 1}, pivot={8.0, 8.0}},
+      .Tile_Stone_0   = {coords={4, 7},  grid={1, 1}, pivot={8.0, 8.0}},
+      .Tile_Stone_1   = {coords={5, 7},  grid={1, 1}, pivot={8.0, 8.0}},
+      .Tile_Wall      = {coords={6, 7},  grid={1, 1}, pivot={8.0, 8.0}},
     }
 
     for &sprite in res.sprites
     {
-      sprite.texture = .SPRITE_MAP
+      sprite.texture = .Sprite_Map
       sprite.pivot /= basic.array_cast(sprite.grid, f32) * 16
     }
   }
@@ -284,59 +284,59 @@ init_resources :: proc(arena: ^mem.Arena)
   // - Sound ---
   {
     res.sounds = [Sound_Name]Sound{
-      .NIL       = {},
-      .THUNK     = {path="res/sounds/thunk.wav", group=.EFFECT},
-      .GUN_SHOT  = {path="res/sounds/gun_shot.wav", group=.EFFECT},
-      .MINECRAFT = {path="res/sounds/minecraft.wav", group=.MUSIC},
+      .Nil       = {},
+      .Thunk     = {path="res/sounds/thunk.wav", group=.Effect},
+      .Gun_Shot  = {path="res/sounds/gun_shot.wav", group=.Effect},
+      .Minecraft = {path="res/sounds/minecraft.wav", group=.Music},
     }
   }
 
   // - Animations ---
   {
     res.animations = [Animation_Name]Animation_Desc{
-      .NIL = {},
-      .PLAYER_WALK = {
+      .Nil = {},
+      .Player_Walk = {
         frames = {
-          {sprite=.PLAYER_WALK_0, duration=0.08},
-          {sprite=.PLAYER_WALK_1, duration=0.08},
-          {sprite=.PLAYER_WALK_2, duration=0.08},
-          {sprite=.PLAYER_WALK_3, duration=0.08},
-          {sprite=.PLAYER_WALK_4, duration=0.08},
+          {sprite=.Player_Walk_0, duration=0.08},
+          {sprite=.Player_Walk_1, duration=0.08},
+          {sprite=.Player_Walk_2, duration=0.08},
+          {sprite=.Player_Walk_3, duration=0.08},
+          {sprite=.Player_Walk_4, duration=0.08},
         },
       },
-      .PLAYER_SNEAK_WALK = {
+      .Player_Sneak_Walk = {
         frames = {
-          {sprite=.PLAYER_SNEAK_1, duration=0.08},
-          {sprite=.PLAYER_SNEAK_2, duration=0.08},
-          {sprite=.PLAYER_SNEAK_3, duration=0.08},
-          {sprite=.PLAYER_SNEAK_4, duration=0.08},
-          {sprite=.PLAYER_SNEAK_0, duration=0.08},
+          {sprite=.Player_Sneak_1, duration=0.08},
+          {sprite=.Player_Sneak_2, duration=0.08},
+          {sprite=.Player_Sneak_3, duration=0.08},
+          {sprite=.Player_Sneak_4, duration=0.08},
+          {sprite=.Player_Sneak_0, duration=0.08},
         },
       },
-      .DEER_IDLE = {
+      .Deer_Idle = {
         frames = {
-          {sprite=.DEER_IDLE_0, duration=0.3}, 
-          {sprite=.DEER_IDLE_1, duration=0.3},
-          {sprite=.DEER_IDLE_2, duration=0.3},
-          {sprite=.DEER_IDLE_3, duration=0.3},
+          {sprite=.Deer_Idle_0, duration=0.3}, 
+          {sprite=.Deer_Idle_1, duration=0.3},
+          {sprite=.Deer_Idle_2, duration=0.3},
+          {sprite=.Deer_Idle_3, duration=0.3},
         },
       },
-      .DEER_WALK = {
+      .Deer_Walk = {
         frames = {
-          {sprite=.DEER_WALK_0, duration=0.15}, 
-          {sprite=.DEER_WALK_1, duration=0.15},
-          {sprite=.DEER_WALK_2, duration=0.15},
-          {sprite=.DEER_WALK_3, duration=0.15},
+          {sprite=.Deer_Walk_0, duration=0.15}, 
+          {sprite=.Deer_Walk_1, duration=0.15},
+          {sprite=.Deer_Walk_2, duration=0.15},
+          {sprite=.Deer_Walk_3, duration=0.15},
         },
       },
-      .BLOOD_POOL_EXPAND = {
+      .Blood_Pool_Expand = {
         frames = {
-          {sprite=.BLOOD_POOL_0, duration=0.15},
-          {sprite=.BLOOD_POOL_1, duration=0.15},
-          {sprite=.BLOOD_POOL_2, duration=0.15},
-          {sprite=.BLOOD_POOL_3, duration=0.15},
-          {sprite=.BLOOD_POOL_4, duration=0.15},
-          {sprite=.BLOOD_POOL_5, duration=0.15},
+          {sprite=.Blood_Pool_0, duration=0.15},
+          {sprite=.Blood_Pool_1, duration=0.15},
+          {sprite=.Blood_Pool_2, duration=0.15},
+          {sprite=.Blood_Pool_3, duration=0.15},
+          {sprite=.Blood_Pool_4, duration=0.15},
+          {sprite=.Blood_Pool_5, duration=0.15},
         },
       },
     }
@@ -345,10 +345,10 @@ init_resources :: proc(arena: ^mem.Arena)
   // - Particles ---
   {
     res.particles = [Particle_Name]Particle_Desc{
-      .NIL = {},
-      .GUN_SMOKE = {
-        sprite = .SMOKE_PARTICLE,
-        emmision_kind = .BURST,
+      .Nil = {},
+      .Gun_Smoke = {
+        sprite = .Smoke_Particle,
+        emmision_kind = .Burst,
         colors = {{0.5, 0.5, 0.5, 0}, {0.4, 0.4, 0.4, 0}, {0.3, 0.3, 0.3, 0}},
         count = 4,
         lifetime = 3.0,
@@ -357,9 +357,9 @@ init_resources :: proc(arena: ^mem.Arena)
         vel = {48.0, 48.0},
         vel_dt = {0, -120},
       },
-      .DEATH_BLOOD = {
-        sprite = .BLOOD_PARTICLE,
-        emmision_kind = .BURST,
+      .Death_Blood = {
+        sprite = .Blood_Particle,
+        emmision_kind = .Burst,
         colors = {{0.5, 0, 0, 0}, {0.4, 0, 0, 0}, {0.3, 0, 0, 0}},
         count = 10,
         lifetime = 0.3,
@@ -379,11 +379,11 @@ init_resources :: proc(arena: ^mem.Arena)
   // - Creature ---
   {
     res.creatures = [Creature_Kind]Creature_Desc{
-      .NIL = {},
-      .DEER = {
+      .Nil = {},
+      .Deer = {
         animations = #partial {
-          .IDLE = .DEER_IDLE,
-          .WALK = .DEER_WALK,
+          .Idle = .Deer_Idle,
+          .Walk = .Deer_Walk,
         },
         wander_range = {10, 50},
         flee_range = {50, 100},
@@ -396,9 +396,9 @@ init_resources :: proc(arena: ^mem.Arena)
   // - Weapons ---
   {
     res.weapons = [Weapon_Kind]Weapon_Desc{
-      .NIL = {},
-      .RIFLE = {
-        sprite = .RIFLE,
+      .Nil = {},
+      .Rifle = {
+        sprite = .Rifle,
         hold_off = {0, 0},
         holster_off = {-2, -5},
         holster_rot = cast(f32) rad_from_deg(90.0),

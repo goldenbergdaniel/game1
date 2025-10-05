@@ -4,7 +4,8 @@ import "base:intrinsics"
 
 PI :: 3.14159265358979323846264338327950288
 
-Range :: struct($T: typeid) where intrinsics.type_is_numeric(T)
+Range :: struct($T: typeid) 
+  where intrinsics.type_is_numeric(T), !intrinsics.type_is_array(T)
 {
   min: T, 
   max: T,
@@ -21,6 +22,7 @@ approx :: #force_inline proc "contextless" (val, tar, tol: $T) -> T
   where intrinsics.type_is_numeric(T)
 {
   return tar if abs(val) - abs(tol) <= abs(tar) else val
+
 }
 
 @(require_results)

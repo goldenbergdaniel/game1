@@ -74,7 +74,7 @@ uninit_audio :: proc()
   ma.engine_uninit(&global_audio.engine)
 }
 
-clean_audio :: proc()
+free_finished_sounds :: proc()
 {
   if !global_audio.initialized do return
 
@@ -102,14 +102,14 @@ play_sound :: proc(
   sound_desc := res.sounds[name]
   switch sound_desc.group
   {
-  case .NIL:
+  case .Nil:
   
-  case .AMBIENCE, .MUSIC:
+  case .Ambience, .Music:
     sound: ^ma.sound
     #partial switch sound_desc.group
     {
-    case .AMBIENCE: sound = &global_audio.ambience
-    case .MUSIC:    sound = &global_audio.music
+    case .Ambience: sound = &global_audio.ambience
+    case .Music:    sound = &global_audio.music
     }
 
     if !ma.sound_is_playing(sound) && ma.sound_at_end(sound)
@@ -126,7 +126,7 @@ play_sound :: proc(
       }
     }
   
-  case .EFFECT:
+  case .Effect:
     sound := next_sound_effect()
     ma_sound_init(sound, res.sounds[name].path) or_return
 
@@ -178,12 +178,12 @@ pause_sound_group :: proc(
 
   switch group
   {
-  case .NIL, .EFFECT:
+  case .Nil, .Effect:
     ok = false
-  case .AMBIENCE:
+  case .Ambience:
     result = ma.sound_stop(&global_audio.ambience)
     ok = true
-  case .MUSIC:
+  case .Music:
     result = ma.sound_stop(&global_audio.music)
     ok = true
   }
@@ -208,12 +208,12 @@ reset_sound_group :: proc(
 
   switch group
   {
-  case .NIL, .EFFECT:
+  case .Nil, .Effect:
     ok = false
-  case .AMBIENCE:
+  case .Ambience:
     result = ma.sound_seek_to_pcm_frame(&global_audio.ambience, 0)
     ok = true
-  case .MUSIC:
+  case .Music:
     result = ma.sound_seek_to_pcm_frame(&global_audio.music, 0)
     ok = true
   }

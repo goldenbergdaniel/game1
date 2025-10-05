@@ -48,32 +48,32 @@ sdl_key_map := #partial #sparse [sdl.Scancode]Key_Kind{
 	._7 			 		= .S_7,
 	._8 			 		= .S_8,
 	._9 			 		= .S_9,
-  .LEFTBRACKET  = .OPEN_BRACKET,
-  .RIGHTBRACKET = .CLOSE_BRACKET,
-  .SLASH		    = .FWD_SLASH,
-  .BACKSLASH    = .BWD_SLASH,
-  .SEMICOLON  	= .SEMICOLON,
-  .APOSTROPHE 	= .APOSTROPHE,
-  .COMMA     		= .COMMA,
-  .PERIOD    		= .PERIOD,
-	.GRAVE     		= .BACKTICK,
-	.LALT 		 		= .LEFT_ALT,
-	.RALT 		 		= .RIGHT_ALT,
-	.LCTRL 		 		= .LEFT_CTRL,
-	.RCTRL 		 		= .RIGHT_CTRL,
-	.LSHIFT 	 		= .LEFT_SHIFT,
-	.RSHIFT 	 		= .RIGHT_SHIFT,
-  .UP        		= .UP,
-  .DOWN      		= .DOWN,
-  .LEFT      		= .LEFT,
-  .RIGHT     		= .RIGHT,
-  .PAGEUP    		= .PAGE_UP,
-  .PAGEDOWN  		= .PAGE_DOWN,
-	.SPACE 		 		= .SPACE,
-	.TAB 			 		= .TAB,
-	.RETURN 	 		= .ENTER,
-	.BACKSPACE 		= .BACKSPACE,
-	.ESCAPE    		= .ESCAPE,
+  .LEFTBRACKET  = .Open_Bracket,
+  .RIGHTBRACKET = .Close_Bracket,
+  .SLASH		    = .Forward_Slash,
+  .BACKSLASH    = .Backward_Slash,
+  .SEMICOLON  	= .Semicolon,
+  .APOSTROPHE 	= .Apostrophe,
+  .COMMA     		= .Comma,
+  .PERIOD    		= .Period,
+	.GRAVE     		= .Backtick,
+	.LALT 		 		= .Left_Alt,
+	.RALT 		 		= .Right_Alt,
+	.LCTRL 		 		= .Left_Ctrl,
+	.RCTRL 		 		= .Right_Ctrl,
+	.LSHIFT 	 		= .Left_Shift,
+	.RSHIFT 	 		= .Right_Shift,
+  .UP        		= .Up,
+  .DOWN      		= .Down,
+  .LEFT      		= .Left,
+  .RIGHT     		= .Right,
+  .PAGEUP    		= .Page_Up,
+  .PAGEDOWN  		= .Page_Down,
+	.SPACE 		 		= .Space,
+	.TAB 			 		= .Tab,
+	.RETURN 	 		= .Enter,
+	.BACKSPACE 		= .Backspace,
+	.ESCAPE    		= .Escape,
   .F1 					= .F1,
   .F2 					= .F2,
   .F3 					= .F3,
@@ -89,9 +89,9 @@ sdl_key_map := #partial #sparse [sdl.Scancode]Key_Kind{
 }
 
 sdl_mouse_btn_map := [?]Mouse_Btn_Kind{
-	1 = .LEFT,
-	2 = .MIDDLE,
-	3 = .RIGHT,
+	1 = .Left,
+	2 = .Middle,
+	3 = .Right,
 }
 
 sdl_create_window :: proc(
@@ -105,7 +105,7 @@ sdl_create_window :: proc(
 
 	when ODIN_OS == .Linux
 	{
-		deco: cstring = .BORDERLESS in desc.props ? "0" : "1"
+		deco: cstring = .Borderless in desc.props ? "0" : "1"
 		sdl.SetHint("SDL_VIDEO_WAYLAND_ALLOW_LIBDECOR", deco)
 
 		sdl.SetHint("SDL_VIDEO_DOUBLE_BUFFER", "1")
@@ -133,13 +133,13 @@ sdl_create_window :: proc(
 
 	for prop in desc.props do #partial switch prop
 	{
-	case .FULLSCREEN:
+	case .Fullscreen:
 		window_flags += {.FULLSCREEN}
-	case .MAXIMIZED:
+	case .Maximized:
 		window_flags += {.MAXIMIZED}
-	case .RESIZEABLE:
+	case .Resizeable:
 		window_flags += {.RESIZABLE}
-	case .BORDERLESS:
+	case .Borderless:
 		window_flags += {.BORDERLESS}
 	}
 
@@ -153,7 +153,7 @@ sdl_create_window :: proc(
 		gl_ctx := sdl.GL_CreateContext(sdl_window)
 		sdl.GL_MakeCurrent(sdl_window, gl_ctx)
 		
-		vsync: i32 = .VSYNC in desc.props ? 1 : 0
+		vsync: i32 = .Vsync in desc.props ? 1 : 0
 		sdl.GL_SetSwapInterval(vsync)
 
 		when false
@@ -200,9 +200,9 @@ sdl_poll_event :: proc(window: ^Window, event: ^Event) -> bool
 
 	imgui_sdl.ProcessEvent(&sdl_event)
 	imio := cast(^imgui.IO) window.imio_handle
-	if imio.WantCaptureMouse && event.mouse_btn_kind != .NIL
+	if imio.WantCaptureMouse && event.mouse_btn_kind != .Nil
 	{
-		event.kind = .NIL
+		event.kind = .Nil
 	}
 
 	// if event.kind != .NIL do fmt.println(event.key_kind)
@@ -222,25 +222,25 @@ sdl_translate_event :: proc(sdl_event: ^sdl.Event) -> Event
 	#partial switch sdl_event.type
 	{
 	case .QUIT: 
-		result = Event{kind=.QUIT}
+		result = Event{kind=.Quit}
   case .KEY_DOWN:
 		result = Event{
-			kind = .KEY_DOWN, 
+			kind = .Key_Down, 
 			key_kind = sdl_key_map[sdl_event.key.scancode],
 		}
 	case .KEY_UP:
 		result = Event{
-			kind = .KEY_UP, 
+			kind = .Key_Up, 
 			key_kind = sdl_key_map[sdl_event.key.scancode],
 		}
 	case .MOUSE_BUTTON_DOWN:
 		result = Event{
-			kind = .MOUSE_BTN_DOWN, 
+			kind = .Mouse_Btn_Down, 
 			mouse_btn_kind = sdl_mouse_btn_map[sdl_event.button.button],
 		}
 	case .MOUSE_BUTTON_UP:
 		result = Event{
-			kind = .MOUSE_BTN_UP, 
+			kind = .Mouse_Btn_Up, 
 			mouse_btn_kind = sdl_mouse_btn_map[sdl_event.button.button],
 		}
 	}

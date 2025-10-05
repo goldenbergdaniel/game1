@@ -23,11 +23,11 @@ Window :: struct
 
 Window_Props :: enum
 {
-  BORDERLESS,
-  FULLSCREEN,
-  RESIZEABLE,
-  MAXIMIZED,
-  VSYNC,
+  Borderless,
+  Fullscreen,
+  Resizeable,
+  Maximized,
+  Vsync,
 }
 
 Window_Desc :: struct
@@ -48,17 +48,17 @@ Event :: struct
 
 Event_Kind :: enum
 {
-  NIL,
-  QUIT,
-  KEY_DOWN,
-  KEY_UP,
-  MOUSE_BTN_DOWN,
-  MOUSE_BTN_UP,
+  Nil,
+  Quit,
+  Key_Down,
+  Key_Up,
+  Mouse_Btn_Down,
+  Mouse_Btn_Up,
 }
 
 Key_Kind :: enum
 {
-  NIL,
+  Nil,
   A,
   B,
   C,
@@ -95,32 +95,32 @@ Key_Kind :: enum
   S_7,
   S_8,
   S_9,
-  OPEN_BRACKET,
-  CLOSE_BRACKET,
-  FWD_SLASH,
-  BWD_SLASH,
-  SEMICOLON,
-  APOSTROPHE,
-  COMMA,
-  PERIOD,
-  BACKTICK,
-  LEFT_ALT,
-  RIGHT_ALT,
-  LEFT_CTRL,
-  RIGHT_CTRL,
-  LEFT_SHIFT,
-  RIGHT_SHIFT,
-  UP,
-  DOWN,
-  LEFT,
-  RIGHT,
-  PAGE_UP,
-  PAGE_DOWN,
-  SPACE,
-  TAB,
-  ENTER,
-  BACKSPACE,
-  ESCAPE,
+  Open_Bracket,
+  Close_Bracket,
+  Forward_Slash,
+  Backward_Slash,
+  Semicolon,
+  Apostrophe,
+  Comma,
+  Period,
+  Backtick,
+  Left_Alt,
+  Right_Alt,
+  Left_Ctrl,
+  Right_Ctrl,
+  Left_Shift,
+  Right_Shift,
+  Up,
+  Down,
+  Left,
+  Right,
+  Page_Up,
+  Page_Down,
+  Space,
+  Tab,
+  Enter,
+  Backspace,
+  Escape,
   F1,
   F2,
   F3,
@@ -137,10 +137,10 @@ Key_Kind :: enum
 
 Mouse_Btn_Kind :: enum
 {
-  NIL,
-  LEFT,
-  RIGHT,
-  MIDDLE,
+  Nil,
+  Left,
+  Right,
+  Middle,
 }
 
 Input :: struct
@@ -237,16 +237,16 @@ pump_events :: #force_inline proc(window: ^Window)
     count += 1
     switch event.kind
     {
-    case .NIL:
-    case .QUIT: 
+    case .Nil:
+    case .Quit: 
       window.should_close = true
-    case .KEY_DOWN:
+    case .Key_Down:
       global_input.keys[event.key_kind] = true
-    case .KEY_UP:
+    case .Key_Up:
       global_input.keys[event.key_kind] = false
-    case .MOUSE_BTN_DOWN:
+    case .Mouse_Btn_Down:
       global_input.mouse_btns[event.mouse_btn_kind] = true
-    case .MOUSE_BTN_UP:
+    case .Mouse_Btn_Up:
       global_input.mouse_btns[event.mouse_btn_kind] = false
     }
   }

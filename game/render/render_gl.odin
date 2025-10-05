@@ -125,7 +125,7 @@ gl_flush :: proc()
   gl.UseProgram(renderer.shader)
 
   u_tex_loc := gl.GetUniformLocation(renderer.shader, "u_tex")
-  gl.Uniform1i(u_tex_loc, i32(Texture_ID.SPRITE_MAP))
+  gl.Uniform1i(u_tex_loc, i32(Texture_ID.Sprite_Map))
   gl.NamedBufferSubData(buffer=renderer.ubo,
                         offset=0,
                         size=size_of(renderer.uniforms),

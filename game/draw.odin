@@ -17,7 +17,7 @@ draw_sprite :: proc(
   rot:    f32 = 0,
   tint:   f32x4 = {1, 1, 1, 1},
   color:  f32x4 = {0, 0, 0, 0},
-  sprite: Sprite_Name = .NIL,
+  sprite: Sprite_Name = .Nil,
   mult:   f32 = 16,
 ){
   sprite_res := &res.sprites[sprite]

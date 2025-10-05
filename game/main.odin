@@ -62,7 +62,7 @@ main :: proc()
     title = "GAME",
     width = 960,
     height = 540,
-    props = {.FULLSCREEN, .VSYNC, .RESIZEABLE},
+    props = {.Fullscreen, .Vsync, .Resizeable},
   }
 
   user.window = platform.create_window(window_desc, &user.perm_arena)
