@@ -139,7 +139,7 @@ start_game :: proc(gm: ^Game)
     spawn_creature(.Deer, region_pos_to_world_pos({200, 200}, region))
   }
 
-  // play_sound(.MINECRAFT, volume=1)
+  play_sound(.Minecraft, volume=1)
 }
 
 update_game :: proc(gm: ^Game, dt: f32)

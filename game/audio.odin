@@ -112,7 +112,7 @@ play_sound :: proc(
     case .Music:    sound = &global_audio.music
     }
 
-    if !ma.sound_is_playing(sound) && ma.sound_at_end(sound)
+    if !ma.sound_is_playing(sound) || ma.sound_at_end(sound)
     {
       ma_sound_init(sound, res.sounds[name].path) or_return
       ma.sound_set_looping(sound, true)
