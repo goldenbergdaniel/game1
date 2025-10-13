@@ -21,7 +21,7 @@ Circle :: struct
 Polygon :: struct
 {
   vertices: [8]f32x2,
-  number:   u32,
+  number:   u8,
 }
 
 circle_circle_overlap :: proc(a, b: Circle) -> bool

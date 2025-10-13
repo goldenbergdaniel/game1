@@ -22,7 +22,6 @@ approx :: #force_inline proc "contextless" (val, tar, tol: $T) -> T
   where intrinsics.type_is_numeric(T)
 {
   return tar if abs(val) - abs(tol) <= abs(tar) else val
-
 }
 
 @(require_results)

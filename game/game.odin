@@ -25,6 +25,10 @@ global: struct
 {
   frame_arena:     mem.Arena,
   world_mem:       mem.Heap,
+  audio:           struct
+  {
+    music_volume:  f32,
+  },
   debug:           struct
   {
     enabled:       bool,
@@ -44,6 +48,7 @@ init_global :: proc()
   _ = mem.heap_init(&global.world_mem, mem.default_allocator(), mem.MIB * 16)
 
   global.temp.noise_sources.allocator = mem.allocator(&global.frame_arena)
+  global.audio.music_volume = 1.0
 
   fnl.noise_2d(fnl.State{}, expand_values([2]f32{1, 1}))
 }
@@ -151,6 +156,8 @@ update_game :: proc(gm: ^Game, dt: f32)
   cursor_pos := screen_to_world_space(platform.cursor_position())
 
   gm.interpolate = true
+
+  set_music_volume(global.audio.music_volume)
 
   // - Resolve entity defers ---
   for &en in gm.entities do if entity_is_valid(en)
@@ -355,7 +362,6 @@ update_game :: proc(gm: ^Game, dt: f32)
         speed_mult *= backward ? BACKWARD_MULT : 1
         speed_mult *= sneaking ? SNEAKING_MULT : 1
         speed_mult *= !gm.weapon.holstered ? EQUIPPED_MULT : 1
-        // println(gm.weapon.holstered)
 
         anim: Animation_State = sneaking ? .Sneak_Walk : .Walk
         entity_play_animation(player, anim, speed=speed_mult, looping=true, reverse=backward)
@@ -1070,6 +1076,16 @@ update_debug_gui :: proc(gm: ^Game, dt: f32)
     imgui.Text("   FPS: %.f", 1.0/(total_durr_ms/1000))
     imgui.Spacing()
 
+    imgui.PushID("Music volume")
+    imgui.PushItemWidth(85)
+    imgui.Text("Music volume:"); imgui.SameLine()
+    imgui.InputFloat("", &global.audio.music_volume, 0.1, format="%.2f")
+    global.audio.music_volume = clamp(global.audio.music_volume, 0, 10)
+    imgui.PopItemWidth()
+    imgui.PopID()
+
+    imgui.Spacing()
+
     imgui.Checkbox("Show debug", &global.debug.enabled)
     imgui.Checkbox("Silence noise", &global.debug.silence_noise)
     if imgui.Button("Spawn deer")
@@ -1467,16 +1483,19 @@ defer_entity_spawn :: proc(en: ^Entity)
   }
 }
 
-kill_entity :: proc(en: ^Entity)
+kill_entity :: proc(en: ^Entity, kill_children := true)
 {
   en.flags.update = false
   en.props += {.Marked_For_Death}
 
-  for child in en.children
+  if kill_children
   {
-    child := entity_from_ref(child) or_continue
-    child.flags.update = false
-    child.props += {.Marked_For_Death}
+    for child_ref in en.children
+    {
+      child := entity_from_ref(child_ref) or_continue
+      child.flags.update = false
+      child.props += {.Marked_For_Death}
+    }
   }
 }
 
@@ -1756,11 +1775,10 @@ entity_resolve_collision_creature :: proc(en: ^Entity, kind: Collision_Kind)
       corpse := spawn_corpse(en)
       corpse.props += {.Flash_Color}
       corpse.flash_color = {1, 1, 1, 0}
-
       timer_start(&corpse.flash_color_timer, 0.05)
     }
 
-    spawn_particles(.Death_Blood, tt.global_pos(en))
+    spawn_particles(.Hurt_Blood, tt.global_pos(en))
 
     en.props += {.Flash_Color}
     en.flash_color = {1, 1, 1, 0}
@@ -1864,23 +1882,31 @@ entity_collider_vertex_pos :: proc(en: ^Entity, v: f32x2) -> f32x2
 
 entity_update_collider :: proc(en: ^Entity, dt: f32)
 {
+  // NOTE(dg): This is a stub
+  @(static)
+  collider_map: [Sprite_Name]struct{
+    vertices:     [6][2]f32,
+    vertex_count: int,
+    origin:       [2]f32,
+  }
+
   switch &collider in en.collider
   {
   case Circle:
     collider.origin = tt.global_pos(en)
     debug_circle(collider.origin, collider.radius, alpha=0.25)
   case Polygon:
-    // en.collider.vertices_cnt = cast(u8) collider_map[en.sprite].vertex_count
-    // for i in 0..<en.collider.vertices_cnt
-    // {
-    //   v := xform_from_entity(en) * vmath.concat(collider_map[en.sprite].vertices[i], 1)
-    //   en.collider.vertices[i] = v.xy
-    // }
+    collider.number = cast(u8) collider_map[en.sprite].vertex_count
+    for i in 0..<collider.number
+    {
+      v := xform_from_entity(en) * vmath.concat(collider_map[en.sprite].vertices[i], 1)
+      collider.vertices[i] = v.xy
+    }
 
-    // for vert in en.collider.vertices[:en.collider.vertices_cnt]
-    // {
-    //   debug_circle(vert, 4, color={0, 1, 0, 0}, alpha=0.75)
-    // }
+    for vert in collider.vertices[:collider.number]
+    {
+      debug_circle(vert, 4, color={0, 1, 0, 0}, alpha=0.75)
+    }
   }
 }
 

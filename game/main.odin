@@ -30,25 +30,17 @@ update_start_tick, update_end_tick: time.Tick
 render_start_tick, render_end_tick: time.Tick
 curr_game, prev_game, res_game: Game
 
-freetype_test :: proc()
+freetype_test :: proc() -> ft.Error
 {
-  err: ft.Error
-  
-  library: ft.Library
-  err = ft.init_free_type(&library)
-  if err != nil
-  {
-    println("Error initializing freetype!", err)
-  }
+  library: ft.Library  
+  ft.init_freetype(&library) or_return
+  defer ft.done_freetype(library)
 
   face: ft.Face
-  ft.new_face(library, "res/fonts/Jersey10.ttf", 0, &face)
-  if err != nil
-  {
-    println("Error reading font file!", err)
-  }
+  ft.new_face(library, "res/fonts/Jersey10.ttf", 0, &face) or_return
+  defer ft.done_face(face)
 
-  // println(face)
+  return nil
 }
 
 main :: proc()
@@ -56,7 +48,12 @@ main :: proc()
   _ = mem.arena_init_static(&user.perm_arena)
   _ = mem.arena_init_growing(&user.frame_arena)
 
-  freetype_test()
+  freetype_err := freetype_test()
+  if freetype_err != nil
+  {
+    println("FreeType error:", freetype_err)
+    return
+  }
 
   window_desc := platform.Window_Desc{
     title = "GAME",

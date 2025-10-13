@@ -131,7 +131,7 @@ Particle_Name :: enum
 {
   Nil,
   Gun_Smoke,
-  Death_Blood,
+  Hurt_Blood,
 }
 
 Particle_Desc :: struct
@@ -259,12 +259,12 @@ init_resources :: proc(arena: ^mem.Arena)
       .Deer_Walk_2    = {coords={6, 4},  grid={1, 1}, pivot={7.5, 8.5}},
       .Deer_Walk_3    = {coords={7, 4},  grid={1, 1}, pivot={7.5, 8.5}},
       .Deer_Corpse    = {coords={8, 4},  grid={2, 1}, pivot={15.0, 15.0}},
-      .Blood_Pool_0   = {coords={0, 6},  grid={1, 1}, pivot={8, 10}},
-      .Blood_Pool_1   = {coords={1, 6},  grid={1, 1}, pivot={8, 10}},
-      .Blood_Pool_2   = {coords={2, 6},  grid={1, 1}, pivot={8, 10}},
-      .Blood_Pool_3   = {coords={3, 6},  grid={1, 1}, pivot={8, 10}},
-      .Blood_Pool_4   = {coords={4, 6},  grid={1, 1}, pivot={8, 10}},
-      .Blood_Pool_5   = {coords={5, 6},  grid={1, 1}, pivot={8, 10}},
+      .Blood_Pool_0   = {coords={0, 6},  grid={1, 1}, pivot={8.0, 10.0}},
+      .Blood_Pool_1   = {coords={1, 6},  grid={1, 1}, pivot={8.0, 10.0}},
+      .Blood_Pool_2   = {coords={2, 6},  grid={1, 1}, pivot={8.0, 10.0}},
+      .Blood_Pool_3   = {coords={3, 6},  grid={1, 1}, pivot={8.0, 10.0}},
+      .Blood_Pool_4   = {coords={4, 6},  grid={1, 1}, pivot={8.0, 10.0}},
+      .Blood_Pool_5   = {coords={5, 6},  grid={1, 1}, pivot={8.0, 10.0}},
       .Tile_Dirt      = {coords={0, 7},  grid={1, 1}, pivot={8.0, 8.0}},
       .Tile_Grass_0   = {coords={1, 7},  grid={1, 1}, pivot={8.0, 8.0}},
       .Tile_Grass_1   = {coords={2, 7},  grid={1, 1}, pivot={8.0, 8.0}},
@@ -283,17 +283,17 @@ init_resources :: proc(arena: ^mem.Arena)
 
   // - Sound ---
   {
-    res.sounds = [Sound_Name]Sound{
+    res.sounds = {
       .Nil       = {},
-      .Thunk     = {path="res/sounds/thunk.wav", group=.Effect},
-      .Gun_Shot  = {path="res/sounds/gun_shot.wav", group=.Effect},
+      .Thunk     = {path="res/sounds/thunk.wav",     group=.Effect},
+      .Gun_Shot  = {path="res/sounds/gun_shot.wav",  group=.Effect},
       .Minecraft = {path="res/sounds/minecraft.wav", group=.Music},
     }
   }
 
   // - Animations ---
   {
-    res.animations = [Animation_Name]Animation_Desc{
+    res.animations = {
       .Nil = {},
       .Player_Walk = {
         frames = {
@@ -344,7 +344,7 @@ init_resources :: proc(arena: ^mem.Arena)
 
   // - Particles ---
   {
-    res.particles = [Particle_Name]Particle_Desc{
+    res.particles = {
       .Nil = {},
       .Gun_Smoke = {
         sprite = .Smoke_Particle,
@@ -357,7 +357,7 @@ init_resources :: proc(arena: ^mem.Arena)
         vel = {48.0, 48.0},
         vel_dt = {0, -120},
       },
-      .Death_Blood = {
+      .Hurt_Blood = {
         sprite = .Blood_Particle,
         emmision_kind = .Burst,
         colors = {{0.5, 0, 0, 0}, {0.4, 0, 0, 0}, {0.3, 0, 0, 0}},
@@ -378,7 +378,7 @@ init_resources :: proc(arena: ^mem.Arena)
 
   // - Creature ---
   {
-    res.creatures = [Creature_Kind]Creature_Desc{
+    res.creatures = {
       .Nil = {},
       .Deer = {
         animations = #partial {
@@ -395,7 +395,7 @@ init_resources :: proc(arena: ^mem.Arena)
 
   // - Weapons ---
   {
-    res.weapons = [Weapon_Kind]Weapon_Desc{
+    res.weapons = {
       .Nil = {},
       .Rifle = {
         sprite = .Rifle,

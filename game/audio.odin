@@ -3,15 +3,14 @@ package game
 import "core:strings"
 
 import ma "ext:miniaudio"
-// import sdl "ext:sdl"
 
 import "basic/mem"
 
 // AUDIO_CHANNELS    :: 2
 // AUDIO_SAMPLE_FREQ :: 48000
 
-AUDIO_MAX_EFFECTS :: 512
-AUDIO_WORLD_SCALE :: 0.01
+@(private="file") MAX_EFFECTS :: 256
+@(private="file") WORLD_SCALE :: 0.01
 
 Sound :: struct
 {
@@ -24,10 +23,9 @@ Audio_Data :: struct
 {
   engine:          ma.engine,
   initialized:     bool,
-
   ambience:        ma.sound,
   music:           ma.sound,
-  effects:         [AUDIO_MAX_EFFECTS]ma.sound,
+  effects:         [MAX_EFFECTS]ma.sound,
   effects_pos:     int,
   looping_effects: [dynamic]ma.sound,
 }
@@ -104,14 +102,24 @@ play_sound :: proc(
   {
   case .Nil:
   
-  case .Ambience, .Music:
-    sound: ^ma.sound
-    #partial switch sound_desc.group
+  case .Ambience:
+    sound := &global_audio.ambience
+    if !ma.sound_is_playing(sound) || ma.sound_at_end(sound)
     {
-    case .Ambience: sound = &global_audio.ambience
-    case .Music:    sound = &global_audio.music
+      ma_sound_init(sound, res.sounds[name].path) or_return
+      ma.sound_set_looping(sound, true)
+      ma.sound_set_spatialization_enabled(sound, false)
+
+      result = ma.sound_start(sound)
+      if result != .SUCCESS
+      {
+        printf("Error: Failed to start sound %s! %s\n", name, result)
+        return false
+      }
     }
 
+  case .Music:
+    sound := &global_audio.music
     if !ma.sound_is_playing(sound) || ma.sound_at_end(sound)
     {
       ma_sound_init(sound, res.sounds[name].path) or_return
@@ -132,7 +140,7 @@ play_sound :: proc(
 
     if pos != nil
     {
-      pos := pos.? * AUDIO_WORLD_SCALE
+      pos := pos.? * WORLD_SCALE
       ma.sound_set_position(sound, pos.x, pos.y, 0)
       ma.sound_set_spatialization_enabled(sound, true)
     }
@@ -230,14 +238,20 @@ reset_sound_group :: proc(
 set_audio_listener_pos :: proc(pos: f32x2)
 {
   if !global_audio.initialized do return
-  pos := pos * AUDIO_WORLD_SCALE
+  pos := pos * WORLD_SCALE
   ma.engine_listener_set_position(&global_audio.engine, 0, pos.x, pos.y , 0)
+}
+
+set_music_volume :: proc(volume: f32)
+{
+  if !global_audio.initialized do return
+  ma.sound_set_volume(&global_audio.music, volume)
 }
 
 @(private="file")
 next_sound_effect :: proc() -> ^ma.sound
 {
-  idx := global_audio.effects_pos % len(global_audio.effects)
+  idx := global_audio.effects_pos % MAX_EFFECTS
   result := &global_audio.effects[idx]
   global_audio.effects_pos += 1
   result^ = {}
@@ -245,7 +259,7 @@ next_sound_effect :: proc() -> ^ma.sound
 }
 
 @(private="file")
-ma_sound_init :: proc(ma_sound: ^ma.sound, path: string) -> (ok: bool)
+ma_sound_init :: proc(ma_sound: ^ma.sound, path: string) -> bool
 {
   scratch := mem.temp_begin(mem.scratch())
   defer mem.temp_end(scratch)
