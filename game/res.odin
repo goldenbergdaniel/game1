@@ -2,7 +2,6 @@
 package game
 
 import "core:image/qoi"
-import "core:math"
 import "basic"
 import "basic/mem"
 import "platform"
@@ -10,15 +9,17 @@ import "render"
 
 Resources :: struct
 {
-  actions:    [Action_Name]platform.Input_Source,
-  textures:   [render.Texture_ID]render.Texture,
-  sprites:    [Sprite_Name]Sprite,
-  sounds:     [Sound_Name]Sound,
-  animations: [Animation_Name]Animation_Desc,
-  particles:  [Particle_Name]Particle_Desc,
-  player:     Player_Desc,
-  creatures:  [Creature_Kind]Creature_Desc,
-  weapons:    [Weapon_Kind]Weapon_Desc,
+  actions:     [Action_Name]platform.Input_Source,
+  textures:    [render.Texture_ID]render.Texture,
+  sprites:     [Sprite_Name]Sprite,
+  sounds:      [Sound_Name]Sound,
+  animations:  [Animation_Name]Animation_Desc,
+  particles:   [Particle_Name]Particle_Desc,
+  player:      Player_Desc,
+  creatures:   [Creature_Kind]Creature_Desc,
+  weapons:     [Weapon_Kind]Weapon_Desc,
+  items:       [Item_Kind]Item_Desc,
+  loot_tables: [Loot_Table_Name][dynamic]Loot_Table_Entry,
 }
 
 Sprite_Name :: enum u16
@@ -47,6 +48,7 @@ Sprite_Name :: enum u16
   Bullet,
   Smoke_Particle,
   Blood_Particle,
+  Item_Venison,
   Deer_Idle_0,
   Deer_Idle_1,
   Deer_Idle_2,
@@ -182,6 +184,23 @@ Creature_Desc :: struct
   speed:        f32,
 }
 
+Item_Desc :: struct
+{
+  value:           int,
+  collider_radius: f32,
+}
+
+Loot_Table_Name :: enum
+{
+  Deer,
+}
+
+Loot_Table_Entry :: struct
+{
+  item:  Item_Kind,
+  rate:  f32,
+}
+
 res: Resources
 
 init_resources :: proc(arena: ^mem.Arena)
@@ -250,6 +269,7 @@ init_resources :: proc(arena: ^mem.Arena)
       .Bullet         = {coords={1, 3},  grid={1, 1}, pivot={8.5, 8.5}},
       .Smoke_Particle = {coords={2, 3},  grid={1, 1}, pivot={8.5, 8.5}},
       .Blood_Particle = {coords={3, 3},  grid={1, 1}, pivot={8.5, 8.5}},
+      .Item_Venison   = {coords={4, 3},  grid={1, 1}, pivot={7.5, 9.0}},
       .Deer_Idle_0    = {coords={0, 4},  grid={1, 1}, pivot={7.5, 8.5}},
       .Deer_Idle_1    = {coords={1, 4},  grid={1, 1}, pivot={7.5, 8.5}},
       .Deer_Idle_2    = {coords={2, 4},  grid={1, 1}, pivot={7.5, 8.5}},
@@ -281,7 +301,7 @@ init_resources :: proc(arena: ^mem.Arena)
     }
   }
 
-  // - Sound ---
+  // - Sounds ---
   {
     res.sounds = {
       .Nil       = {},
@@ -409,6 +429,38 @@ init_resources :: proc(arena: ^mem.Arena)
         speed = 512.0,
         capacity = 5,
       },
+    }
+  }
+
+  // - Items ---
+  {
+    res.items = {
+      .Nil = {},
+      .Venison = {
+        value = 33, 
+        collider_radius = 4,
+      },
+    }
+  }
+
+  // - Loot tables ---
+  {
+    res.loot_tables = {
+      .Deer = {
+        {item = .Nil, rate = 0.0},
+        {item = .Venison, rate = 1.0},
+      },
+    }
+
+    for loot_table in res.loot_tables
+    {
+      sum: f32
+      for entry in loot_table
+      {
+        sum += entry.rate
+      }
+
+      assert(sum == 1.0)
     }
   }
 }

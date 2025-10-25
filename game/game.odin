@@ -86,12 +86,16 @@ Game :: struct
     holstered:        bool,
     just_flipped:     bool,
   },
+  player_inventory:   struct
+  {
+    items:            [Item_Kind]int,
+  },
 }
 
 @(thread_local, private="file")
 _current_game: ^Game
 
-current_game :: #force_inline proc() -> ^Game
+get_current_game :: #force_inline proc() -> ^Game
 {
   return _current_game
 }
@@ -439,13 +443,19 @@ update_game :: proc(gm: ^Game, dt: f32)
         #partial switch en.state
         {
         case .Idle:
-          entity_creature_idle(&en)
+          creature_state_idle(&en)
         case .Wander:
-          entity_creature_wander(&en, dt)
+          creature_state_wander(&en, dt)
         case .Flee:
-          entity_creature_flee(&en, tt.global_pos(player), dt)
+          creature_state_flee(&en, tt.global_pos(player), dt)
         }
       }
+    }
+
+    // - Item bob ---
+    for &en in gm.entities do if en.flags.update && en.item_kind != .Nil
+    {
+      item_state_idle(&en, dt)
     }
 
     // - Move ---
@@ -575,25 +585,21 @@ update_game :: proc(gm: ^Game, dt: f32)
       return false
     }
 
-    for &en_a in gm.entities do if en_a.flags.update
+    for &en_a in gm.entities do if en_a.flags.update && en_a.collider != nil
     {
-      if en_a.collider == nil do continue
-
-      for &en_b in gm.entities do if en_b.flags.update
+      for &en_b in gm.entities do if en_b.flags.update && en_b.collider != nil
       {
-        if en_b.collider == nil || 
-           entity_is_same(en_a, en_b) ||
-           en_b.col_layer not_in COLLISION_MATRIX[en_a.col_layer]
-        {
-          continue
-        }
+        if entity_is_same(en_a, en_b) do continue
 
-        if !in_collided_cache(en_a.ref, en_b.ref) && collider_overlap(en_a.collider, en_b.collider)
+        if en_b.col_layer in COLLISION_MATRIX[en_a.col_layer]
         {
-          append(&collided_cache, Collision{en_a.ref.idx, en_b.ref.idx})
-          
-          en_a->resolve_collision(.Projectile_Hit)
-          en_b->resolve_collision(.Projectile_Hit)
+          if !in_collided_cache(en_a.ref, en_b.ref) && collider_overlap(en_a.collider, en_b.collider)
+          {
+            append(&collided_cache, Collision{en_a.ref.idx, en_b.ref.idx})
+
+            en_a->resolve_collision(&en_b)
+            en_b->resolve_collision(&en_a)
+          }
         }
       }
 
@@ -1162,7 +1168,7 @@ update_debug_gui :: proc(gm: ^Game, dt: f32)
 
 camera_follow_point :: proc(point: f32x2, bounds: [2]Range(f32))
 {
-  gm := current_game()
+  gm := get_current_game()
   point := point - {WORLD_WIDTH, WORLD_HEIGHT}/2
   gm.camera.pos.x = clamp(point.x, bounds.x.min, bounds.x.max)
   gm.camera.pos.y = clamp(point.y, bounds.y.min, bounds.y.max)
@@ -1170,7 +1176,7 @@ camera_follow_point :: proc(point: f32x2, bounds: [2]Range(f32))
 
 screen_to_world_space :: proc(pos: f32x2) -> (result: f32x2)
 {
-  gm := current_game()
+  gm := get_current_game()
 
   result = {
     (pos.x - user.viewport.x) * (WORLD_WIDTH / user.viewport.z),
@@ -1246,7 +1252,7 @@ Entity :: struct
   sprite:            Sprite_Name,
   collider:          Collider,
   col_layer:         Collision_Layer,
-  resolve_collision: proc(en: ^Entity, kind: Collision_Kind),
+  resolve_collision: proc(this, other: ^Entity),
   z_index:           i16,
   z_layer:           enum{Nil, Decoration, Enemy, Player, Projectile},
   attack_timer:      Timer,
@@ -1261,6 +1267,7 @@ Entity :: struct
   creature_kind:     Creature_Kind,
   decoration_kind:   Decoration_Kind,
   projectile_kind:   Projectile_Kind,
+  item_kind:         Item_Kind,
 
   anim:              struct
   {
@@ -1301,6 +1308,7 @@ Entity :: struct
     max_dist:        f32,
   },
   shot_point:        tt.Transform,
+  loot_table:        Loot_Table_Name,
 }
 
 Entity_Ref :: struct
@@ -1316,6 +1324,7 @@ Entity_Prop :: enum
   Interpolate,
   Flip_H,
   Flip_V,
+  Is_Player,
   Look_At_Target,
   Kill_After_Time,
   Follow_Entity,
@@ -1335,17 +1344,22 @@ Entity_State :: enum
 
 Entity_State_Data :: struct #raw_union
 {
-  wander:       struct
+  bob:            struct
   {
-    state:      enum{Choose, Move, Wait},
-    point:      f32x2,
-    wait_timer: Timer,
+    state:        enum{Up, Down},
+    displacement: f32,
   },
-  flee:         struct
+  wander:         struct
   {
-    state:      enum{Choose, Move},
-    point:      f32x2,
-    count:      int,
+    state:        enum{Choose, Move, Wait},
+    point:        f32x2,
+    wait_timer:   Timer,
+  },
+  flee:           struct
+  {
+    state:        enum{Choose, Move},
+    point:        f32x2,
+    count:        int,
   },
 }
 
@@ -1354,6 +1368,7 @@ Collision_Layer :: enum
   Nil,
   Player,
   Enemy,
+  Item,
 }
 
 Creature_Kind :: enum
@@ -1380,14 +1395,21 @@ Projectile_Kind :: enum
   Bullet,
 }
 
+Item_Kind :: enum
+{
+  Nil,
+  Venison,
+}
+
 @(rodata)
 NIL_ENTITY: Entity
 
 @(rodata)
 COLLISION_MATRIX: [Collision_Layer]bit_set[Collision_Layer] = {
   .Nil    = {.Nil},
-  .Player = {.Enemy},
+  .Player = {.Enemy, .Item},
   .Enemy  = {.Player},
+  .Item   = {.Player},
 }
 
 entity_is_valid :: proc
@@ -1413,7 +1435,7 @@ entity_is_same :: #force_inline proc(en_a, en_b: $E/Entity) -> bool
 
 entity_from_ref :: proc(ref: Entity_Ref) -> (^Entity, bool) #optional_ok
 {
-  gm := current_game()
+  gm := get_current_game()
   en := &gm.entities[ref.idx]
 
   if ref.idx != 0 && ref.gen == en.gen
@@ -1521,18 +1543,23 @@ entity_child_at :: proc(en: ^Entity, idx: int) -> (res: ^Entity, ok: bool) #opti
 
 spawn_player :: proc() -> ^Entity
 {
-  gm := current_game()
+  gm := get_current_game()
 
   en := alloc_entity(gm)
   en.tint = {1, 1, 1, 1}
   en.z_layer = .Player
-  en.props += {.Interpolate}
+  en.props += {.Is_Player, .Interpolate}
   en.movement_speed = res.player.speed
   en.anim.state = .Idle
   en.anim.data[.Idle] = .Player_Idle_0
   en.anim.data[.Walk] = .Player_Walk
   en.anim.data[.Sneak_Idle] = .Player_Sneak_0
   en.anim.data[.Sneak_Walk] = .Player_Sneak_Walk
+
+  en.col_layer = .Player
+  en.collider = Circle{
+    radius = 6,
+  }
 
   // - Shadow ---
   {
@@ -1593,7 +1620,7 @@ spawn_player :: proc() -> ^Entity
 
 spawn_creature :: proc(kind: Creature_Kind, pos: f32x2, deferred := false) -> ^Entity
 {
-  gm := current_game()
+  gm := get_current_game()
 
   en := alloc_entity(gm)
   en.creature_kind = kind
@@ -1654,7 +1681,7 @@ spawn_creature :: proc(kind: Creature_Kind, pos: f32x2, deferred := false) -> ^E
 
 spawn_projectile :: proc(kind: Projectile_Kind, deferred := false) -> ^Entity
 {
-  gm := current_game()
+  gm := get_current_game()
 
   en := alloc_entity(gm)
   en.projectile_kind = kind
@@ -1693,14 +1720,51 @@ spawn_projectile :: proc(kind: Projectile_Kind, deferred := false) -> ^Entity
   return en
 }
 
+spawn_item :: proc(kind: Item_Kind, deferred := false) -> ^Entity
+{
+  gm := get_current_game()
+
+  en := alloc_entity(gm)
+  en.item_kind = kind
+  en.props += {.Interpolate}
+  en.z_layer = .Decoration
+  en.col_layer = .Item
+  en.tint = {1, 1, 1, 1}
+  en.resolve_collision = entity_resolve_collision_item
+
+  switch kind
+  {
+  case .Nil:
+  case .Venison:
+    en.anim.data[.Idle] = .Item_Venison
+  }
+
+  en.collider = Circle{
+    radius = res.items[kind].collider_radius,
+  }
+
+  if deferred
+  {
+    defer_entity_spawn(en)
+  }
+  else
+  {
+    en.flags.render = true
+    en.flags.update = true
+  }
+
+  entity_set_state(en, .Idle)
+
+  return en
+}
+
 spawn_corpse :: proc(owner: ^Entity, deferred := false) -> ^Entity
 {
-  if owner.creature_kind == .Nil do return nil
+  assert(owner.creature_kind != .Nil)
 
-  gm := current_game()
+  gm := get_current_game()
 
   corpse := alloc_entity(gm)
-  corpse.flags.render = true
   corpse.props += {.Interpolate}
   corpse.tint = {1, 1, 1, 1}
   tt.local(corpse).pos = tt.global_pos(owner) + {0, 5}
@@ -1709,7 +1773,8 @@ spawn_corpse :: proc(owner: ^Entity, deferred := false) -> ^Entity
   switch owner.creature_kind
   {
   case .Nil:
-  case .Deer: corpse.anim.data[.Idle] = .Deer_Corpse
+  case .Deer: 
+    corpse.anim.data[.Idle] = .Deer_Corpse
   }
 
   // - Blood pool ---
@@ -1755,45 +1820,51 @@ entity_play_animation :: proc(
   en.anim.speed = speed
 }
 
-Collision_Kind :: enum
+entity_resolve_collision_stub :: proc(this, other: ^Entity) {}
+
+entity_resolve_collision_creature :: proc(this, other: ^Entity)
 {
-  Projectile_Hit,
+  this.health -= 1
+
+  if this.health == 0
+  {
+    kill_entity(this)
+
+    item_kind := roll_loot_table(this.loot_table)
+    item := spawn_item(item_kind)
+    tt.local(item).pos = tt.global_pos(this)
+
+    corpse := spawn_corpse(this)
+    corpse.props += {.Flash_Color}
+    corpse.flash_color = {1, 1, 1, 0}
+    timer_start(&corpse.flash_color_timer, 0.05)
+  }
+
+  spawn_particles(.Hurt_Blood, tt.global_pos(this))
+
+  this.props += {.Flash_Color}
+  this.flash_color = {1, 1, 1, 0}
+  timer_start(&this.flash_color_timer, 0.05)
+
+  entity_set_state(this, .Flee)
 }
 
-entity_resolve_collision_stub :: proc(en: ^Entity, kind: Collision_Kind) {}
-
-entity_resolve_collision_creature :: proc(en: ^Entity, kind: Collision_Kind)
+entity_resolve_collision_projectile :: proc(this, other: ^Entity)
 {
-  switch kind
+  if other.item_kind == .Nil
   {
-  case .Projectile_Hit:
-    en.health -= 1
-    if en.health == 0
-    {
-      kill_entity(en)
-
-      corpse := spawn_corpse(en)
-      corpse.props += {.Flash_Color}
-      corpse.flash_color = {1, 1, 1, 0}
-      timer_start(&corpse.flash_color_timer, 0.05)
-    }
-
-    spawn_particles(.Hurt_Blood, tt.global_pos(en))
-
-    en.props += {.Flash_Color}
-    en.flash_color = {1, 1, 1, 0}
-    timer_start(&en.flash_color_timer, 0.05)
-
-    entity_set_state(en, .Flee)
+    kill_entity(this)
   }
 }
 
-entity_resolve_collision_projectile :: proc(en: ^Entity, kind: Collision_Kind)
+entity_resolve_collision_item :: proc(this, other: ^Entity)
 {
-  switch kind
+  gm := get_current_game()
+
+  if .Is_Player in other.props
   {
-  case .Projectile_Hit:
-    kill_entity(en)
+    kill_entity(this)
+    gm.player_inventory.items[this.item_kind] += 1
   }
 }
 
@@ -1957,7 +2028,7 @@ entity_equip_weapon :: proc(en: ^Entity, kind: Weapon_Kind)
 {
   if !entity_is_valid(en) do return
 
-  gm := current_game()
+  gm := get_current_game()
   gm.weapon.kind = kind
 
   weapon := entity_child_at(en, 1)
@@ -1978,7 +2049,7 @@ entity_holster_weapon :: proc(en: ^Entity, holster: bool)
 {
   if !entity_is_valid(en) do return
 
-  gm := current_game()
+  gm := get_current_game()
   gm.weapon.holstered = holster
 
   if gm.weapon.kind != .Nil
@@ -2009,12 +2080,12 @@ entity_set_state :: proc(en: ^Entity, st: Entity_State, reset := false)
   en.state = st
 }
 
-entity_creature_idle :: proc(en: ^Entity)
+creature_state_idle :: proc(en: ^Entity)
 {
   entity_play_animation(en, .Idle, looping=true)
 }
 
-entity_creature_wander :: proc(en: ^Entity, dt: f32)
+creature_state_wander :: proc(en: ^Entity, dt: f32)
 {
   creature_desc := &res.creatures[en.creature_kind]
   wander := &en.state_data.wander
@@ -2064,7 +2135,7 @@ entity_creature_wander :: proc(en: ^Entity, dt: f32)
   }
 }
 
-entity_creature_flee :: proc(en: ^Entity, target_pos: f32x2, dt: f32)
+creature_state_flee :: proc(en: ^Entity, target_pos: f32x2, dt: f32)
 {
   creature_desc := &res.creatures[en.creature_kind]
   flee := &en.state_data.flee
@@ -2111,6 +2182,49 @@ entity_creature_flee :: proc(en: ^Entity, target_pos: f32x2, dt: f32)
   }
 }
 
+item_state_idle :: proc(en: ^Entity, dt: f32)
+{
+  MAX_DISPLACEMENT :: 2.0
+
+  bob := &en.state_data.bob
+  dy := 5 * dt
+  
+  switch bob.state
+  {
+  case .Up:
+    tt.local(en).pos.y -= dy
+    bob.displacement += dy
+    if bob.displacement >= MAX_DISPLACEMENT
+    {
+      bob.state = .Down
+    }
+
+  case .Down:
+    tt.local(en).pos.y += dy
+    bob.displacement -= dy
+    if bob.displacement <= -MAX_DISPLACEMENT
+    {
+      bob.state = .Up
+    }
+  }
+}
+
+roll_loot_table :: proc(loot_table: Loot_Table_Name) -> Item_Kind
+{
+  result: Item_Kind
+
+  for entry in res.loot_tables[loot_table]
+  {
+    if entry.rate != 0.0
+    {
+      result = entry.item
+      break
+    }
+  }
+  
+  return result
+}
+
 
 // Debug_Entity //////////////////////////////////////////////////////////////////////////
 
@@ -2119,7 +2233,7 @@ Debug_Entity :: distinct Entity
 
 push_debug_entity :: proc() -> ^Debug_Entity
 {
-  gm := current_game()
+  gm := get_current_game()
 
   result := &gm.debug_entities[gm.debug_entities_pos]
   result.flags.update = true
@@ -2140,7 +2254,7 @@ push_debug_entity :: proc() -> ^Debug_Entity
 
 pop_debug_entity :: proc(den: ^Debug_Entity)
 {
-  gm := current_game()
+  gm := get_current_game()
 
   tt.free_transform(&gm.transform_tree, den.xform)
   den^ = {}
@@ -2239,7 +2353,7 @@ region_from_world_pos :: proc(pos: f32x2) -> Region_Coord
 
 region_pos_from_world_pos :: proc(pos: f32x2) -> f32x2
 {
-  gm := current_game()
+  gm := get_current_game()
   region_pos := region_pos_to_world_pos({0, 0})
 
   return {
@@ -2250,7 +2364,7 @@ region_pos_from_world_pos :: proc(pos: f32x2) -> f32x2
 
 region_pos_to_world_pos :: proc(pos: f32x2, region: Region_Coord = {-1, -1}) -> f32x2
 {
-  gm := current_game()
+  gm := get_current_game()
 
   region := region
   if region == {-1, -1}
@@ -2418,7 +2532,7 @@ kill_particle :: proc(par: ^Particle)
 
 spawn_particles :: proc(kind: Particle_Name, pos: f32x2)
 {
-  gm := current_game()
+  gm := get_current_game()
   desc := &res.particles[kind]
 
   for i in 0..<desc.count
@@ -2481,19 +2595,19 @@ Timer :: struct
 
 timer_start :: proc(timer: ^Timer, duration: f32)
 {
-  gm := current_game()
+  gm := get_current_game()
   timer.end_time = gm.t + duration
   timer.ticking = true
 }
 
 timer_timeout :: proc(timer: ^Timer) -> b32
 {
-  gm := current_game()
+  gm := get_current_game()
   return timer.ticking && gm.t >= timer.end_time
 }
 
 timer_remaining :: proc(timer: ^Timer) -> f32
 {
-  gm := current_game()
+  gm := get_current_game()
   return timer.end_time - gm.t
 }
