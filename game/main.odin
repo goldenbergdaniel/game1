@@ -8,7 +8,6 @@ import "basic"
 import "basic/mem"
 import "platform"
 import "render"
-import tt "transform_tree"
 
 WORLD_WIDTH  :: 320.0
 WORLD_HEIGHT :: 180.0
@@ -28,6 +27,8 @@ user: User
 
 update_start_tick, update_end_tick: time.Tick
 render_start_tick, render_end_tick: time.Tick
+
+@(private="file")
 curr_game, prev_game, res_game: Game
 
 freetype_test :: proc() -> ft.Error
@@ -70,8 +71,8 @@ main :: proc()
   init_audio()
   init_global()
 
-  init_game(&curr_game)
-  start_game(&curr_game)
+  game_init(&curr_game)
+  game_start(&curr_game)
 
   elapsed_time, accumulator: f64
   start_tick := time.tick_now()
@@ -108,11 +109,9 @@ main :: proc()
       update_start_tick = time.tick_now()
       
       copy_game(&prev_game, &curr_game)
-      update_game(&curr_game, WORLD_STEP * curr_game.t_mult)
+      game_update(&curr_game, WORLD_STEP * curr_game.t_mult)
       platform.remember_prev_input()
  
-      // if frame_time * 1000 > 20 do printf("%.0f ms\n", frame_time * 1000)
-
       curr_game.t += WORLD_STEP * curr_game.t_mult
       accumulator -= WORLD_STEP
 
@@ -123,7 +122,7 @@ main :: proc()
 
     alpha := accumulator / WORLD_STEP
     interpolate_games(&curr_game, &prev_game, &res_game, f32(alpha))
-    render_game(&res_game)
+    game_render(&res_game)
 
     render_end_tick = time.tick_now()
 

@@ -186,8 +186,8 @@ Creature_Desc :: struct
 
 Item_Desc :: struct
 {
-  value:           int,
-  collider_radius: f32,
+  name:  string,
+  value: int,
 }
 
 Loot_Table_Name :: enum
@@ -437,8 +437,8 @@ init_resources :: proc(arena: ^mem.Arena)
     res.items = {
       .Nil = {},
       .Venison = {
+        name = "Venison",
         value = 33, 
-        collider_radius = 4,
       },
     }
   }
