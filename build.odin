@@ -26,7 +26,7 @@ main :: proc()
   if mode == "debug"
   {
     game_process_desc = os2.Process_Desc{
-      command={
+      command = {
         "odin", 
         "run", 
         "game", 
@@ -43,7 +43,7 @@ main :: proc()
   else if mode == "release"
   {
     game_process_desc = os2.Process_Desc{
-      command={
+      command = {
         "odin", 
         "build", 
         "game", 
@@ -72,4 +72,20 @@ main :: proc()
   process, start_err := os2.process_start(game_process_desc)
   if start_err != nil do fmt.panicf("Error: %s\n", start_err)
   _, _ = os2.process_wait(process)
+
+  // - Strip ---
+  {
+    process_desc := os2.Process_Desc{
+      command = {
+        "strip",
+        "game.bin",
+        "--strip-all" 
+      },
+      stdout = os2.stdout,
+      stderr = os2.stderr,
+    }
+
+    process, start_err := os2.process_start(process_desc)
+    _, _ = os2.process_wait(process)
+  }
 }
