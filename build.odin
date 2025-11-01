@@ -74,6 +74,7 @@ main :: proc()
   _, _ = os2.process_wait(process)
 
   // - Strip ---
+  if mode == "release"
   {
     process_desc := os2.Process_Desc{
       command = {

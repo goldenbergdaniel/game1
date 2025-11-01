@@ -1307,7 +1307,6 @@ Entity :: struct
     max_dist:        f32,
   },
   shot_point:        tt.Transform,
-  loot_table:        Loot_Table_Name,
 }
 
 Entity_Ref :: struct
@@ -1403,6 +1402,7 @@ Item_Kind :: enum
 {
   Nil,
   Venison,
+  Rabbit_Foot,
 }
 
 @(rodata)
@@ -1410,11 +1410,11 @@ NIL_ENTITY: Entity
 
 @(rodata)
 COLLISION_MATRIX: [Collision_Layer]bit_set[Collision_Layer] = {
-  .Nil    =            {.Nil},
-  .Player =            {.Item},
+  .Nil               = {.Nil},
+  .Player            = {.Item},
   .Player_Projectile = {.Enemy},
-  .Enemy  =            {.Player_Projectile},
-  .Item   =            {.Player},
+  .Enemy             = {.Player_Projectile},
+  .Item              = {.Player},
 }
 
 entity_is_valid :: proc
@@ -1623,6 +1623,8 @@ spawn_creature :: proc(kind: Creature_Kind, pos: f32x2, deferred := false) -> ^E
 
   tt.local(creature).pos = pos
 
+  entity_set_state(creature, .Wander)
+
   switch kind
   {
   case .Nil:
@@ -1633,15 +1635,14 @@ spawn_creature :: proc(kind: Creature_Kind, pos: f32x2, deferred := false) -> ^E
     }
 
     spawn_shadow(creature, .Shadow_L, {-2, 7})
-    entity_set_state(creature, .Wander)
 
   case .Rabbit:
     creature.collider = Circle{
       radius = 3,
     }
 
-    spawn_shadow(creature, .Shadow_M, {-2, 7})
     entity_set_state(creature, .Idle)
+    spawn_shadow(creature, .Shadow_M, {-2, 7})
   }
 
   if deferred
@@ -1811,14 +1812,19 @@ entity_resolve_collision_stub :: proc(this, other: ^Entity) {}
 
 entity_resolve_collision_creature :: proc(this, other: ^Entity)
 {
+  assert(this.creature_kind != .Nil)
+
   this.health -= 1
 
   if this.health == 0
   {
     kill_entity(this)
 
-    item_kind := roll_loot_table(this.loot_table)
-    item := spawn_item(item_kind, tt.global_pos(this))
+    item_kind := roll_loot_table(res.creatures[this.creature_kind].loot_table)
+    if item_kind != .Nil
+    {
+      spawn_item(item_kind, tt.global_pos(this))
+    }
 
     corpse := spawn_corpse(this)
     corpse.props += {.Flash_Color}
