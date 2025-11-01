@@ -28,8 +28,9 @@ Sprite_Name :: enum u16
   Square,
   UI_Square,
   Circle,
-  Shadow_Player,
-  Shadow_Deer,
+  Shadow_S,
+  Shadow_M,
+  Shadow_L,
   Player_Idle_0,
   Player_Idle_1,
   Player_Walk_0,
@@ -58,6 +59,14 @@ Sprite_Name :: enum u16
   Deer_Walk_2,
   Deer_Walk_3,
   Deer_Corpse,
+  Rabbit_Idle_0,
+  Rabbit_Idle_1,
+  Rabbit_Idle_2,
+  Rabbit_Walk_0,
+  Rabbit_Walk_1,
+  Rabbit_Walk_2,
+  Rabbit_Walk_3,
+  Rabbit_Corpse,
   Blood_Pool_0,
   Blood_Pool_1,
   Blood_Pool_2,
@@ -108,6 +117,8 @@ Animation_Name :: enum
   Player_Sneak_Walk,
   Deer_Idle,
   Deer_Walk,
+  Rabbit_Idle,
+  Rabbit_Walk,
   Blood_Pool_Expand,
 }
 
@@ -128,6 +139,8 @@ Animation_Desc :: struct
     duration: f32,
   },
 }
+
+Sprite_Or_Animation :: union#shared_nil{Sprite_Name, Animation_Name}
 
 Particle_Name :: enum
 {
@@ -156,6 +169,22 @@ Particle_Desc :: struct
   rot_dt:        f32,
 }
 
+Player_Desc :: struct
+{
+  animations:   [Animation_State]Sprite_Or_Animation,
+  speed: f32,
+}
+
+Creature_Desc :: struct
+{
+  animations:   [Animation_State]Sprite_Or_Animation,
+  corpse:       Sprite_Name,
+  wander_range: Range(i32),
+  flee_range:   Range(i32),
+  health:       i32,
+  speed:        f32,
+}
+
 Weapon_Desc :: struct
 {
   sprite:      Sprite_Name,
@@ -170,24 +199,11 @@ Weapon_Desc :: struct
   capacity:    u16,
 }
 
-Player_Desc :: struct
-{
-  speed: f32,
-}
-
-Creature_Desc :: struct
-{
-  animations:   [Animation_State]Animation_Name,
-  wander_range: Range(i32),
-  flee_range:   Range(i32),
-  health:       int,
-  speed:        f32,
-}
-
 Item_Desc :: struct
 {
-  name:  string,
-  value: int,
+  name:       string,
+  animations: [Animation_State]Sprite_Or_Animation,
+  value:      int,
 }
 
 Loot_Table_Name :: enum
@@ -249,8 +265,9 @@ init_resources :: proc(arena: ^mem.Arena)
       .Square         = {coords={1, 0},  grid={1, 1}, pivot={7.5, 7.5}},
       .UI_Square      = {coords={1, 0},  grid={1, 1}, pivot={0.0, 0.0}},
       .Circle         = {coords={2, 0},  grid={1, 1}, pivot={8.5, 8.5}},
-      .Shadow_Player  = {coords={3, 0},  grid={1, 1}, pivot={7.5, 14.5}},
-      .Shadow_Deer    = {coords={4, 0},  grid={1, 1}, pivot={7.5, 14.5}},
+      .Shadow_S       = {coords={3, 0},  grid={1, 1}, pivot={7.5, 14.5}},
+      .Shadow_M       = {coords={4, 0},  grid={1, 1}, pivot={7.5, 14.5}},
+      .Shadow_L       = {coords={5, 0},  grid={1, 1}, pivot={7.5, 14.5}},
       .Player_Idle_0  = {coords={0, 1},  grid={1, 1}, pivot={7.5, 8.5}},
       .Player_Idle_1  = {coords={1, 1},  grid={1, 1}, pivot={7.5, 8.5}},
       .Player_Walk_0  = {coords={2, 1},  grid={1, 1}, pivot={7.5, 8.5}},
@@ -279,6 +296,14 @@ init_resources :: proc(arena: ^mem.Arena)
       .Deer_Walk_2    = {coords={6, 4},  grid={1, 1}, pivot={7.5, 8.5}},
       .Deer_Walk_3    = {coords={7, 4},  grid={1, 1}, pivot={7.5, 8.5}},
       .Deer_Corpse    = {coords={8, 4},  grid={2, 1}, pivot={15.0, 15.0}},
+      .Rabbit_Idle_0  = {coords={0, 5},  grid={1, 1}, pivot={9.5, 9.5}},
+      .Rabbit_Idle_1  = {coords={1, 5},  grid={1, 1}, pivot={9.5, 9.5}},
+      .Rabbit_Idle_2  = {coords={2, 5},  grid={1, 1}, pivot={9.5, 9.5}},
+      .Rabbit_Walk_0  = {coords={4, 5},  grid={1, 1}, pivot={7.5, 8.5}},
+      .Rabbit_Walk_1  = {coords={5, 5},  grid={1, 1}, pivot={7.5, 8.5}},
+      .Rabbit_Walk_2  = {coords={6, 5},  grid={1, 1}, pivot={7.5, 8.5}},
+      .Rabbit_Walk_3  = {coords={7, 5},  grid={1, 1}, pivot={7.5, 8.5}},
+      .Rabbit_Corpse  = {coords={8, 5},  grid={1, 1}, pivot={8.5, 15.0}},
       .Blood_Pool_0   = {coords={0, 6},  grid={1, 1}, pivot={8.0, 10.0}},
       .Blood_Pool_1   = {coords={1, 6},  grid={1, 1}, pivot={8.0, 10.0}},
       .Blood_Pool_2   = {coords={2, 6},  grid={1, 1}, pivot={8.0, 10.0}},
@@ -359,6 +384,21 @@ init_resources :: proc(arena: ^mem.Arena)
           {sprite=.Blood_Pool_5, duration=0.15},
         },
       },
+      .Rabbit_Idle = {
+        frames = {
+          {sprite=.Rabbit_Idle_0, duration=0.3}, 
+          {sprite=.Rabbit_Idle_1, duration=0.3},
+          {sprite=.Rabbit_Idle_2, duration=0.3},
+        },
+      },
+      .Rabbit_Walk = {
+        frames = {
+          {sprite=.Rabbit_Walk_0, duration=0.15}, 
+          {sprite=.Rabbit_Walk_1, duration=0.15},
+          {sprite=.Rabbit_Walk_2, duration=0.15},
+          {sprite=.Rabbit_Walk_3, duration=0.15},
+        },
+      },
     }
   }
 
@@ -393,7 +433,15 @@ init_resources :: proc(arena: ^mem.Arena)
 
   // - Player ---
   {
-    res.player.speed = 50
+    res.player = {
+      animations = #partial {
+        .Idle = .Player_Idle_0,
+        .Walk = .Player_Walk,
+        .Sneak_Idle = .Player_Sneak_0,
+        .Sneak_Walk = .Player_Sneak_Walk,
+      },
+      speed = 50,
+    }
   }
 
   // - Creature ---
@@ -405,10 +453,22 @@ init_resources :: proc(arena: ^mem.Arena)
           .Idle = .Deer_Idle,
           .Walk = .Deer_Walk,
         },
+        corpse = .Deer_Corpse,
         wander_range = {10, 50},
         flee_range = {50, 100},
         health = 2,
         speed = 35,
+      },
+      .Rabbit = {
+        animations = #partial {
+          .Idle = .Rabbit_Idle,
+          .Walk = .Rabbit_Walk,
+        },
+        corpse = .Rabbit_Corpse,
+        wander_range = {10, 50},
+        flee_range = {50, 100},
+        health = 1,
+        speed = 25,
       },
     }
   }
@@ -438,6 +498,9 @@ init_resources :: proc(arena: ^mem.Arena)
       .Nil = {},
       .Venison = {
         name = "Venison",
+        animations = #partial {
+          .Idle = .Item_Venison,
+        },
         value = 33, 
       },
     }

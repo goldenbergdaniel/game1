@@ -1,9 +1,7 @@
 package game
 
-import "core:fmt"
 import "core:math"
 import "core:math/noise"
-import "core:reflect"
 import "core:slice"
 import "core:time"
 import imgui "ext:dear_imgui"
@@ -20,7 +18,7 @@ import tt "transform_tree"
 // Global //////////////////////////////////////////////////////////////////////////////////
 
 
-@(thread_local, private="file")
+@(private="file")
 global: struct
 {
   frame_arena:     mem.Arena,
@@ -146,6 +144,7 @@ game_start :: proc(gm: ^Game)
   for _ in 0..<1
   {
     spawn_creature(.Deer, region_pos_to_world_pos({200, 200}, region))
+    spawn_creature(.Rabbit, region_pos_to_world_pos({200, 200}, region))
   }
 
   play_sound(.Minecraft, volume=1)
@@ -206,7 +205,7 @@ game_update :: proc(gm: ^Game, dt: f32)
     {
       user.window.should_close = true
     }
-
+    
     if platform.key_just_pressed(.Tab) && !platform.key_pressed(.Left_Ctrl)
     {
       user.show_dbgui = !user.show_dbgui
@@ -282,14 +281,12 @@ game_update :: proc(gm: ^Game, dt: f32)
     {
       // - Move right ---
       gm.active_region.x += 1
-      // gm.camera.pos.x += WORLD_WIDTH - REGION_GAP
       gm.interpolate = false
     }
     else if gm.active_region.x > 0 && relative_player_pos.x < -0
     {
       // - Move left ---
       gm.active_region.x -= 1
-      // gm.camera.pos.x -= WORLD_WIDTH - REGION_GAP
       gm.interpolate = false
     }
 
@@ -297,14 +294,12 @@ game_update :: proc(gm: ^Game, dt: f32)
     {
       // - Move down ---
       gm.active_region.y += 1
-      gm.camera.pos.y += WORLD_HEIGHT + REGION_GAP
       gm.interpolate = false
     }
     else if gm.active_region.y > 0 && relative_player_pos.y < -0
     {
       // - Move up ---
       gm.active_region.y -= 1
-      gm.camera.pos.y -= WORLD_HEIGHT - REGION_GAP
       gm.interpolate = false
     }
   }
@@ -449,6 +444,17 @@ game_update :: proc(gm: ^Game, dt: f32)
         case .Flee:
           creature_state_flee(&en, tt.global_pos(player), dt)
         }
+
+      case .Rabbit:
+        #partial switch en.state
+        {
+        case .Idle:
+          creature_state_idle(&en)
+        case .Wander:
+          creature_state_wander(&en, dt)
+        case .Flee:
+          creature_state_flee(&en, tt.global_pos(player), dt)
+        }
       }
     }
 
@@ -557,7 +563,6 @@ game_update :: proc(gm: ^Game, dt: f32)
 
   // - Collision detection (:collision, :collide) ---
   {
-    // - Update colliders ---
     for &en in gm.entities do if en.flags.update && en.collider != nil
     {
       entity_update_collider(&en, dt)
@@ -568,7 +573,6 @@ game_update :: proc(gm: ^Game, dt: f32)
     @(static)
     collided_cache: [dynamic]Collision
     collided_cache.allocator = mem.allocator(&global.frame_arena)
-    defer clear(&collided_cache)
     
     in_collided_cache :: proc(a, b: Entity_Ref) -> bool
     {
@@ -612,6 +616,8 @@ game_update :: proc(gm: ^Game, dt: f32)
         }
       }
     }
+
+    clear(&collided_cache)
   }
 
   // - Misc behavior ---
@@ -1246,7 +1252,7 @@ Entity :: struct
   vel:               f32x2,
   input_dir:         f32x2,
   movement_speed:    f32,
-  health:            u32,
+  health:            i32,
   tint:              f32x4,
   color:             f32x4,
   sprite:            Sprite_Name,
@@ -1265,7 +1271,7 @@ Entity :: struct
   state_data:        Entity_State_Data,
   anim:              struct
   {
-    data:            [Animation_State]union#shared_nil{Sprite_Name, Animation_Name},
+    data:            [Animation_State]Sprite_Or_Animation,
     state:           Animation_State,
     next_state:      Animation_State,
     speed:           f32,
@@ -1372,6 +1378,7 @@ Creature_Kind :: enum
 {
   Nil,
   Deer,
+  Rabbit,
 }
 
 Decoration_Kind :: enum
@@ -1542,38 +1549,21 @@ entity_child_at :: proc(en: ^Entity, idx: int) -> (res: ^Entity, ok: bool) #opti
 spawn_player :: proc() -> ^Entity
 {
   gm := get_current_game()
+  player := alloc_entity(gm)
+  desc := &res.player
 
-  en := alloc_entity(gm)
-  en.tint = {1, 1, 1, 1}
-  en.z_layer = .Player
-  en.props += {.Is_Player, .Interpolate}
-  en.movement_speed = res.player.speed
-  en.anim.state = .Idle
-  en.anim.data[.Idle] = .Player_Idle_0
-  en.anim.data[.Walk] = .Player_Walk
-  en.anim.data[.Sneak_Idle] = .Player_Sneak_0
-  en.anim.data[.Sneak_Walk] = .Player_Sneak_Walk
-
-  en.col_layer = .Player
-  en.collider = Circle{
+  player.tint = {1, 1, 1, 1}
+  player.z_layer = .Player
+  player.props += {.Is_Player, .Interpolate}
+  player.movement_speed = res.player.speed
+  player.anim.data = desc.animations
+  player.col_layer = .Player
+  player.collider = Circle{
     radius = 6,
   }
 
-  // - Shadow ---
-  {
-    shadow := alloc_entity(gm)
-    shadow.flags.update = true
-    shadow.flags.render = true
-    shadow.props += {.Interpolate}
-    shadow.tint = {1, 1, 1, 1}
-    shadow.color = {0.2, 0.2, 0.2, 0}
-    shadow.tint.a = 0.5
-    shadow.anim.data[.Idle] = .Shadow_Player
-    
-    tt.set_parent(shadow, en)
-    tt.local(shadow).pos = {0, 7}
-    entity_attach_child(en, shadow)
-  }
+  entity_set_state(player, .Idle)
+  spawn_shadow(player, .Shadow_S, {0, 7})
 
   // - Weapon ---
   {
@@ -1587,7 +1577,7 @@ spawn_player :: proc() -> ^Entity
     weapon.shot_point = tt.alloc_transform(&gm.transform_tree, weapon)
     weapon.anim.data[.Idle] = .Rifle
 
-    tt.set_parent(weapon, en)
+    tt.set_parent(weapon, player)
 
     // - Muzzle flash ---
     {
@@ -1605,158 +1595,131 @@ spawn_player :: proc() -> ^Entity
       entity_attach_child(weapon, muzzle_flash)
     }
 
-    entity_attach_child(en, weapon)
+    entity_attach_child(player, weapon)
   }
 
-  entity_equip_weapon(en, .Rifle)
+  entity_equip_weapon(player, .Rifle)
 
-  en.flags.render = true
-  en.flags.update = true
+  player.flags.render = true
+  player.flags.update = true
 
-  return en
+  return player
 }
 
 spawn_creature :: proc(kind: Creature_Kind, pos: f32x2, deferred := false) -> ^Entity
 {
   gm := get_current_game()
+  creature := alloc_entity(gm)
+  desc := &res.creatures[kind]
 
-  en := alloc_entity(gm)
-  en.creature_kind = kind
-  en.props += {.Follow_Entity, .Flee_Noise}
-  en.tint = {1, 1, 1, 1}
-  en.z_layer = .Enemy
-  en.col_layer = .Enemy
-  en.resolve_collision = entity_resolve_collision_creature
-  en.targetting.target_en = gm.special_entities[.Player].ref
-  en.targetting.min_dist = 8
-  en.targetting.max_dist = 1000
-  tt.local(en).pos = pos
+  creature.creature_kind = kind
+  creature.props += {.Interpolate, .Follow_Entity, .Flee_Noise}
+  creature.tint = {1, 1, 1, 1}
+  creature.z_layer = .Enemy
+  creature.col_layer = .Enemy
+  creature.resolve_collision = entity_resolve_collision_creature
+  creature.health = desc.health
+  creature.anim.data = desc.animations
 
-  entity_set_state(en, .Wander)
+  tt.local(creature).pos = pos
 
   switch kind
   {
   case .Nil:
-  case .Deer:
-    en.props += {.Interpolate}
-    en.tint = {1, 1, 1, 1}
-    en.health = 2
-    en.anim.data[.Idle] = .Deer_Idle
-    en.anim.data[.Walk] = .Deer_Walk
 
-    en.collider = Circle{
+  case .Deer:
+    creature.collider = Circle{
       radius = 5,
     }
 
-    // - Shadow ---
-    {
-      shadow := alloc_entity(gm)
-      shadow.flags.update = true
-      shadow.flags.render = true
-      shadow.props += {.Interpolate}
-      shadow.tint = {1, 1, 1, 1}
-      tt.local(shadow).pos = {-2, 7}
-      shadow.color = {0.2, 0.2, 0.2, 0}
-      shadow.tint.a = 0.5
-      shadow.anim.data[.Idle] = .Shadow_Deer
+    spawn_shadow(creature, .Shadow_L, {-2, 7})
+    entity_set_state(creature, .Wander)
 
-      tt.set_parent(shadow, en)
-      entity_attach_child(en, shadow)
+  case .Rabbit:
+    creature.collider = Circle{
+      radius = 3,
     }
+
+    spawn_shadow(creature, .Shadow_M, {-2, 7})
+    entity_set_state(creature, .Idle)
   }
 
   if deferred
   {
-    defer_entity_spawn(en)
+    defer_entity_spawn(creature)
   }
   else
   {
-    en.flags.update = true
-    en.flags.render = true
+    creature.flags.update = true
+    creature.flags.render = true
   }
 
-  return en
+  return creature
 }
 
 spawn_projectile :: proc(kind: Projectile_Kind, pos: f32x2, deferred := false) -> ^Entity
 {
   gm := get_current_game()
+  projectile := alloc_entity(gm)
 
-  en := alloc_entity(gm)
-  en.projectile_kind = kind
-  en.props += {.Kill_After_Time}
-  en.z_layer = .Projectile
-  en.col_layer = .Player_Projectile
-  en.resolve_collision = entity_resolve_collision_projectile
-  tt.local(en).pos = pos
-
-  collider_radius: f32
-
-  switch kind
-  {
-  case .Bullet:
-    en.props += {.Interpolate}
-    en.tint = {1, 1, 1, 1}
-    en.anim.data[.Idle] = .Bullet
-
-    collider_radius = 2
-  case .Nil:
+  projectile.projectile_kind = kind
+  projectile.props += {.Interpolate, .Kill_After_Time}
+  projectile.z_layer = .Projectile
+  projectile.tint = {1, 1, 1, 1}
+  projectile.anim.data[.Idle] = .Bullet
+  projectile.col_layer = .Player_Projectile
+  projectile.resolve_collision = entity_resolve_collision_projectile
+  projectile.collider = Circle{
+    radius = 2,
   }
 
-  en.collider = Circle{
-    radius = collider_radius,
-  }
+  tt.local(projectile).pos = pos
 
   if deferred
   {
-    defer_entity_spawn(en)
+    defer_entity_spawn(projectile)
   }
   else
   {
-    en.flags.render = true
-    en.flags.update = true
+    projectile.flags.render = true
+    projectile.flags.update = true
   }
 
-  return en
+  return projectile
 }
 
 spawn_item :: proc(kind: Item_Kind, pos: f32x2, deferred := false) -> ^Entity
 {
   gm := get_current_game()
+  item := alloc_entity(gm)
+  desc := &res.items[kind]
 
-  en := alloc_entity(gm)
-  en.item_kind = kind
-  en.props += {.Interpolate}
-  en.z_layer = .Decoration
-  en.col_layer = .Item
-  en.tint = {1, 1, 1, 1}
-  en.resolve_collision = entity_resolve_collision_item
-  tt.local(en).pos = pos
-
-  entity_set_state(en, .Bob)
-
-  switch kind
-  {
-  case .Nil:
-  case .Venison:
-    en.anim.data[.Idle] = .Item_Venison
-  }
-
-  en.collider = Circle{
+  item.item_kind = kind
+  item.props += {.Interpolate}
+  item.z_layer = .Decoration
+  item.col_layer = .Item
+  item.tint = {1, 1, 1, 1}
+  item.anim.data = desc.animations
+  item.resolve_collision = entity_resolve_collision_item
+  item.collider = Circle{
     radius = 4,
   }
 
+  tt.local(item).pos = pos
+
+  entity_set_state(item, .Bob)
+
   if deferred
   {
-    defer_entity_spawn(en)
+    defer_entity_spawn(item)
   }
   else
   {
-    en.flags.render = true
-    en.flags.update = true
+    item.flags.render = true
+    item.flags.update = true
   }
 
-  return en
+  return item
 }
 
 spawn_corpse :: proc(owner: ^Entity, deferred := false) -> ^Entity
@@ -1764,19 +1727,14 @@ spawn_corpse :: proc(owner: ^Entity, deferred := false) -> ^Entity
   assert(owner.creature_kind != .Nil)
 
   gm := get_current_game()
-
   corpse := alloc_entity(gm)
-  corpse.props += {.Interpolate}
-  corpse.tint = {1, 1, 1, 1}
-  tt.local(corpse).pos = tt.global_pos(owner) + {0, 5}
-  corpse.props += owner.props & {.Flip_H}
 
-  switch owner.creature_kind
-  {
-  case .Nil:
-  case .Deer: 
-    corpse.anim.data[.Idle] = .Deer_Corpse
-  }
+  corpse.props += {.Interpolate}
+  corpse.props += owner.props & {.Flip_H}
+  corpse.tint = {1, 1, 1, 1}
+  corpse.anim.data[.Idle] = res.creatures[owner.creature_kind].corpse
+
+  tt.local(corpse).pos = tt.global_pos(owner) + {0, 5}
 
   // - Blood pool ---
   {
@@ -1806,6 +1764,34 @@ spawn_corpse :: proc(owner: ^Entity, deferred := false) -> ^Entity
   }
 
   return corpse
+}
+
+spawn_shadow :: proc(owner: ^Entity, sprite: Sprite_Or_Animation, pos: f32x2, deferred := false) -> ^Entity
+{
+  gm := get_current_game()
+
+  shadow := alloc_entity(gm)
+  shadow.props += {.Interpolate}
+  shadow.tint = {1, 1, 1, 1}
+  shadow.color = {0.2, 0.2, 0.2, 0}
+  shadow.tint.a = 0.5
+  shadow.anim.data[.Idle] = sprite
+  tt.local(shadow).pos = pos
+
+  tt.set_parent(shadow, owner)
+  entity_attach_child(owner, shadow)
+
+  if deferred
+  {
+    defer_entity_spawn(shadow)
+  }
+  else
+  {
+    shadow.flags.update = true
+    shadow.flags.render = true
+  }
+
+  return shadow
 }
 
 entity_play_animation :: proc(
