@@ -387,81 +387,10 @@ game_update :: proc(gm: ^Game, dt: f32)
       entity_flip_to_target(player, cursor_pos)
     }
 
-    // - Enemy movement ---
+    // - Entity state ---
     for &en in gm.entities do if en.flags.update
     {
-      ACC  :: 400.0
-      DRAG :: 3.0
-
-      if .Follow_Entity in en.props
-      {
-        en_pos := tt.global_pos(en)
-        target := entity_from_ref(en.targetting.target_en)
-        target_pos := tt.global_pos(target)
-
-        dir := vmath.normalize(target_pos - en_pos)
-        dist_to_target := vmath.abs(en_pos - target_pos)
-
-        if dist_to_target.x >= en.targetting.min_dist &&
-           dist_to_target.x <= en.targetting.max_dist
-        {
-          en.vel.x += dir.x * ACC * dt
-          en.vel.x = clamp(en.vel.x, -en.movement_speed, en.movement_speed)
-        }
-        else
-        {
-          en.vel.x = math.lerp(en.vel.x, 0, DRAG * dt)
-          en.vel.x = basic.approx(en.vel.x, 0, 1)
-        }
-
-        if dist_to_target.y >= en.targetting.min_dist &&
-           dist_to_target.y <= en.targetting.max_dist
-        {
-          en.vel.y += dir.y * ACC * dt
-          en.vel.y = clamp(en.vel.y, -en.movement_speed, en.movement_speed)
-        }
-        else
-        {
-          en.vel.y = math.lerp(en.vel.y, 0, DRAG * dt)
-          en.vel.y = basic.approx(en.vel.y, 0, 1)
-        }
-      }
-    }
-
-    // - Creature movement ---
-    for &en in gm.entities do if en.flags.update && en.creature_kind != .Nil
-    {
-      switch en.creature_kind
-      {
-      case .Nil:
-      case .Deer:
-        #partial switch en.state
-        {
-        case .Idle:
-          creature_state_idle(&en)
-        case .Wander:
-          creature_state_wander(&en, dt)
-        case .Flee:
-          creature_state_flee(&en, tt.global_pos(player), dt)
-        }
-
-      case .Rabbit:
-        #partial switch en.state
-        {
-        case .Idle:
-          creature_state_idle(&en)
-        case .Wander:
-          creature_state_wander(&en, dt)
-        case .Flee:
-          creature_state_flee(&en, tt.global_pos(player), dt)
-        }
-      }
-    }
-
-    // - Item bob ---
-    for &en in gm.entities do if en.flags.update && en.item_kind != .Nil
-    {
-      item_state_bob(&en, dt)
+      en->update_state(&{dt=dt})
     }
 
     // - Move ---
@@ -623,14 +552,6 @@ game_update :: proc(gm: ^Game, dt: f32)
   // - Misc behavior ---
   for &en in gm.entities do if en.flags.update
   {
-    if .Look_At_Target in en.props
-    {
-      target_pos: f32x2
-      target_en := entity_from_ref(en.targetting.target_en) or_break
-      target_pos = tt.global_pos(target_en)
-      entity_flip_to_target(&en, target_pos)
-    }
-
     if .Kill_After_Time in en.props
     {
       if !en.death_timer.ticking
@@ -647,7 +568,7 @@ game_update :: proc(gm: ^Game, dt: f32)
     if .Flee_Noise in en.props
     {
       noise := noise_at(tt.global_pos(en))
-      if noise > 30
+      if noise > res.creatures[en.creature_kind].noise_threshold
       {
         if !en.flee_timer.ticking
         {
@@ -907,7 +828,6 @@ game_render :: proc(gm: ^Game)
     en_count += 1
   }
 
-  // slice.sort_by(en_targets[:en_count], proc(i, j: ^Entity) -> bool {
   slice.stable_sort_by(en_targets[:en_count], proc(i, j: ^Entity) -> bool {
     if i.z_layer == j.z_layer
     {
@@ -917,8 +837,18 @@ game_render :: proc(gm: ^Game)
     {
       return i.z_layer < j.z_layer
     }
-    // return tt.global_pos(i).y < tt.global_pos(j).y
   })
+
+  // slice.sort_by(en_targets[:en_count], proc(i, j: ^Entity) -> bool {
+  //   if i.z_layer == j.z_layer
+  //   {
+  //     return tt.global_pos(i).y < tt.global_pos(j).y
+  //   }
+  //   else
+  //   {
+  //     return i.z_layer < j.z_layer
+  //   }
+  // })
 
   // - Draw entities ---
   for en in en_targets[:en_count]
@@ -1269,6 +1199,7 @@ Entity :: struct
   flee_timer:        Timer,
   state:             Entity_State,
   state_data:        Entity_State_Data,
+  update_state:      proc(this: ^Entity, ctx: ^Entity_State_Context),
   anim:              struct
   {
     data:            [Animation_State]Sprite_Or_Animation,
@@ -1299,13 +1230,6 @@ Entity :: struct
     weapon_kind:     Weapon_Kind,
     muzzle_timer:    Timer,
   },
-  targetting:        struct
-  {
-    target_en:       Entity_Ref,
-    target_pos:      f32x2,
-    min_dist:        f32,
-    max_dist:        f32,
-  },
   shot_point:        tt.Transform,
 }
 
@@ -1323,9 +1247,7 @@ Entity_Prop :: enum
   Flip_H,
   Flip_V,
   Is_Player,
-  Look_At_Target,
   Kill_After_Time,
-  Follow_Entity,
   Rotate_Over_Time,
   Sneaking,
   Flee_Noise,
@@ -1362,6 +1284,12 @@ Entity_State_Data :: struct #raw_union
     point:        f32x2,
     count:        int,
   },
+}
+
+Entity_State_Context :: struct
+{
+  dt:     f32,
+  target: f32x2,
 }
 
 Collision_Layer :: enum
@@ -1472,6 +1400,7 @@ alloc_entity :: proc(gm: ^Game) -> ^Entity
       en.ref.gen = en.gen
       en.xform = tt.alloc_transform(&gm.transform_tree)
       en.resolve_collision = entity_resolve_collision_stub
+      en.update_state = entity_state_stub
 
       result = &en
 
@@ -1613,7 +1542,7 @@ spawn_creature :: proc(kind: Creature_Kind, pos: f32x2, deferred := false) -> ^E
   desc := &res.creatures[kind]
 
   creature.creature_kind = kind
-  creature.props += {.Interpolate, .Follow_Entity, .Flee_Noise}
+  creature.props += {.Interpolate, .Flee_Noise}
   creature.tint = {1, 1, 1, 1}
   creature.z_layer = .Enemy
   creature.col_layer = .Enemy
@@ -1638,7 +1567,7 @@ spawn_creature :: proc(kind: Creature_Kind, pos: f32x2, deferred := false) -> ^E
 
   case .Rabbit:
     creature.collider = Circle{
-      radius = 3,
+      radius = 4,
     }
 
     entity_set_state(creature, .Idle)
@@ -1729,11 +1658,12 @@ spawn_corpse :: proc(owner: ^Entity, deferred := false) -> ^Entity
 
   gm := get_current_game()
   corpse := alloc_entity(gm)
+  creature_desc := &res.creatures[owner.creature_kind]
 
   corpse.props += {.Interpolate}
   corpse.props += owner.props & {.Flip_H}
   corpse.tint = {1, 1, 1, 1}
-  corpse.anim.data[.Idle] = res.creatures[owner.creature_kind].corpse
+  corpse.anim.data[.Idle] = creature_desc.corpse
 
   tt.local(corpse).pos = tt.global_pos(owner) + {0, 5}
 
@@ -1746,7 +1676,7 @@ spawn_corpse :: proc(owner: ^Entity, deferred := false) -> ^Entity
     blood_pool.tint = {1, 1, 1, 1}
     blood_pool.z_index = -1
     blood_pool.anim.data[.Idle] = .Blood_Pool_0
-    blood_pool.anim.data[.Expand] = .Blood_Pool_Expand
+    blood_pool.anim.data[.Expand] = creature_desc.blood_pool
 
     entity_play_animation(blood_pool, .Expand, looping=false)
 
@@ -1777,6 +1707,8 @@ spawn_shadow :: proc(owner: ^Entity, sprite: Sprite_Or_Animation, pos: f32x2, de
   shadow.color = {0.2, 0.2, 0.2, 0}
   shadow.tint.a = 0.5
   shadow.anim.data[.Idle] = sprite
+  shadow.z_index = -999
+  // shadow.z_layer = .
   tt.local(shadow).pos = pos
 
   tt.set_parent(shadow, owner)
@@ -2046,13 +1978,11 @@ entity_holster_weapon :: proc(en: ^Entity, holster: bool)
     if holster
     {
       en.equipped.weapon_kind = .Nil
-      // weapon.weapon_kind = .NIL
       weapon.z_layer = .Decoration
     }
     else
     {
       en.equipped.weapon_kind = gm.weapon.kind
-      // weapon.weapon_kind = gm.weapon.kind
       weapon.z_layer = .Player
     }
   }
@@ -2066,15 +1996,36 @@ entity_set_state :: proc(en: ^Entity, st: Entity_State, reset := false)
   }
 
   en.state = st
+
+  if en.creature_kind != .Nil
+  {
+    #partial switch en.state
+    {
+    case .Idle:   en.update_state = creature_state_idle
+    case .Wander: en.update_state = creature_state_wander
+    case .Flee:   en.update_state = creature_state_flee
+    }
+  }
+  else if en.item_kind != .Nil
+  {
+    #partial switch en.state
+    {
+    case .Bob: en.update_state = item_state_bob
+    }
+  }
 }
 
-creature_state_idle :: proc(en: ^Entity)
+entity_state_stub :: proc(this: ^Entity, ctx: ^Entity_State_Context) {}
+
+creature_state_idle :: proc(this: ^Entity, ctx: ^Entity_State_Context)
 {
-  entity_play_animation(en, .Idle, looping=true)
+  entity_play_animation(this, .Idle, looping=true)
 }
 
-creature_state_wander :: proc(en: ^Entity, dt: f32)
+creature_state_wander :: proc(en: ^Entity, using ctx: ^Entity_State_Context)
 {
+  assert(ctx != nil)
+
   creature_desc := &res.creatures[en.creature_kind]
   wander := &en.state_data.wander
   en_pos := tt.global_pos(en)
@@ -2123,8 +2074,10 @@ creature_state_wander :: proc(en: ^Entity, dt: f32)
   }
 }
 
-creature_state_flee :: proc(en: ^Entity, target_pos: f32x2, dt: f32)
+creature_state_flee :: proc(en: ^Entity, using ctx: ^Entity_State_Context)
 {
+  assert(ctx != nil)
+
   creature_desc := &res.creatures[en.creature_kind]
   flee := &en.state_data.flee
   en_pos := tt.global_pos(en)
@@ -2170,17 +2123,17 @@ creature_state_flee :: proc(en: ^Entity, target_pos: f32x2, dt: f32)
   }
 }
 
-item_state_bob :: proc(en: ^Entity, dt: f32)
+item_state_bob :: proc(this: ^Entity, using ctx: ^Entity_State_Context)
 {
   MAX_DISPLACEMENT :: 2.0
 
-  bob := &en.state_data.bob
+  bob := &this.state_data.bob
   dy := 5 * dt
   
   switch bob.state
   {
   case .Up:
-    tt.local(en).pos.y -= dy
+    tt.local(this).pos.y -= dy
     bob.displacement += dy
     if bob.displacement >= MAX_DISPLACEMENT
     {
@@ -2188,7 +2141,7 @@ item_state_bob :: proc(en: ^Entity, dt: f32)
     }
 
   case .Down:
-    tt.local(en).pos.y += dy
+    tt.local(this).pos.y += dy
     bob.displacement -= dy
     if bob.displacement <= -MAX_DISPLACEMENT
     {

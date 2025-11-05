@@ -121,7 +121,8 @@ Animation_Name :: enum
   Deer_Walk,
   Rabbit_Idle,
   Rabbit_Walk,
-  Blood_Pool_Expand,
+  Blood_Pool_Expand_M,
+  Blood_Pool_Expand_L,
 }
 
 Animation_State :: enum
@@ -179,13 +180,16 @@ Player_Desc :: struct
 
 Creature_Desc :: struct
 {
-  animations:   [Animation_State]Sprite_Or_Animation,
-  corpse:       Sprite_Name,
-  wander_range: Range(i32),
-  flee_range:   Range(i32),
-  health:       i32,
-  speed:        f32,
-  loot_table:   Loot_Table_Name,
+  animations:      [Animation_State]Sprite_Or_Animation,
+  // states:          [Entity_State],
+  corpse:          Sprite_Name,
+  blood_pool:      Animation_Name,
+  wander_range:    Range(i32),
+  flee_range:      Range(i32),
+  noise_threshold: f32,
+  health:          i32,
+  speed:           f32,
+  loot_table:      Loot_Table_Name,
 }
 
 Weapon_Desc :: struct
@@ -389,7 +393,14 @@ init_resources :: proc(arena: ^mem.Arena)
           {sprite=.Deer_Walk_3, duration=0.15},
         },
       },
-      .Blood_Pool_Expand = {
+      .Blood_Pool_Expand_M = {
+        frames = {
+          {sprite=.Blood_Pool_0, duration=0.25},
+          {sprite=.Blood_Pool_1, duration=0.25},
+          {sprite=.Blood_Pool_2, duration=0.25},
+        },
+      },
+      .Blood_Pool_Expand_L = {
         frames = {
           {sprite=.Blood_Pool_0, duration=0.15},
           {sprite=.Blood_Pool_1, duration=0.15},
@@ -470,8 +481,10 @@ init_resources :: proc(arena: ^mem.Arena)
           .Walk = .Deer_Walk,
         },
         corpse = .Deer_Corpse,
+        blood_pool = .Blood_Pool_Expand_L,
         wander_range = {10, 50},
         flee_range = {50, 100},
+        noise_threshold = 30,
         health = 2,
         speed = 35,
         loot_table = .Deer,
@@ -482,8 +495,10 @@ init_resources :: proc(arena: ^mem.Arena)
           .Walk = .Rabbit_Walk,
         },
         corpse = .Rabbit_Corpse,
+        blood_pool = .Blood_Pool_Expand_M,
         wander_range = {10, 50},
         flee_range = {50, 100},
+        noise_threshold = 35,
         health = 1,
         speed = 25,
         loot_table = .Rabbit,
