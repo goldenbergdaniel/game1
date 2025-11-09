@@ -1,6 +1,6 @@
 package game
 
-import vmath "basic/vector_math"
+import "basic/vmath"
 import "render"
 
 Sprite :: struct

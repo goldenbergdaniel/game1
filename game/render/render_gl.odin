@@ -6,7 +6,7 @@ import "core:fmt"
 import "core:os"
 
 import gl "ext:opengl"
-import vmath "../basic/vector_math"
+import "../basic/vmath"
 import "../platform"
 
 gl_init :: proc(

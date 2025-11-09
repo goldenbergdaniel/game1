@@ -28,9 +28,6 @@ user: User
 update_start_tick, update_end_tick: time.Tick
 render_start_tick, render_end_tick: time.Tick
 
-@(private="file")
-curr_game, prev_game, res_game: Game
-
 freetype_test :: proc() -> ft.Error
 {
   library: ft.Library  
@@ -46,8 +43,24 @@ freetype_test :: proc() -> ft.Error
 
 main :: proc()
 {
-  _ = mem.arena_init_static(&user.perm_arena)
-  _ = mem.arena_init_growing(&user.frame_arena)
+  @(static)
+  curr_game, prev_game, res_game: Game
+
+  arena_err: mem.Allocator_Error
+
+  arena_err = mem.arena_init_static(&user.perm_arena)
+  if arena_err != nil
+  {
+    fmt.eprintln("Failed to allocate static arena!", arena_err)
+    return
+  }
+
+  arena_err = mem.arena_init_growing(&user.frame_arena)
+  if arena_err != nil
+  {
+    fmt.eprintln("Failed to allocate growing arena!", arena_err)
+    return
+  }
 
   freetype_err := freetype_test()
   if freetype_err != nil
@@ -81,23 +94,20 @@ main :: proc()
   {
     platform.pump_events(&user.window)
 
-    // - Update viewport ---
+    window_size := basic.array_cast(platform.window_size(&user.window), f32)
+    ratio := window_size.x / window_size.y
+    if ratio >= WORLD_WIDTH / WORLD_HEIGHT
     {
-      window_size := basic.array_cast(platform.window_size(&user.window), f32)
-      ratio := window_size.x / window_size.y
-      if ratio >= WORLD_WIDTH / WORLD_HEIGHT
-      {
-        img_width := window_size.x / (ratio * (WORLD_HEIGHT / WORLD_WIDTH))
-        user.viewport = {(window_size.x - img_width) / 2, 0, img_width, window_size.y}
-      }
-      else
-      {
-        img_height := window_size.y * (ratio / (WORLD_WIDTH / WORLD_HEIGHT))
-        user.viewport = {0, (window_size.y - img_height) / 2, window_size.x, img_height}
-      }
-      
-      render.set_viewport(basic.array_cast(user.viewport, i32))
+      img_width := window_size.x / (ratio * (WORLD_HEIGHT / WORLD_WIDTH))
+      user.viewport = {(window_size.x - img_width) / 2, 0, img_width, window_size.y}
     }
+    else
+    {
+      img_height := window_size.y * (ratio / (WORLD_WIDTH / WORLD_HEIGHT))
+      user.viewport = {0, (window_size.y - img_height) / 2, window_size.x, img_height}
+    }
+    
+    render.set_viewport(basic.array_cast(user.viewport, i32))
 
     curr_time := time.duration_seconds(time.tick_since(start_tick))
     frame_time := curr_time - elapsed_time

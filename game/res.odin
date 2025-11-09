@@ -9,20 +9,24 @@ import "render"
 
 Resources :: struct
 {
-  actions:     [Action_Name]platform.Input_Source,
-  textures:    [render.Texture_ID]render.Texture,
-  sprites:     [Sprite_Name]Sprite,
-  sounds:      [Sound_Name]Sound,
-  animations:  [Animation_Name]Animation_Desc,
-  particles:   [Particle_Name]Particle_Desc,
-  player:      Player_Desc,
-  creatures:   [Creature_Kind]Creature_Desc,
-  weapons:     [Weapon_Kind]Weapon_Desc,
-  items:       [Item_Kind]Item_Desc,
-  loot_tables: [Loot_Table_Name][dynamic]Loot_Table_Entry,
+  player:       struct
+  {
+    animations: [Animation_State]Sprite_Or_Animation,
+    speed:      f32,
+  },
+  actions:      [Action_Name]platform.Input_Source,
+  textures:     [render.Texture_ID]render.Texture,
+  sprites:      [Sprite_Name]Sprite,
+  sounds:       [Sound_Name]Sound,
+  animations:   [Animation_Name]Animation_Desc,
+  particles:    [Particle_Name]Particle_Desc,
+  creatures:    [Creature_Kind]Creature_Desc,
+  weapons:      [Weapon_Kind]Weapon_Desc,
+  items:        [Item_Kind]Item_Desc,
+  loot_tables:  [Loot_Table_Name][dynamic]Loot_Table_Entry,
 }
 
-Sprite_Name :: enum u16
+Sprite_Name :: enum
 {
   Nil,
   Square,
@@ -143,7 +147,11 @@ Animation_Desc :: struct
   },
 }
 
-Sprite_Or_Animation :: union#shared_nil{Sprite_Name, Animation_Name}
+Sprite_Or_Animation :: union #shared_nil
+{
+  Sprite_Name,
+  Animation_Name,
+}
 
 Particle_Name :: enum
 {
@@ -172,21 +180,15 @@ Particle_Desc :: struct
   rot_dt:        f32,
 }
 
-Player_Desc :: struct
-{
-  animations:   [Animation_State]Sprite_Or_Animation,
-  speed: f32,
-}
-
 Creature_Desc :: struct
 {
   animations:      [Animation_State]Sprite_Or_Animation,
-  // states:          [Entity_State],
   corpse:          Sprite_Name,
   blood_pool:      Animation_Name,
   wander_range:    Range(i32),
   flee_range:      Range(i32),
   noise_threshold: f32,
+  reaction_time:   f32,
   health:          i32,
   speed:           f32,
   loot_table:      Loot_Table_Name,
@@ -234,17 +236,15 @@ init_resources :: proc(arena: ^mem.Arena)
 
   // - Actions ---
   {
-    using platform
-
-    res.actions = [Action_Name]Input_Source{
-      .Nil = nil,
-      .Up = Key_Kind.W,
-      .Down = Key_Kind.S,
-      .Right = Key_Kind.D,
-      .Left = Key_Kind.A,
-      .Sneak = Key_Kind.Left_Shift,
-      .Attack = Mouse_Btn_Kind.Left,
-      .Holster = Key_Kind.Q,
+    res.actions = [Action_Name]platform.Input_Source{
+      .Nil = platform.Key_Kind.Nil,
+      .Up = platform.Key_Kind.W,
+      .Down = platform.Key_Kind.S,
+      .Right = platform.Key_Kind.D,
+      .Left = platform.Key_Kind.A,
+      .Sneak = platform.Key_Kind.Left_Shift,
+      .Attack = platform.Mouse_Btn_Kind.Left,
+      .Holster = platform.Key_Kind.Q,
     }
   }
 
@@ -485,6 +485,7 @@ init_resources :: proc(arena: ^mem.Arena)
         wander_range = {10, 50},
         flee_range = {50, 100},
         noise_threshold = 30,
+        reaction_time = 0.2,
         health = 2,
         speed = 35,
         loot_table = .Deer,
@@ -499,6 +500,7 @@ init_resources :: proc(arena: ^mem.Arena)
         wander_range = {10, 50},
         flee_range = {50, 100},
         noise_threshold = 35,
+        reaction_time = 0.1,
         health = 1,
         speed = 25,
         loot_table = .Rabbit,

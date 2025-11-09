@@ -9,7 +9,7 @@ import fnl "ext:fast_noise_lite"
 import "basic"
 import "basic/mem"
 import "basic/rand"
-import vmath "basic/vector_math"
+import "basic/vmath"
 import "platform"
 import "render"
 import tt "transform_tree"
@@ -49,8 +49,11 @@ init_global :: proc()
   global.audio.music_volume = 1.0
 
   fnl.noise_2d(fnl.State{}, expand_values([2]f32{1, 1}))
-}
 
+  Blob :: struct {
+    using xform: tt.Transform,
+  }
+}
 
 // Game //////////////////////////////////////////////////////////////////////////////////
 
@@ -60,7 +63,6 @@ Game :: struct
   t:                  f32,
   t_mult:             f32,
   interpolate:        bool,
-
   camera:             struct
   {
     pos:              f32x2,
@@ -76,7 +78,6 @@ Game :: struct
   debug_entities_pos: int,
   particles:          [MAX_PARTICLES]Particle,
   particles_pos:      int,
-
   special_entities:   [enum{Player}]^Entity,
   weapon:             struct
   {
@@ -205,7 +206,7 @@ game_update :: proc(gm: ^Game, dt: f32)
     {
       user.window.should_close = true
     }
-    
+
     if platform.key_just_pressed(.Tab) && !platform.key_pressed(.Left_Ctrl)
     {
       user.show_dbgui = !user.show_dbgui
@@ -256,7 +257,7 @@ game_update :: proc(gm: ^Game, dt: f32)
       {
         entity_equip_weapon(player, .Rifle)
       }
-      
+
       if gm.weapon.kind != .Nil
       {
         if platform.input_just_pressed(res.actions[.Holster])
@@ -464,7 +465,7 @@ game_update :: proc(gm: ^Game, dt: f32)
         timer_start(&player.equipped.muzzle_timer, 0.1)
         muzzle_flash.flags.render = true
 
-        entity_distort_h(weapon, tt.local(weapon).scl.x*0.8, 5*dt)
+        entity_distort(weapon, .W, tt.local(weapon).scl.x*0.8, 5*dt)
         spawn_particles(.Gun_Smoke, tt.global_pos(weapon.shot_point))
         play_sound(.Gun_Shot, volume=0.1, pitch=rand.range_f32({0.8, 1.2}))
         emit_noise(60, tt.global_pos(weapon.shot_point))
@@ -502,7 +503,7 @@ game_update :: proc(gm: ^Game, dt: f32)
     @(static)
     collided_cache: [dynamic]Collision
     collided_cache.allocator = mem.allocator(&global.frame_arena)
-    
+
     in_collided_cache :: proc(a, b: Entity_Ref) -> bool
     {
       for col in collided_cache
@@ -565,14 +566,16 @@ game_update :: proc(gm: ^Game, dt: f32)
       }
     }
 
-    if .Flee_Noise in en.props
+    if .Flee_Noise in en.props do if en.creature_kind != .Nil
     {
+      creature_desc := res.creatures[en.creature_kind]
       noise := noise_at(tt.global_pos(en))
-      if noise > res.creatures[en.creature_kind].noise_threshold
+
+      if noise > creature_desc.noise_threshold
       {
         if !en.flee_timer.ticking
         {
-          timer_start(&en.flee_timer, 0.1)
+          timer_start(&en.flee_timer, creature_desc.reaction_time)
         }
       }
 
@@ -589,19 +592,19 @@ game_update :: proc(gm: ^Game, dt: f32)
   {
     // - Update animation state ---
     {
-      prev_state := en.anim.state
-      en.anim.state = en.anim.next_state
-      if prev_state != en.anim.next_state
+      prev_state := en.animation.state
+      en.animation.state = en.animation.next_state
+      if prev_state != en.animation.next_state
       {
-        en.anim.duration = 0
-        en.anim.frame_idx = entity_animation_last_frame(&en) if en.anim.reverse else 0
+        en.animation.duration = 0
+        en.animation.frame_idx = entity_animation_last_frame(&en) if en.animation.reverse else 0
       }
     }
 
     // - Equipped weapon ---
     {
       weapon := entity_child_at(player, 1)
-      
+
       if gm.weapon.holstered
       {
         holster_off := res.weapons[gm.weapon.kind].holster_off
@@ -650,142 +653,142 @@ game_update :: proc(gm: ^Game, dt: f32)
     {
       distort_up: bool
 
-      distort_up = en.distort_h.target > en.distort_h.saved
-      switch en.distort_h.state
+      distort_up = en.distort[0].target > en.distort[0].saved
+      switch en.distort[0].state
       {
       case .Hold:
 
       case .Distort:
         if distort_up
         {
-          tt.local(en).scl.x += en.distort_h.rate
-          if tt.local(en).scl.x >= en.distort_h.target
+          tt.local(en).scl.x += en.distort[0].rate
+          if tt.local(en).scl.x >= en.distort[0].target
           {
-            tt.local(en).scl.x = en.distort_h.target
-            en.distort_h.state = .Return
+            tt.local(en).scl.x = en.distort[0].target
+            en.distort[0].state = .Return
           }
         }
         else
         {
-          tt.local(en).scl.x -= en.distort_h.rate
-          if tt.local(en).scl.x <= en.distort_h.target
+          tt.local(en).scl.x -= en.distort[0].rate
+          if tt.local(en).scl.x <= en.distort[0].target
           {
-            tt.local(en).scl.x = en.distort_h.target
-            en.distort_h.state = .Return
+            tt.local(en).scl.x = en.distort[0].target
+            en.distort[0].state = .Return
           }
         }
 
       case .Return:
         if distort_up
         {
-          tt.local(en).scl.x -= en.distort_h.rate
-          if tt.local(en).scl.x <= en.distort_h.saved
+          tt.local(en).scl.x -= en.distort[0].rate
+          if tt.local(en).scl.x <= en.distort[0].saved
           {
-            tt.local(en).scl.x = en.distort_h.saved
-            en.distort_h.state = .Hold
+            tt.local(en).scl.x = en.distort[0].saved
+            en.distort[0].state = .Hold
           }
         }
         else
         {
-          tt.local(en).scl.x += en.distort_h.rate
-          if tt.local(en).scl.x >= en.distort_h.saved
+          tt.local(en).scl.x += en.distort[0].rate
+          if tt.local(en).scl.x >= en.distort[0].saved
           {
-            tt.local(en).scl.x = en.distort_h.saved
-            en.distort_h.state = .Hold
+            tt.local(en).scl.x = en.distort[0].saved
+            en.distort[0].state = .Hold
           }
         }
       }
 
-      distort_up = en.distort_v.target > en.distort_v.saved
-      switch en.distort_v.state
+      distort_up = en.distort[1].target > en.distort[1].saved
+      switch en.distort[1].state
       {
       case .Hold:
 
       case .Distort:
         if distort_up
         {
-          tt.local(en).scl.y += en.distort_v.rate
-          if tt.local(en).scl.y >= en.distort_v.target
+          tt.local(en).scl.y += en.distort[1].rate
+          if tt.local(en).scl.y >= en.distort[1].target
           {
-            tt.local(en).scl.y = en.distort_v.target
-            en.distort_v.state = .Return
+            tt.local(en).scl.y = en.distort[1].target
+            en.distort[1].state = .Return
           }
         }
         else
         {
-          tt.local(en).scl.y -= en.distort_v.rate
-          if tt.local(en).scl.y <= en.distort_v.target
+          tt.local(en).scl.y -= en.distort[1].rate
+          if tt.local(en).scl.y <= en.distort[1].target
           {
-            tt.local(en).scl.y = en.distort_v.target
-            en.distort_v.state = .Return
+            tt.local(en).scl.y = en.distort[1].target
+            en.distort[1].state = .Return
           }
         }
 
       case .Return:
         if distort_up
         {
-          tt.local(en).scl.y -= en.distort_v.rate
-          if tt.local(en).scl.y <= en.distort_v.saved
+          tt.local(en).scl.y -= en.distort[1].rate
+          if tt.local(en).scl.y <= en.distort[1].saved
           {
-            tt.local(en).scl.y = en.distort_v.saved
-            en.distort_v.state = .Hold
+            tt.local(en).scl.y = en.distort[1].saved
+            en.distort[1].state = .Hold
           }
         }
         else
         {
-          tt.local(en).scl.y += en.distort_v.rate
-          if tt.local(en).scl.y >= en.distort_v.saved
+          tt.local(en).scl.y += en.distort[1].rate
+          if tt.local(en).scl.y >= en.distort[1].saved
           {
-            tt.local(en).scl.y = en.distort_v.saved
-            en.distort_v.state = .Hold
+            tt.local(en).scl.y = en.distort[1].saved
+            en.distort[1].state = .Hold
           }
         }
       }
     }
 
     // - Animate sprite ---
-    switch v in en.anim.data[en.anim.state]
+    switch v in en.animation.data[en.animation.state]
     {
     case Sprite_Name:
       en.sprite = v
-    
+
     case Animation_Name:
       desc := &res.animations[v]
 
       if len(desc.frames) <= 0 do continue
 
-      en.anim.duration -= dt
-      if en.anim.duration <= 0
+      en.animation.duration -= dt
+      if en.animation.duration <= 0
       {
-        en.sprite = desc.frames[en.anim.frame_idx].sprite
-        en.anim.duration = desc.frames[en.anim.frame_idx].duration * (1/en.anim.speed)
-      
-        if en.anim.reverse
+        en.sprite = desc.frames[en.animation.frame_idx].sprite
+        en.animation.duration = desc.frames[en.animation.frame_idx].duration * (1/en.animation.speed)
+
+        if en.animation.reverse
         {
           if entity_animation_at_end(&en)
           {
-            if en.anim.looping
+            if en.animation.looping
             {
-              en.anim.frame_idx = entity_animation_last_frame(&en)
+              en.animation.frame_idx = entity_animation_last_frame(&en)
             }
           }
           else
           {
-            en.anim.frame_idx -= 1
+            en.animation.frame_idx -= 1
           }
         }
         else
         {
           if entity_animation_at_end(&en)
           {
-            if en.anim.looping
+            if en.animation.looping
             {
-              en.anim.frame_idx = 0
+              en.animation.frame_idx = 0
             }
           }
           else
           {
-            en.anim.frame_idx += 1
+            en.animation.frame_idx += 1
           }
         }
       }
@@ -1129,7 +1132,7 @@ Noise_Source :: struct
 emit_noise :: proc(value: f32, pos: f32x2)
 {
   if global.debug.silence_noise do return
-  
+
   append(&global.temp.noise_sources, Noise_Source{
     value = value,
     pos = pos,
@@ -1200,7 +1203,7 @@ Entity :: struct
   state:             Entity_State,
   state_data:        Entity_State_Data,
   update_state:      proc(this: ^Entity, ctx: ^Entity_State_Context),
-  anim:              struct
+  animation:         struct
   {
     data:            [Animation_State]Sprite_Or_Animation,
     state:           Animation_State,
@@ -1211,14 +1214,7 @@ Entity :: struct
     looping:         bool,
     frame_idx:       u16,
   },
-  distort_h:         struct
-  {
-    saved:           f32,
-    target:          f32,
-    rate:            f32,
-    state:           enum{Hold, Distort, Return},
-  },
-  distort_v:         struct
+  distort:           [2]struct
   {
     saved:           f32,
     target:          f32,
@@ -1265,13 +1261,13 @@ Entity_State :: enum
 
 Entity_State_Data :: struct #raw_union
 {
-  idle:           struct {},
+  idle:           struct{},
+  expand:         struct{},
   bob:            struct
   {
     state:        enum{Up, Down},
     displacement: f32,
   },
-  expand:         struct {},
   wander:         struct
   {
     state:        enum{Choose, Move, Wait},
@@ -1414,7 +1410,7 @@ alloc_entity :: proc(gm: ^Game) -> ^Entity
 
 free_entity :: proc(gm: ^Game, en: ^Entity)
 {
-  assert(entity_is_valid(en))
+  if !entity_is_valid(en) do return
 
   tt.free_transform(&gm.transform_tree, en.xform)
   gen := en.gen
@@ -1429,7 +1425,7 @@ defer_entity_spawn :: proc(en: ^Entity)
   en.flags.update = false
   en.flags.render = false
   en.props += {.Marked_For_Spawn}
-  
+
   for child in en.children
   {
     child := entity_from_ref(child) or_continue
@@ -1455,7 +1451,7 @@ kill_entity :: proc(en: ^Entity, kill_children := true)
   }
 }
 
-entity_attach_child :: proc(parent, child: ^Entity) -> bool
+entity_attach_child :: proc(parent, child: ^Entity) -> (ok: bool)
 {
   for &slot in parent.children
   {
@@ -1485,7 +1481,7 @@ spawn_player :: proc() -> ^Entity
   player.z_layer = .Player
   player.props += {.Is_Player, .Interpolate}
   player.movement_speed = res.player.speed
-  player.anim.data = desc.animations
+  player.animation.data = desc.animations
   player.col_layer = .Player
   player.collider = Circle{
     radius = 6,
@@ -1504,7 +1500,7 @@ spawn_player :: proc() -> ^Entity
     weapon.z_layer = .Player
     weapon.z_index = 1
     weapon.shot_point = tt.alloc_transform(&gm.transform_tree, weapon)
-    weapon.anim.data[.Idle] = .Rifle
+    weapon.animation.data[.Idle] = .Rifle
 
     tt.set_parent(weapon, player)
 
@@ -1518,7 +1514,7 @@ spawn_player :: proc() -> ^Entity
       muzzle_flash.z_layer = .Player
       muzzle_flash.z_index = 2
       muzzle_flash.flags.render = false
-      muzzle_flash.anim.data[.Idle] = .Muzzle_Flash
+      muzzle_flash.animation.data[.Idle] = .Muzzle_Flash
 
       tt.set_parent(muzzle_flash, weapon)
       entity_attach_child(weapon, muzzle_flash)
@@ -1548,7 +1544,7 @@ spawn_creature :: proc(kind: Creature_Kind, pos: f32x2, deferred := false) -> ^E
   creature.col_layer = .Enemy
   creature.resolve_collision = entity_resolve_collision_creature
   creature.health = desc.health
-  creature.anim.data = desc.animations
+  creature.animation.data = desc.animations
 
   tt.local(creature).pos = pos
 
@@ -1596,7 +1592,7 @@ spawn_projectile :: proc(kind: Projectile_Kind, pos: f32x2, deferred := false) -
   projectile.props += {.Interpolate, .Kill_After_Time}
   projectile.z_layer = .Projectile
   projectile.tint = {1, 1, 1, 1}
-  projectile.anim.data[.Idle] = .Bullet
+  projectile.animation.data[.Idle] = .Bullet
   projectile.col_layer = .Player_Projectile
   projectile.resolve_collision = entity_resolve_collision_projectile
   projectile.collider = Circle{
@@ -1629,7 +1625,7 @@ spawn_item :: proc(kind: Item_Kind, pos: f32x2, deferred := false) -> ^Entity
   item.z_layer = .Decoration
   item.col_layer = .Item
   item.tint = {1, 1, 1, 1}
-  item.anim.data = desc.animations
+  item.animation.data = desc.animations
   item.resolve_collision = entity_resolve_collision_item
   item.collider = Circle{
     radius = 4,
@@ -1663,7 +1659,7 @@ spawn_corpse :: proc(owner: ^Entity, deferred := false) -> ^Entity
   corpse.props += {.Interpolate}
   corpse.props += owner.props & {.Flip_H}
   corpse.tint = {1, 1, 1, 1}
-  corpse.anim.data[.Idle] = creature_desc.corpse
+  corpse.animation.data[.Idle] = creature_desc.corpse
 
   tt.local(corpse).pos = tt.global_pos(owner) + {0, 5}
 
@@ -1675,8 +1671,8 @@ spawn_corpse :: proc(owner: ^Entity, deferred := false) -> ^Entity
     blood_pool.props += {.Interpolate}
     blood_pool.tint = {1, 1, 1, 1}
     blood_pool.z_index = -1
-    blood_pool.anim.data[.Idle] = .Blood_Pool_0
-    blood_pool.anim.data[.Expand] = creature_desc.blood_pool
+    blood_pool.animation.data[.Idle] = .Blood_Pool_0
+    blood_pool.animation.data[.Expand] = creature_desc.blood_pool
 
     entity_play_animation(blood_pool, .Expand, looping=false)
 
@@ -1706,9 +1702,8 @@ spawn_shadow :: proc(owner: ^Entity, sprite: Sprite_Or_Animation, pos: f32x2, de
   shadow.tint = {1, 1, 1, 1}
   shadow.color = {0.2, 0.2, 0.2, 0}
   shadow.tint.a = 0.5
-  shadow.anim.data[.Idle] = sprite
+  shadow.animation.data[.Idle] = sprite
   shadow.z_index = -999
-  // shadow.z_layer = .
   tt.local(shadow).pos = pos
 
   tt.set_parent(shadow, owner)
@@ -1734,10 +1729,10 @@ entity_play_animation :: proc(
   reverse: bool = false,
   speed:   f32 = 1.0,
 ){
-  en.anim.next_state = anim
-  en.anim.looping = looping
-  en.anim.reverse = reverse
-  en.anim.speed = speed
+  en.animation.next_state = anim
+  en.animation.looping = looping
+  en.animation.reverse = reverse
+  en.animation.speed = speed
 }
 
 entity_resolve_collision_stub :: proc(this, other: ^Entity) {}
@@ -1788,7 +1783,7 @@ entity_resolve_collision_item :: proc(this, other: ^Entity)
 
 entity_animation_last_frame :: proc(en: ^Entity) -> u16
 {
-  anim, ok := en.anim.data[en.anim.state].(Animation_Name)
+  anim, ok := en.animation.data[en.animation.state].(Animation_Name)
   if ok
   {
     return cast(u16) len(res.animations[anim].frames) - 1
@@ -1801,8 +1796,8 @@ entity_animation_last_frame :: proc(en: ^Entity) -> u16
 
 entity_animation_at_end :: proc(en: ^Entity) -> bool
 {
-  return (!en.anim.reverse && en.anim.frame_idx == entity_animation_last_frame(en)) ||
-         (en.anim.reverse && en.anim.frame_idx == 0)
+  return (!en.animation.reverse && en.animation.frame_idx == entity_animation_last_frame(en)) ||
+         (en.animation.reverse && en.animation.frame_idx == 0)
 }
 
 entity_rotate_to_target :: proc(en: ^Entity, target: f32x2)
@@ -1830,7 +1825,7 @@ entity_flip_to_target :: proc(en: ^Entity, target: f32x2)
   en_pos := tt.global_pos(en)
   if en_pos.x > target.x
   {
-    if weapon != nil && .Flip_H not_in en.props 
+    if weapon != nil && .Flip_H not_in en.props
     {
       weapon.flags.interpolate = false
     }
@@ -1839,7 +1834,7 @@ entity_flip_to_target :: proc(en: ^Entity, target: f32x2)
   }
   else
   {
-    if weapon != nil && .Flip_H in en.props 
+    if weapon != nil && .Flip_H in en.props
     {
       weapon.flags.interpolate = false
     }
@@ -1875,9 +1870,9 @@ entity_update_collider :: proc(en: ^Entity, dt: f32)
   // NOTE(dg): This is a stub.
   @(static)
   collider_map: [Sprite_Name]struct{
-    vertices: [6][2]f32,
+    vertices:     [6][2]f32,
     vertex_count: int,
-    origin: [2]f32,
+    origin:       [2]f32,
   }
 
   switch &collider in en.collider
@@ -1928,20 +1923,12 @@ entity_move_to_point :: proc(
   return new_pos == p
 }
 
-entity_distort_h :: proc(en: ^Entity, target, rate: f32)
+entity_distort :: proc(en: ^Entity, axis: enum{W, H}, target, rate: f32)
 {
-  en.distort_h.rate = rate
-  en.distort_h.target = target
-  en.distort_h.saved = tt.local(en).scl.x
-  en.distort_h.state = .Distort
-}
-
-entity_distort_v :: proc(en: ^Entity, target, rate: f32)
-{
-  en.distort_v.rate = rate
-  en.distort_v.target = target
-  en.distort_h.saved = tt.local(en).scl.y
-  en.distort_v.state = .Distort
+  en.distort[axis].rate = rate
+  en.distort[axis].target = target
+  en.distort[axis].saved = tt.local(en).scl.x
+  en.distort[axis].state = .Distort
 }
 
 entity_equip_weapon :: proc(en: ^Entity, kind: Weapon_Kind)
@@ -2129,7 +2116,7 @@ item_state_bob :: proc(this: ^Entity, using ctx: ^Entity_State_Context)
 
   bob := &this.state_data.bob
   dy := 5 * dt
-  
+
   switch bob.state
   {
   case .Up:
@@ -2162,7 +2149,7 @@ roll_loot_table :: proc(loot_table: Loot_Table_Name) -> Item_Kind
       break
     }
   }
-  
+
   return result
 }
 
@@ -2408,7 +2395,7 @@ render_world_region :: proc(gm: ^Game, region_idx: int)
 // Particle //////////////////////////////////////////////////////////////////////////////
 
 
-MAX_PARTICLES :: 8 << 10
+MAX_PARTICLES :: 4 << 10
 
 Particle :: struct
 {
@@ -2451,7 +2438,7 @@ particle_has_props :: proc(par: Particle, props: bit_set[Particle_Prop]) -> bool
 
 particle_push :: proc(gm: ^Game) -> ^Particle
 {
-  idx := gm.particles_pos % len(gm.particles)
+  idx := gm.particles_pos % MAX_PARTICLES
   result := &gm.particles[idx]
   gm.particles_pos += 1
 

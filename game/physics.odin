@@ -1,16 +1,8 @@
 package game
 
 import "core:math"
-import "core:reflect"
-
 import "basic"
-import vmath "basic/vector_math"
-
-Collider :: union
-{
-  Circle,
-  Polygon,
-}
+import "basic/vmath"
 
 Circle :: struct
 {
@@ -22,6 +14,12 @@ Polygon :: struct
 {
   vertices: [8]f32x2,
   number:   u8,
+}
+
+Collider :: union
+{
+  Circle,
+  Polygon,
 }
 
 circle_circle_overlap :: proc(a, b: Circle) -> bool
@@ -37,8 +35,7 @@ polygon_polygon_overlap :: proc(a, b: Polygon) -> bool
     j := (i + 1) % a.number
     proj_axis := vmath.normal(a.vertices[i], a.vertices[j])
     
-    min_pa := max(f32)
-    max_pa := min(f32)
+    min_pa, max_pa := max(f32), min(f32)
     for k in 0..<a.number
     {
       p := vmath.dot(a.vertices[k], proj_axis)
@@ -46,8 +43,7 @@ polygon_polygon_overlap :: proc(a, b: Polygon) -> bool
       max_pa = max(max_pa, p)
     }
 
-    min_pb := max(f32)
-    max_pb := min(f32)
+    min_pb, max_pb := max(f32), min(f32)
     for k in 0..<b.number
     {
       p := vmath.dot(b.vertices[k], proj_axis)
@@ -55,7 +51,7 @@ polygon_polygon_overlap :: proc(a, b: Polygon) -> bool
       max_pb = max(max_pb, p)
     }
 
-    basic.range_overlap(Range(f32){min_pa, max_pa}, Range(f32){min_pb, max_pb}) or_return
+    if basic.range_overlap(Range(f32){min_pa, max_pa}, Range(f32){min_pb, max_pb}) do return false
   }
 
   // - Collider B ---
@@ -64,8 +60,7 @@ polygon_polygon_overlap :: proc(a, b: Polygon) -> bool
     j := (i + 1) % b.number
     proj_axis := vmath.normal(b.vertices[i], b.vertices[j])
     
-    min_pa := max(f32)
-    max_pa := min(f32)
+    min_pa, max_pa := max(f32), min(f32)
     for k in 0..<a.number
     {
       p := vmath.dot(a.vertices[k], proj_axis)
@@ -73,8 +68,7 @@ polygon_polygon_overlap :: proc(a, b: Polygon) -> bool
       max_pa = max(max_pa, p)
     }
 
-    min_pb := max(f32)
-    max_pb := min(f32)
+    min_pb, max_pb := max(f32), min(f32)
     for k in 0..<b.number
     {
       p := vmath.dot(b.vertices[k], proj_axis)
@@ -82,7 +76,7 @@ polygon_polygon_overlap :: proc(a, b: Polygon) -> bool
       max_pb = max(max_pb, p)
     }
 
-    basic.range_overlap(Range(f32){min_pa, max_pa}, Range(f32){min_pb, max_pb}) or_return
+    if basic.range_overlap(Range(f32){min_pa, max_pa}, Range(f32){min_pb, max_pb}) do return false
   }
 
   return true
@@ -93,8 +87,7 @@ circle_polygon_overlap :: proc(circle: Circle, polygon: Polygon) -> bool
   for i in 0..<polygon.number
   {
     j := (i + 1) % polygon.number
-    vi := polygon.vertices[i]
-    vj := polygon.vertices[j]
+    vi, vj := polygon.vertices[i], polygon.vertices[i]
 
     edge := vj - vi
     proj := vmath.dot(circle.origin - vi, edge) / vmath.magnitude_squared(edge)
@@ -117,8 +110,7 @@ circle_polygon_overlap :: proc(circle: Circle, polygon: Polygon) -> bool
     if dist_to_circle <= circle.radius do return true
 
     verticies := polygon.vertices
-    inside := point_in_polygon(circle.origin, verticies[:polygon.number])
-    if inside do return true
+    if point_in_polygon(circle.origin, verticies[:polygon.number]) do return true
   }
 
   return false
@@ -138,12 +130,12 @@ point_in_bounds :: proc(point: f32x2, bounds: [2]Range(f32)) -> bool
 point_in_polygon :: proc(point: f32x2, polygon: []f32x2) -> bool
 {
   inside: bool
+  n := len(polygon)
 
-  for i in 0..<len(polygon)
+  for i in 0..<n
   {
-    j := (i + 1) % len(polygon)
-    vi := polygon[i]
-    vj := polygon[j]
+    j := (i + 1) % n
+    vi, vj := polygon[i], polygon[j]
 
     // Check if point is between y-coords of edge and to the left of the edge
     if (vi.y > point.y) != (vj.y > point.y) &&
@@ -158,32 +150,38 @@ point_in_polygon :: proc(point: f32x2, polygon: []f32x2) -> bool
 
 collider_overlap :: proc(a, b: Collider) -> bool
 {
-  types: [2]typeid = {
-    reflect.union_variant_typeid(a),
-    reflect.union_variant_typeid(b),
-  }
-
-  switch types
+  switch va in a
   {
-  case {Circle, Circle}:   return circle_circle_overlap(a.(Circle), b.(Circle))
-  case {Circle, Polygon}:  return circle_polygon_overlap(a.(Circle), b.(Polygon))
-  case {Polygon, Circle}:  return circle_polygon_overlap(b.(Circle), a.(Polygon))
-  case {Polygon, Polygon}: return polygon_polygon_overlap(a.(Polygon), b.(Polygon))
+  case Circle:
+    switch vb in b
+    {
+    case Circle:  return circle_circle_overlap(va, vb)
+    case Polygon: return circle_polygon_overlap(va, vb)
+    }
+  case Polygon:
+    switch vb in b
+    {
+    case Circle:  return circle_polygon_overlap(vb, va)
+    case Polygon: return polygon_polygon_overlap(va, vb)
+    }
   }
 
-  panic("Unhandled collision for collider types!")
+  return false
 }
 
 move_to_point :: proc(src, dst: f32x2, r: f32) -> f32x2
 {
   dx := dst.x - src.x
   dy := dst.y - src.y
+
   dist := math.sqrt(dx*dx + dy*dy)
 
   if dist == 0 do return src
 
   if r > dist do return dst
 
-  factor := r / dist
-  return {src.x + (dx * factor), src.y + (dy * factor)} 
+  return {
+    src.x + (dx * (r / dist)), 
+    src.y + (dy * (r / dist)),
+  } 
 }

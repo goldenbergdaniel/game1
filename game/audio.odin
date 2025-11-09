@@ -1,16 +1,14 @@
 package game
 
 import "core:strings"
-
 import ma "ext:miniaudio"
-
 import "basic/mem"
 
-// AUDIO_CHANNELS    :: 2
-// AUDIO_SAMPLE_FREQ :: 48000
+@(private="file")
+MAX_EFFECTS :: 256
 
-@(private="file") MAX_EFFECTS :: 256
-@(private="file") WORLD_SCALE :: 0.01
+@(private="file")
+WORLD_SCALE :: 0.01
 
 Sound :: struct
 {
@@ -19,48 +17,27 @@ Sound :: struct
 }
 
 @(private="file")
-Audio_Data :: struct
+global_audio: struct
 {
   engine:          ma.engine,
-  initialized:     bool,
   ambience:        ma.sound,
   music:           ma.sound,
   effects:         [MAX_EFFECTS]ma.sound,
   effects_pos:     int,
   looping_effects: [dynamic]ma.sound,
+  initialized:     bool,
 }
-
-global_audio: Audio_Data
 
 init_audio :: proc()
 {
-  // sdl_res := sdl.InitSubSystem(sdl.INIT_AUDIO)
-  // if !sdl_res
-  // {
-  //   println("Failed to init SDL audio subsystem!")
-  //   return
-  // }
-
-  // desired_spec := sdl.AudioSpec{
-  //   format = .F32,
-  //   channels = AUDIO_CHANNELS,
-  //   freq = AUDIO_SAMPLE_FREQ,
-  // }
-
-  // device := sdl.OpenAudioDevice(sdl.AUDIO_DEVICE_DEFAULT_PLAYBACK, &desired_spec)
-  // sdl.ResumeAudioDevice(device)
-
-  result: ma.result
-
   config := ma.engine_config_init()
   config.listenerCount = 1
-  // config.channels = AUDIO_CHANNELS
-  // config.sampleRate = AUDIO_SAMPLE_FREQ
 
-  result = ma.engine_init(&config, &global_audio.engine)
+  result := ma.engine_init(&config, &global_audio.engine)
   if result != .SUCCESS
   {
     println("Failed to init miniaudio engine!", res)
+    uninit_audio()
     return
   }
 
@@ -96,8 +73,8 @@ play_sound :: proc(
   if !global_audio.initialized do return false
 
   result: ma.result
-
   sound_desc := res.sounds[name]
+  
   switch sound_desc.group
   {
   case .Nil:
@@ -106,7 +83,7 @@ play_sound :: proc(
     sound := &global_audio.ambience
     if !ma.sound_is_playing(sound) || ma.sound_at_end(sound)
     {
-      ma_sound_init(sound, res.sounds[name].path) or_return
+      ma_sound_init(sound, sound_desc.path) or_return
       ma.sound_set_looping(sound, true)
       ma.sound_set_spatialization_enabled(sound, false)
 
@@ -122,7 +99,7 @@ play_sound :: proc(
     sound := &global_audio.music
     if !ma.sound_is_playing(sound) || ma.sound_at_end(sound)
     {
-      ma_sound_init(sound, res.sounds[name].path) or_return
+      ma_sound_init(sound, sound_desc.path) or_return
       ma.sound_set_looping(sound, true)
       ma.sound_set_spatialization_enabled(sound, false)
 
@@ -136,7 +113,7 @@ play_sound :: proc(
   
   case .Effect:
     sound := next_sound_effect()
-    ma_sound_init(sound, res.sounds[name].path) or_return
+    ma_sound_init(sound, sound_desc.path) or_return
 
     if pos != nil
     {
@@ -188,9 +165,11 @@ pause_sound_group :: proc(
   {
   case .Nil, .Effect:
     ok = false
+    
   case .Ambience:
     result = ma.sound_stop(&global_audio.ambience)
     ok = true
+
   case .Music:
     result = ma.sound_stop(&global_audio.music)
     ok = true
@@ -218,9 +197,11 @@ reset_sound_group :: proc(
   {
   case .Nil, .Effect:
     ok = false
+
   case .Ambience:
     result = ma.sound_seek_to_pcm_frame(&global_audio.ambience, 0)
     ok = true
+
   case .Music:
     result = ma.sound_seek_to_pcm_frame(&global_audio.music, 0)
     ok = true
@@ -248,19 +229,22 @@ set_music_volume :: proc(volume: f32)
   ma.sound_set_volume(&global_audio.music, volume)
 }
 
+// TODO(dg): Currently, one sound may overshadow others if too many. 
 @(private="file")
 next_sound_effect :: proc() -> ^ma.sound
 {
-  idx := global_audio.effects_pos % MAX_EFFECTS
-  result := &global_audio.effects[idx]
+  if !global_audio.initialized do return nil
+
+  result := &global_audio.effects[global_audio.effects_pos % MAX_EFFECTS]
   global_audio.effects_pos += 1
-  result^ = {}
   return result
 }
 
 @(private="file")
 ma_sound_init :: proc(ma_sound: ^ma.sound, path: string) -> bool
 {
+  if !global_audio.initialized do return false
+
   scratch := mem.temp_begin(mem.scratch())
   defer mem.temp_end(scratch)
 
