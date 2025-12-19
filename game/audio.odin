@@ -17,7 +17,7 @@ Sound :: struct
 }
 
 @(private="file")
-global_audio: struct
+audio: struct
 {
   engine:          ma.engine,
   ambience:        ma.sound,
@@ -33,7 +33,7 @@ init_audio :: proc()
   config := ma.engine_config_init()
   config.listenerCount = 1
 
-  result := ma.engine_init(&config, &global_audio.engine)
+  result := ma.engine_init(&config, &audio.engine)
   if result != .SUCCESS
   {
     println("Failed to init miniaudio engine!", res)
@@ -41,19 +41,19 @@ init_audio :: proc()
     return
   }
 
-  global_audio.initialized = true
+  audio.initialized = true
 }
 
 uninit_audio :: proc()
 {
-  ma.engine_uninit(&global_audio.engine)
+  ma.engine_uninit(&audio.engine)
 }
 
 free_finished_sounds :: proc()
 {
-  if !global_audio.initialized do return
+  if !audio.initialized do return
 
-  for &sound in global_audio.effects
+  for &sound in audio.effects
   {
     if ma.sound_at_end(&sound)
     {
@@ -64,13 +64,13 @@ free_finished_sounds :: proc()
 
 play_sound :: proc(
   name:   Sound_Name,
-  pos:    Maybe(f32x2) = nil,
   volume: f32 = 1.0,
   pitch:  f32 = 1.0,
+  pos:    Maybe(v2f32) = nil,
 ) -> (
   ok: bool,
 ){
-  if !global_audio.initialized do return false
+  if !audio.initialized do return false
 
   result: ma.result
   sound_desc := res.sounds[name]
@@ -80,13 +80,15 @@ play_sound :: proc(
   case .Nil:
   
   case .Ambience:
-    sound := &global_audio.ambience
+    sound := &audio.ambience
     if !ma.sound_is_playing(sound) || ma.sound_at_end(sound)
     {
       ma_sound_init(sound, sound_desc.path) or_return
       ma.sound_set_looping(sound, true)
       ma.sound_set_spatialization_enabled(sound, false)
-
+      ma.sound_set_volume(sound, volume)
+      ma.sound_set_pitch(sound, pitch)
+      
       result = ma.sound_start(sound)
       if result != .SUCCESS
       {
@@ -96,12 +98,14 @@ play_sound :: proc(
     }
 
   case .Music:
-    sound := &global_audio.music
+    sound := &audio.music
     if !ma.sound_is_playing(sound) || ma.sound_at_end(sound)
     {
       ma_sound_init(sound, sound_desc.path) or_return
       ma.sound_set_looping(sound, true)
       ma.sound_set_spatialization_enabled(sound, false)
+      ma.sound_set_volume(sound, volume)
+      ma.sound_set_pitch(sound, pitch)
 
       result = ma.sound_start(sound)
       if result != .SUCCESS
@@ -143,7 +147,7 @@ play_sound :: proc(
 // TODO(dg): Maybe implement this, maybe not.
 play_sound_looping :: proc(
   name:   Sound_Name,
-  pos:    Maybe(f32x2) = nil,
+  pos:    Maybe(v2f32) = nil,
   volume: f32 = 1.0,
   pitch:  f32 = 1.0,
 ) -> (
@@ -152,14 +156,11 @@ play_sound_looping :: proc(
   return false
 }
 
-pause_sound_group :: proc(
-  group: Sound_Group,
-) -> (
-  ok: bool,
-){
-  if !global_audio.initialized do return false
+pause_sound_group :: proc(group: Sound_Group) -> (ok: bool)
+{
+  if !audio.initialized do return false
 
-  result: ma.result
+  ma_result: ma.result
 
   switch group
   {
@@ -167,29 +168,26 @@ pause_sound_group :: proc(
     ok = false
     
   case .Ambience:
-    result = ma.sound_stop(&global_audio.ambience)
+    ma_result = ma.sound_stop(&audio.ambience)
     ok = true
 
   case .Music:
-    result = ma.sound_stop(&global_audio.music)
+    ma_result = ma.sound_stop(&audio.music)
     ok = true
   }
 
-  if result != .SUCCESS
+  if ma_result != .SUCCESS
   {
-    printf("Error: Failed to pause sound group %s! %s\n", group, result)
+    printf("Error: Failed to pause sound group %s! %s\n", group, ma_result)
     ok = false
   }
 
   return
 }
 
-reset_sound_group :: proc(
-  group: Sound_Group, 
-) -> (
-  ok: bool,
-){
-  if !global_audio.initialized do return false
+reset_sound_group :: proc(group: Sound_Group) -> (ok: bool)
+{
+  if !audio.initialized do return false
 
   result: ma.result
 
@@ -199,11 +197,11 @@ reset_sound_group :: proc(
     ok = false
 
   case .Ambience:
-    result = ma.sound_seek_to_pcm_frame(&global_audio.ambience, 0)
+    result = ma.sound_seek_to_pcm_frame(&audio.ambience, 0)
     ok = true
 
   case .Music:
-    result = ma.sound_seek_to_pcm_frame(&global_audio.music, 0)
+    result = ma.sound_seek_to_pcm_frame(&audio.music, 0)
     ok = true
   }
 
@@ -216,40 +214,42 @@ reset_sound_group :: proc(
   return
 }
 
-set_audio_listener_pos :: proc(pos: f32x2)
+set_audio_listener_pos :: proc(pos: v2f32)
 {
-  if !global_audio.initialized do return
+  if !audio.initialized do return
+
   pos := pos * WORLD_SCALE
-  ma.engine_listener_set_position(&global_audio.engine, 0, pos.x, pos.y , 0)
+  ma.engine_listener_set_position(&audio.engine, 0, pos.x, pos.y , 0)
 }
 
 set_music_volume :: proc(volume: f32)
 {
-  if !global_audio.initialized do return
-  ma.sound_set_volume(&global_audio.music, volume)
+  if !audio.initialized do return
+
+  ma.sound_set_volume(&audio.music, volume)
 }
 
 // TODO(dg): Currently, one sound may overshadow others if too many. 
 @(private="file")
 next_sound_effect :: proc() -> ^ma.sound
 {
-  if !global_audio.initialized do return nil
+  if !audio.initialized do return nil
 
-  result := &global_audio.effects[global_audio.effects_pos % MAX_EFFECTS]
-  global_audio.effects_pos += 1
+  result := &audio.effects[audio.effects_pos % MAX_EFFECTS]
+  audio.effects_pos += 1
   return result
 }
 
 @(private="file")
 ma_sound_init :: proc(ma_sound: ^ma.sound, path: string) -> bool
 {
-  if !global_audio.initialized do return false
+  if !audio.initialized do return false
 
   scratch := mem.temp_begin(mem.scratch())
   defer mem.temp_end(scratch)
 
   path_cstr := strings.clone_to_cstring(path, mem.allocator(scratch.arena))
-  ma_res := ma.sound_init_from_file(&global_audio.engine, path_cstr, 0, nil, nil, ma_sound)
+  ma_res := ma.sound_init_from_file(&audio.engine, path_cstr, 0, nil, nil, ma_sound)
   if ma_res != .SUCCESS
   {
     printf("Error: Failed to init sound %s! %s\n", path, ma_res)

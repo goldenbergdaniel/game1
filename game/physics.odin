@@ -6,13 +6,13 @@ import "basic/vmath"
 
 Circle :: struct
 {
-  origin: f32x2,
+  origin: v2f32,
   radius: f32,
 }
 
 Polygon :: struct
 {
-  vertices: [8]f32x2,
+  vertices: [8]v2f32,
   number:   u8,
 }
 
@@ -92,7 +92,7 @@ circle_polygon_overlap :: proc(circle: Circle, polygon: Polygon) -> bool
     edge := vj - vi
     proj := vmath.dot(circle.origin - vi, edge) / vmath.magnitude_squared(edge)
 
-    edge_point: f32x2
+    edge_point: v2f32
     if proj <= 0
     {
       edge_point = vi
@@ -116,18 +116,18 @@ circle_polygon_overlap :: proc(circle: Circle, polygon: Polygon) -> bool
   return false
 }
 
-point_in_circle :: proc(point: f32x2, circle: Circle) -> bool
+point_in_circle :: proc(point: v2f32, circle: Circle) -> bool
 {
   return vmath.distance(point, circle.origin) <= circle.radius
 }
 
-point_in_bounds :: proc(point: f32x2, bounds: [2]Range(f32)) -> bool
+point_in_bounds :: proc(point: v2f32, bounds: [2]Range(f32)) -> bool
 {
   return (point.x > bounds.x.min && point.x < bounds.x.max) && 
          (point.y > bounds.y.min && point.y < bounds.y.max)
 }
 
-point_in_polygon :: proc(point: f32x2, polygon: []f32x2) -> bool
+point_in_polygon :: proc(point: v2f32, polygon: []v2f32) -> bool
 {
   inside: bool
   n := len(polygon)
@@ -169,7 +169,7 @@ collider_overlap :: proc(a, b: Collider) -> bool
   return false
 }
 
-move_to_point :: proc(src, dst: f32x2, r: f32) -> f32x2
+move_to_point :: proc(src, dst: v2f32, r: f32) -> v2f32
 {
   dx := dst.x - src.x
   dy := dst.y - src.y

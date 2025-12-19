@@ -1,26 +1,32 @@
 package game
 
-import "base:intrinsics"
 import "core:fmt"
 import "core:time"
-import ft "ext:freetype"
 import "basic"
 import "basic/mem"
 import "platform"
 import "render"
 
-WORLD_WIDTH  :: 320.0
-WORLD_HEIGHT :: 180.0
-WORLD_TEXEL  :: 16.0
-WORLD_STEP   :: 1.0/50
+WORLD_SCALE :: #config(WORLD_SCALE, 1)
+
+WORLD_WIDTH  :: 320.0 / WORLD_SCALE
+WORLD_HEIGHT :: 180.0 / WORLD_SCALE
+WORLD_STEP   :: 1.0/40
 
 User :: struct
 {
-  window:      platform.Window,
-  viewport:    f32x4,
   perm_arena:  mem.Arena,
   frame_arena: mem.Arena,
+  window:      platform.Window,
+  viewport:    v4f32,
+  screen:      Screen,
   show_dbgui:  bool,
+}
+
+Screen :: enum
+{
+  Main_Menu, 
+  Game, 
 }
 
 user: User
@@ -28,23 +34,13 @@ user: User
 update_start_tick, update_end_tick: time.Tick
 render_start_tick, render_end_tick: time.Tick
 
-freetype_test :: proc() -> ft.Error
-{
-  library: ft.Library  
-  ft.init_freetype(&library) or_return
-  defer ft.done_freetype(library)
-
-  face: ft.Face
-  ft.new_face(library, "res/fonts/Jersey10.ttf", 0, &face) or_return
-  defer ft.done_face(face)
-
-  return nil
-}
-
 main :: proc()
 {
   @(static)
   curr_game, prev_game, res_game: Game
+
+  @(static)
+  prev_keys: [platform.Key_Kind]bool
 
   arena_err: mem.Allocator_Error
 
@@ -62,25 +58,21 @@ main :: proc()
     return
   }
 
-  freetype_err := freetype_test()
-  if freetype_err != nil
-  {
-    println("FreeType error:", freetype_err)
-    return
-  }
-
   window_desc := platform.Window_Desc{
     title = "GAME",
-    width = 960,
-    height = 540,
-    props = {.Fullscreen, .Vsync, .Resizeable},
+    width = 1280,
+    height = 720,
+    props = {.Vsync, .Resizeable},
   }
 
   user.window = platform.create_window(window_desc, &user.perm_arena)
   defer platform.destroy_window(&user.window)
 
+  user.screen = .Main_Menu
+
+  render.init_renderer(&user.window)
   init_resources(&user.perm_arena)
-  render.init(&user.window, {0, WORLD_WIDTH, 0, WORLD_HEIGHT}, &res.textures)
+
   init_audio()
   init_global()
 
@@ -92,9 +84,32 @@ main :: proc()
 
   for !user.window.should_close
   {
-    platform.pump_events(&user.window)
+    platform.window_pump_events(&user.window)
 
-    window_size := basic.array_cast(platform.window_size(&user.window), f32)
+    // - Global keybinds ---
+    {
+      if platform.key_down(.Escape) && !platform.key_down(.Left_Ctrl)
+      {
+        user.window.should_close = true
+      }
+
+      if platform.key_down(.Tab) && !prev_keys[.Tab] && !platform.key_down(.Left_Ctrl)
+      {
+        user.show_dbgui = !user.show_dbgui
+      }
+
+      if platform.key_down(.Backward_Slash) && !prev_keys[.Backward_Slash]
+      {
+        user.screen = cast(Screen) ((int(user.screen) + 1) % len(Screen))
+      }
+
+      if platform.key_down(.Enter) && !prev_keys[.Enter] && platform.key_down(.Left_Ctrl)
+      {
+        platform.window_toggle_fullscreen(&user.window)
+      }
+    }
+
+    window_size := platform.window_get_size(&user.window)
     ratio := window_size.x / window_size.y
     if ratio >= WORLD_WIDTH / WORLD_HEIGHT
     {
@@ -106,33 +121,46 @@ main :: proc()
       img_height := window_size.y * (ratio / (WORLD_WIDTH / WORLD_HEIGHT))
       user.viewport = {0, (window_size.y - img_height) / 2, window_size.x, img_height}
     }
-    
-    render.set_viewport(basic.array_cast(user.viewport, i32))
+
+    update_start_tick = time.tick_now()
 
     curr_time := time.duration_seconds(time.tick_since(start_tick))
     frame_time := curr_time - elapsed_time
     elapsed_time = curr_time
-    accumulator += frame_time
-    
-    for accumulator >= WORLD_STEP
-    {
-      update_start_tick = time.tick_now()
-      
-      copy_game(&prev_game, &curr_game)
-      game_update(&curr_game, WORLD_STEP * curr_game.t_mult)
-      platform.remember_prev_input()
- 
-      curr_game.t += WORLD_STEP * curr_game.t_mult
-      accumulator -= WORLD_STEP
 
-      update_end_tick = time.tick_now()
+    if user.screen == .Game
+    {
+      accumulator += frame_time
+
+      for accumulator >= WORLD_STEP
+      {
+        copy_game(&prev_game, &curr_game)
+        game_update(&curr_game, WORLD_STEP * curr_game.t_mult)
+         
+        curr_game.t += WORLD_STEP * curr_game.t_mult
+        accumulator -= WORLD_STEP
+      }
     }
+    else if user.screen == .Main_Menu
+    {
+      update_gui_test()
+    }
+
+    update_end_tick = time.tick_now()
 
     render_start_tick = time.tick_now()
 
-    alpha := accumulator / WORLD_STEP
-    interpolate_games(&curr_game, &prev_game, &res_game, f32(alpha))
-    game_render(&res_game)
+    switch user.screen
+    {
+    case .Main_Menu:
+      // render_scratch()
+      render_gui_test()
+      
+    case .Game:
+      alpha := accumulator / WORLD_STEP
+      interpolate_games(&curr_game, &prev_game, &res_game, f32(alpha))
+      game_render(&res_game)
+    }
 
     render_end_tick = time.tick_now()
 
@@ -143,13 +171,14 @@ main :: proc()
       platform.imgui_end()
     }
 
-    platform.window_swap(&user.window)
+    prev_keys = platform.global_input.keys
+    platform.window_draw(&user.window)
   }
 }
 
-f32x2 :: [2]f32
-f32x3 :: [3]f32
-f32x4 :: [4]f32
+v2f32 :: [2]f32
+v3f32 :: [3]f32
+v4f32 :: [4]f32
 
 m2f32 :: matrix[2,2]f32
 m3f32 :: matrix[3,3]f32
@@ -158,7 +187,7 @@ Range :: basic.Range
 
 range_overlap :: basic.range_overlap
 array_cast    :: basic.array_cast
-approc        :: basic.approx
+approx        :: basic.approx
 rad_from_deg  :: basic.rad_from_deg
 deg_from_rad  :: basic.deg_from_rad
 

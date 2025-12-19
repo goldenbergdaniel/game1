@@ -2,127 +2,199 @@ package render
 
 import "../platform"
 
-when ODIN_OS == .Darwin  do BACKEND :: "metal"
-when ODIN_OS == .Linux   do BACKEND :: "opengl"
-when ODIN_OS == .Windows do BACKEND :: "dx11"
-
-@(private="file")
 BACKEND :: #config(RENDER_BACKEND, "opengl")
 
-i32x2   :: [2]i32
-i32x4   :: [4]i32
-f32x2   :: [2]f32
-f32x4   :: [4]f32
+MAX_SHADERS  :: 8
+MAX_TEXTURES :: 8
+
+v2f32   :: [2]f32
+v4f32   :: [4]f32
 m3x3f32 :: matrix[3,3]f32
 m4x4f32 :: matrix[4,4]f32
 
 Vertex :: struct
 {
-  pos:   f32x2,
-  tint:  f32x4,
-  color: f32x4,
-  uv:    f32x2,
+  pos:   v2f32,
+  tint:  v4f32,
+  color: v4f32,
+  uv:    v2f32,
+}
+
+Shader :: struct
+{
+  id:       u32,
+  uniforms: struct{tex, light: i32},
 }
 
 Texture :: struct
 {
+  id:     u32,
   data:   []byte,
   width:  i32,
   height: i32,
-  cell:   i32,
 }
 
-Texture_ID :: enum
+Pass :: struct
 {
-  Sprite_Map,
+  shader:      ^Shader,
+  texture:     ^Texture,
+  projection:  m3x3f32,
+  camera:      m3x3f32,
+  viewport:    v4f32,
+  clear_color: v4f32,
+  light_color: v4f32,
 }
 
 Renderer :: struct
 {
-  vertices:     [40000]Vertex,
-  vertex_count: int,
-  indices:      [60000]u16,
-  index_count:  int,
-  camera:       m3x3f32,
-  projection:   m3x3f32,
-  viewport:     i32x4,
-  texture:      ^Texture,
-  uniforms:     struct
+  initialized:    bool,
+  window:         ^platform.Window,
+  shaders:        [MAX_SHADERS]u32,
+  shaders_count:  int,
+  textures:       [MAX_TEXTURES]u32,
+  textures_count: int,
+  vertices:       [40000]Vertex,
+  vertices_count: int,
+  indices:        [60000]u16,
+  indices_count:  int,
+  pass:           Pass,
+  pass_open:      bool,
+  uniforms:       struct
   {
-    projection: m4x4f32,
-    camera:     m4x4f32,
+    projection:   m4x4f32,
+    camera:       m4x4f32,
   },
-  window:       ^platform.Window,
-  shader:       u32,
-  textures:     [Texture_ID]u32,
-  ubo:          u32,
-  ssbo:         u32,
-  ibo:          u32,
+  ubo:            u32,
+  ssbo:           u32,
+  ibo:            u32,
 }
 
 renderer: ^Renderer = &{}
 
-init :: #force_inline proc(
-  window: ^platform.Window, 
-  projection: f32x4,
-  textures: ^[Texture_ID]Texture,
-){
-  /**/ when BACKEND == "opengl" do gl_init(window, projection, textures)
-  else                          do panic("Invalid render backend selected!")
+init_renderer :: #force_inline proc(window: ^platform.Window)
+{
+  renderer.window = window
+  
+  /**/ when BACKEND == "opengl" do gl_init(window)
+  else                          do panic("Fatal [render]: Invalid backend selected!")
+
+  renderer.initialized = true
 }
 
-clear :: #force_inline proc(color: f32x4)
+create_shader :: #force_inline proc(vsrc, fsrc: string) -> Shader
+{
+  /**/ when BACKEND == "opengl" do return gl_create_shader(vsrc, fsrc)
+  else                          do panic("Fatal [render]: Invalid backend selected!")
+}
+
+create_texture :: #force_inline proc(data: []byte, width, height: i32) -> Texture
+{
+  /**/ when BACKEND == "opengl" do return gl_create_texture(data, width, height)
+  else                          do panic("Fatal [render]: Invalid backend selected!")
+}
+
+clear :: #force_inline proc(color: v4f32)
 {
   when BACKEND == "opengl" do gl_clear(color)
 }
 
-flush :: #force_inline proc()
+draw :: #force_inline proc()
 {
-  /**/ when BACKEND == "opengl" do gl_flush()
-  else                          do panic("Invalid render backend selected!")
+  when BACKEND == "opengl" do gl_draw()
 }
 
-push_vertex :: proc{push_vertex_vert, push_vertex_vec}
-
-push_vertex_vert :: proc(vertex: Vertex)
+begin_pass :: proc(pass: Pass)
 {
-  if renderer.vertex_count == len(renderer.vertices)
+  if !renderer.initialized do panic("Fatal [render]: Renderer is not initialized!")
+  if renderer.pass_open do panic("Fatal [render]: Render pass is already open!")
+
+  assert(pass.shader != nil && pass.texture != nil)
+
+  renderer.pass = pass
+  renderer.pass_open = true
+  
+  if pass.clear_color.a > 0
   {
-    flush()
+    clear(pass.clear_color)
   }
 
-  renderer.vertices[renderer.vertex_count] = Vertex{
+  if pass.light_color.a == 0
+  {
+    renderer.pass.light_color = {1, 1, 1, 1}
+  }
+}
+
+end_pass :: proc()
+{
+  if !renderer.initialized do panic("Fatal [render]: Renderer is not initialized!")
+  if !renderer.pass_open do panic("Fatal [render]: Render pass is already closed!")
+
+  draw()
+
+  renderer.pass = {}
+  renderer.pass_open = false
+  renderer.vertices_count = 0
+}
+
+get_pass :: proc() -> ^Pass
+{
+  if !renderer.initialized do panic("Fatal [render]: Renderer is not initialized!")
+  if !renderer.pass_open do panic("Fatal [render]: No active render pass!")
+
+  return &renderer.pass
+}
+
+push_vertex :: proc(vertex: Vertex)
+{
+  if renderer.vertices_count == len(renderer.vertices)
+  {
+    draw()
+  }
+
+  renderer.vertices[renderer.vertices_count] = Vertex{
     pos = vertex.pos,
     tint = vertex.tint,
     color = vertex.color,
     uv = vertex.uv,
   }
 
-  renderer.vertex_count += 1
+  renderer.vertices_count += 1
 }
 
-push_vertex_vec :: proc(pos: f32x2, tint: f32x4, color: f32x4, uv: f32x2)
+push_triangle :: proc(v: [3]Vertex)
 {
-  push_vertex_vert(Vertex{pos, tint, color, uv})
+  push_vertex(v[0])
+  push_vertex(v[1])
+  push_vertex(v[2])
+  push_triangle_indices()
 }
 
-push_tri_indices :: proc()
+push_rectangle :: proc(v: [4]Vertex)
+{
+  push_vertex(v[0])
+  push_vertex(v[1])
+  push_vertex(v[2])
+  push_vertex(v[3])
+  push_rectangle_indices()
+}
+
+push_triangle_indices :: proc()
 {
   @(static)
   layout: [3]u16 = {
     0, 1, 2,
   }
 
-  offset := cast(u16) renderer.vertex_count - 3
-  index_count := renderer.index_count + 3
-  renderer.index_count += 3
+  offset := cast(u16) renderer.vertices_count - 3
+  index_count := renderer.indices_count + 3
+  renderer.indices_count += 3
 
   renderer.indices[index_count - 3] = layout[0] + offset
   renderer.indices[index_count - 2] = layout[1] + offset
   renderer.indices[index_count - 1] = layout[2] + offset
 }
 
-push_rect_indices :: proc()
+push_rectangle_indices :: proc()
 {
   @(static)
   layout: [6]u16 = {
@@ -130,9 +202,9 @@ push_rect_indices :: proc()
     1, 2, 3,
   }
 
-  offset := cast(u16) renderer.vertex_count - 4
-  index_count := renderer.index_count + 6
-  renderer.index_count += 6
+  offset := cast(u16) renderer.vertices_count - 4
+  index_count := renderer.indices_count + 6
+  renderer.indices_count += 6
 
   renderer.indices[index_count - 6] = layout[0] + offset
   renderer.indices[index_count - 5] = layout[1] + offset
@@ -142,46 +214,35 @@ push_rect_indices :: proc()
   renderer.indices[index_count - 1] = layout[5] + offset
 }
 
-coords_from_texture :: proc(texture: ^Texture, coords, grid: f32x2) -> (tl, tr, br, bl: f32x2)
-{
-  cell := cast(f32) texture.cell
+coords_from_texture :: proc(
+  texture: ^Texture, 
+  coord:   v2f32,
+  grid:    v2f32,
+) -> (
+  tl, tr, br, bl: v2f32,
+){
   width := cast(f32) texture.width
   height := cast(f32) texture.height
 
-  tl = f32x2{
-    (f32(coords.x) * cell) / width, 
-    (f32(coords.y) * cell) / height,
+  tl = {
+    coord.x / width, 
+    coord.y / height,
   }
 
-  tr = f32x2{
-    (f32(coords.x+(grid.x)) * cell) / width, 
-    (f32(coords.y) * cell) / height,
+  tr = {
+    (coord.x + grid.x) / width, 
+    coord.y / height,
   }
 
-  br = f32x2{
-    (f32(coords.x+(grid.x)) * cell) / width, 
-    (f32(coords.y+(grid.y)) * cell) / height,
+  br = {
+    (coord.x + grid.x) / width, 
+    (coord.y + grid.y) / height,
   }
 
-  bl = f32x2{
-    (f32(coords.x) * cell) / width, 
-    (f32(coords.y+(grid.y)) * cell) / height,
+  bl = {
+    coord.x / width, 
+    (coord.y + grid.y) / height,
   }
 
   return
-}
-
-set_viewport :: #force_inline proc(viewport: i32x4)
-{
-  renderer.viewport = viewport
-}
-
-set_camera :: #force_inline proc(camera: m3x3f32)
-{
-  renderer.camera = camera
-}
-
-set_projection :: #force_inline proc(projection: m3x3f32)
-{
-  renderer.projection = projection
 }

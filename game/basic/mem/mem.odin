@@ -8,7 +8,7 @@ import "core:mem/tlsf"
 Allocator       :: runtime.Allocator
 Allocator_Error :: runtime.Allocator_Error
 Arena           :: virtual.Arena
-Temp      			:: virtual.Arena_Temp
+Arena_Temp      :: virtual.Arena_Temp
 Heap						:: tlsf.Allocator
 
 KIB :: 1 << 10
@@ -80,10 +80,17 @@ default_allocator :: #force_inline proc() -> Allocator
 
 // Arena /////////////////////////////////////////////////////////////////////////////////
 
+// Arena :: struct
+// {
+//   #subtype arena: virtual.Arena,
+//   #subtype alloc: runtime.Allocator,
+// }
+
 arena_init_buffer  :: virtual.arena_init_buffer
 arena_init_growing :: virtual.arena_init_growing
 arena_init_static  :: virtual.arena_init_static
 arena_destroy			 :: virtual.arena_destroy
+arena_clear				 :: virtual.arena_free_all
 
 temp_begin :: virtual.arena_temp_begin
 temp_end	 :: virtual.arena_temp_end
@@ -101,6 +108,14 @@ scratch :: proc(conflict: ^Arena = nil) -> ^Arena
 
 	return result
 }
+
+// arena_init :: proc(arena: ^Arena, type: enum{Buffer, Growing, Static}) -> Allocator_Error
+// {
+//   _ = virtual.arena_init_static(arena)
+//   arena.alloc.data = arena
+//   arena.alloc.procedure = virtual.arena_allocator_proc
+// }
+
 
 // Heap //////////////////////////////////////////////////////////////////////////////////
 

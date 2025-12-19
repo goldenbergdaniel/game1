@@ -7,14 +7,18 @@ Buffer :: struct
   data:   []byte,
   r_pos:  int,
   w_pos:  int,
-  endian: Endian_Kind,
+  endian: Endian,
 }
 
-Endian_Kind :: enum {BE, LE}
-
-create_buffer :: proc(data: []byte, endian_kind: Endian_Kind) -> Buffer
+Endian :: enum
 {
-  return {data, 0, 0, endian_kind}
+  BE, 
+  LE,
+}
+
+create_buffer :: proc(data: []byte, kind: Endian) -> Buffer
+{
+  return {data, 0, 0, kind}
 }
 
 read_byte :: #force_inline proc(buffer: ^Buffer) -> byte
@@ -38,119 +42,83 @@ read_u8 :: proc(buffer: ^Buffer) -> u8
 
 read_i16 :: proc(buffer: ^Buffer) -> i16
 {
-  result: i16
-
   data := buffer.data[buffer.r_pos:buffer.r_pos+2]
   buffer.r_pos += 2
 
-  if buffer.endian == .BE do result = cast(i16) endian.unchecked_get_u16be(data)
-  else                    do result = cast(i16) endian.unchecked_get_u16le(data)
-
-  return result
+  if buffer.endian == .BE do return cast(i16) endian.unchecked_get_u16be(data)
+  else                    do return cast(i16) endian.unchecked_get_u16le(data)
 }
 
 read_u16 :: proc(buffer: ^Buffer) -> u16
 {
-  result: u16
-
   data := buffer.data[buffer.r_pos:buffer.r_pos+2]
   buffer.r_pos += 2
   
-  if buffer.endian == .BE do result = endian.unchecked_get_u16be(data)
-  else                    do result = endian.unchecked_get_u16le(data)
-
-  return result
+  if buffer.endian == .BE do return endian.unchecked_get_u16be(data)
+  else                    do return endian.unchecked_get_u16le(data)
 }
 
 read_i32 :: proc(buffer: ^Buffer) -> i32
 {
-  result: i32
-
   data := buffer.data[buffer.r_pos:buffer.r_pos+4]
   buffer.r_pos += 4
   
-  if buffer.endian == .BE do result = cast(i32) endian.unchecked_get_u32be(data)
-  else                    do result = cast(i32) endian.unchecked_get_u32le(data)
-
-  return result
+  if buffer.endian == .BE do return cast(i32) endian.unchecked_get_u32be(data)
+  else                    do return cast(i32) endian.unchecked_get_u32le(data)
 }
 
 read_u32 :: proc(buffer: ^Buffer) -> u32
 {
-  result: u32
-
   data := buffer.data[buffer.r_pos:buffer.r_pos+4]
   buffer.r_pos += 4
   
-  if buffer.endian == .BE do result = endian.unchecked_get_u32be(data)
-  else                    do result = endian.unchecked_get_u32le(data)
-
-  return result
+  if buffer.endian == .BE do return endian.unchecked_get_u32be(data)
+  else                    do return endian.unchecked_get_u32le(data)
 }
 
 read_i64 :: proc(buffer: ^Buffer) -> i64
 {
-  result: i64
-
   data := buffer.data[buffer.r_pos:buffer.r_pos+8]
   buffer.r_pos += 8
   
-  if buffer.endian == .BE do result = cast(i64) endian.unchecked_get_u64be(data)
-  else                    do result = cast(i64) endian.unchecked_get_u64le(data)
-
-  return result
+  if buffer.endian == .BE do return cast(i64) endian.unchecked_get_u64be(data)
+  else                    do return cast(i64) endian.unchecked_get_u64le(data)
 }
 
 read_u64 :: proc(buffer: ^Buffer) -> u64
 {
-  result: u64
-
   data := buffer.data[buffer.r_pos:buffer.r_pos+8]
   buffer.r_pos += 8
 
-  if buffer.endian == .BE do result = endian.unchecked_get_u64be(data)
-  else                    do result = endian.unchecked_get_u64le(data)
-
-  return result
+  if buffer.endian == .BE do return endian.unchecked_get_u64be(data)
+  else                    do return endian.unchecked_get_u64le(data)
 }
 
 read_f16 :: proc(buffer: ^Buffer) -> f16
 {
-  result: f16
-
   data := buffer.data[buffer.r_pos:buffer.r_pos+8]
   buffer.r_pos += 8
   
-  if buffer.endian == .BE do result = transmute(f16) endian.unchecked_get_u16be(data)
-  else                    do result = transmute(f16) endian.unchecked_get_u16le(data)
-
-  return result
+  if buffer.endian == .BE do return transmute(f16) endian.unchecked_get_u16be(data)
+  else                    do return transmute(f16) endian.unchecked_get_u16le(data)
 }
 
 read_f32 :: proc(buffer: ^Buffer) -> f32
 {
-  result: f32
-
   data := buffer.data[buffer.r_pos:buffer.r_pos+8]
   buffer.r_pos += 8
   
-  if buffer.endian == .BE do result = transmute(f32) endian.unchecked_get_u32be(data)
-  else                    do result = transmute(f32) endian.unchecked_get_u32le(data)
-
-  return result
+  if buffer.endian == .BE do return transmute(f32) endian.unchecked_get_u32be(data)
+  else                    do return transmute(f32) endian.unchecked_get_u32le(data)
 }
 
 read_f64 :: proc(buffer: ^Buffer) -> f64
 {
-  result: f64
-
   data := buffer.data[buffer.r_pos:buffer.r_pos+8]
   buffer.r_pos += 8
   
-  if buffer.endian == .BE do result = transmute(f64) endian.unchecked_get_u64be(data)
-  else                    do result = transmute(f64) endian.unchecked_get_u64le(data)
-
-  return result
+  if buffer.endian == .BE do return transmute(f64) endian.unchecked_get_u64be(data)
+  else                    do return transmute(f64) endian.unchecked_get_u64le(data)
 }
 
 read_bytes :: proc(buffer: ^Buffer, size := -1) -> []byte

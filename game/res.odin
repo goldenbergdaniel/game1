@@ -2,7 +2,7 @@
 package game
 
 import "core:image/qoi"
-import "basic"
+import "core:os/os2"
 import "basic/mem"
 import "platform"
 import "render"
@@ -15,9 +15,11 @@ Resources :: struct
     speed:      f32,
   },
   actions:      [Action_Name]platform.Input_Source,
-  textures:     [render.Texture_ID]render.Texture,
+  shaders:      [Shader_Name]render.Shader,
+  textures:     [Texture_Name]render.Texture,
   sprites:      [Sprite_Name]Sprite,
   sounds:       [Sound_Name]Sound,
+  font:         []byte,
   animations:   [Animation_Name]Animation_Desc,
   particles:    [Particle_Name]Particle_Desc,
   creatures:    [Creature_Kind]Creature_Desc,
@@ -26,9 +28,20 @@ Resources :: struct
   loot_tables:  [Loot_Table_Name][dynamic]Loot_Table_Entry,
 }
 
+Texture_Name :: enum
+{
+  Sprite_Map,
+}
+
+Shader_Name :: enum
+{
+  Sprite,
+}
+
 Sprite_Name :: enum
 {
   Nil,
+  Rect,
   Square,
   UI_Square,
   Circle,
@@ -94,6 +107,7 @@ Sound_Name :: enum
   Thunk,
   Gun_Shot,
   Minecraft,
+  Forest_Ambience,
 }
 
 Sound_Group :: enum
@@ -167,22 +181,24 @@ Particle_Desc :: struct
   props:         bit_set[Particle_Prop],
   count:         u16,
   lifetime:      f32,
+  lifetime_var:  f32,
   spread:        f32,
-  colors:        [dynamic]f32x4,
-  scl:           f32x2,
-  scl_dt:        f32x2,
+  colors:        [dynamic]v4f32,
+  scl:           v2f32,
+  scl_dt:        v2f32,
   scl_var:       f32,
-  vel:           f32x2,
-  vel_dt:        f32x2,
+  vel:           v2f32,
+  vel_dt:        v2f32,
   dir:           f32,
   dir_dt:        f32,
   rot:           f32,
   rot_dt:        f32,
 }
 
-Creature_Desc :: struct
+Creature_Desc :: struct #all_or_none
 {
   animations:      [Animation_State]Sprite_Or_Animation,
+  collider:        Circle,
   corpse:          Sprite_Name,
   blood_pool:      Animation_Name,
   wander_range:    Range(i32),
@@ -194,13 +210,13 @@ Creature_Desc :: struct
   loot_table:      Loot_Table_Name,
 }
 
-Weapon_Desc :: struct
+Weapon_Desc :: struct #all_or_none
 {
   sprite:      Sprite_Name,
-  hold_off:    f32x2,
-  holster_off: f32x2,
+  hold_off:    v2f32,
+  holster_off: v2f32,
   holster_rot: f32,
-  shot_pos:    f32x2,
+  shot_pos:    v2f32,
   shot_time:   f32,
   reload_time: f32,
   damage:      f32,
@@ -208,7 +224,7 @@ Weapon_Desc :: struct
   capacity:    u16,
 }
 
-Item_Desc :: struct
+Item_Desc :: struct #all_or_none
 {
   name:       string,
   animations: [Animation_State]Sprite_Or_Animation,
@@ -222,7 +238,7 @@ Loot_Table_Name :: enum
   Rabbit,
 }
 
-Loot_Table_Entry :: struct
+Loot_Table_Entry :: struct #all_or_none
 {
   item: Item_Kind,
   rate: f32,
@@ -248,6 +264,12 @@ init_resources :: proc(arena: ^mem.Arena)
     }
   }
 
+  // - Shaders ---
+  {
+    res.shaders[.Sprite] = render.create_shader(#load("../res/shaders/sprite.vert.glsl"),
+                                                #load("../res/shaders/sprite.frag.glsl"))
+  }
+
   // - Textures ---
   {
     img: ^qoi.Image
@@ -259,99 +281,108 @@ init_resources :: proc(arena: ^mem.Arena)
       panicf("Failed to open texture file!", err)
     }
 
-    res.textures[.Sprite_Map] = render.Texture{
-      data = img.pixels.buf[:],
-      width = cast(i32) img.width,
-      height = cast(i32) img.height,
-      cell = 16,
-    }
+    res.textures[.Sprite_Map] = render.create_texture(img.pixels.buf[:], i32(img.width), i32(img.height))
   }
 
   // - Sprites ---
   {
-    res.sprites = [Sprite_Name]Sprite{
-      .Nil              = {coords={0, 0},  grid={1, 1}, pivot={7.5, 7.5}},
-      .Square           = {coords={1, 0},  grid={1, 1}, pivot={7.5, 7.5}},
-      .UI_Square        = {coords={1, 0},  grid={1, 1}, pivot={0.0, 0.0}},
-      .Circle           = {coords={2, 0},  grid={1, 1}, pivot={8.5, 8.5}},
+    CELL_SIZE :: 16
 
-      .Shadow_S         = {coords={3, 0},  grid={1, 1}, pivot={7.5, 14.5}},
-      .Shadow_M         = {coords={4, 0},  grid={1, 1}, pivot={7.5, 14.5}},
-      .Shadow_L         = {coords={5, 0},  grid={1, 1}, pivot={7.5, 14.5}},
+    res.sprites = {
+      .Nil              = {coord={0, 0},  grid={1, 1}, pivot={7.5, 7.5}},
+      .Rect             = {coord={1, 0},  grid={1, 1}, pivot={0, 0}},
+      .Square           = {coord={1, 0},  grid={1, 1}, pivot={7.5, 7.5}},
+      .UI_Square        = {coord={1, 0},  grid={1, 1}, pivot={0.0, 0.0}},
+      .Circle           = {coord={2, 0},  grid={1, 1}, pivot={8.5, 8.5}},
 
-      .Player_Idle_0    = {coords={0, 1},  grid={1, 1}, pivot={7.5, 8.5}},
-      .Player_Idle_1    = {coords={1, 1},  grid={1, 1}, pivot={7.5, 8.5}},
-      .Player_Walk_0    = {coords={2, 1},  grid={1, 1}, pivot={7.5, 8.5}},
-      .Player_Walk_1    = {coords={3, 1},  grid={1, 1}, pivot={7.5, 8.5}},
-      .Player_Walk_2    = {coords={4, 1},  grid={1, 1}, pivot={7.5, 8.5}},
-      .Player_Walk_3    = {coords={5, 1},  grid={1, 1}, pivot={7.5, 8.5}},
-      .Player_Walk_4    = {coords={6, 1},  grid={1, 1}, pivot={7.5, 8.5}},
-      .Player_Sneak_0   = {coords={7, 1},  grid={1, 1}, pivot={7.5, 8.5}},
-      .Player_Sneak_1   = {coords={8, 1},  grid={1, 1}, pivot={7.5, 8.5}},
-      .Player_Sneak_2   = {coords={9, 1},  grid={1, 1}, pivot={7.5, 8.5}},
-      .Player_Sneak_3   = {coords={10, 1}, grid={1, 1}, pivot={7.5, 8.5}},
-      .Player_Sneak_4   = {coords={11, 1}, grid={1, 1}, pivot={7.5, 8.5}},
+      .Shadow_S         = {coord={3, 0},  grid={1, 1}, pivot={7.5, 14.5}},
+      .Shadow_M         = {coord={4, 0},  grid={1, 1}, pivot={7.5, 14.5}},
+      .Shadow_L         = {coord={5, 0},  grid={1, 1}, pivot={7.5, 14.5}},
 
-      .Rifle            = {coords={0, 2},  grid={1, 1}, pivot={4.5, 8.5}},
-      .Shotgun          = {coords={1, 2},  grid={1, 1}, pivot={4.5, 8.5}},
-      .Muzzle_Flash     = {coords={0, 3},  grid={1, 1}, pivot={8.5, 8.5}},
-      .Bullet           = {coords={1, 3},  grid={1, 1}, pivot={8.5, 8.5}},
-      .Smoke_Particle   = {coords={2, 3},  grid={1, 1}, pivot={8.5, 8.5}},
-      .Blood_Particle   = {coords={3, 3},  grid={1, 1}, pivot={8.5, 8.5}},
+      .Player_Idle_0    = {coord={0, 1},  grid={1, 1}, pivot={7.5, 8.5}},
+      .Player_Idle_1    = {coord={1, 1},  grid={1, 1}, pivot={7.5, 8.5}},
+      .Player_Walk_0    = {coord={2, 1},  grid={1, 1}, pivot={7.5, 8.5}},
+      .Player_Walk_1    = {coord={3, 1},  grid={1, 1}, pivot={7.5, 8.5}},
+      .Player_Walk_2    = {coord={4, 1},  grid={1, 1}, pivot={7.5, 8.5}},
+      .Player_Walk_3    = {coord={5, 1},  grid={1, 1}, pivot={7.5, 8.5}},
+      .Player_Walk_4    = {coord={6, 1},  grid={1, 1}, pivot={7.5, 8.5}},
+      .Player_Sneak_0   = {coord={7, 1},  grid={1, 1}, pivot={7.5, 8.5}},
+      .Player_Sneak_1   = {coord={8, 1},  grid={1, 1}, pivot={7.5, 8.5}},
+      .Player_Sneak_2   = {coord={9, 1},  grid={1, 1}, pivot={7.5, 8.5}},
+      .Player_Sneak_3   = {coord={10, 1}, grid={1, 1}, pivot={7.5, 8.5}},
+      .Player_Sneak_4   = {coord={11, 1}, grid={1, 1}, pivot={7.5, 8.5}},
 
-      .Item_Venison     = {coords={4, 3},  grid={1, 1}, pivot={7.5, 9.0}},
-      .Item_Rabbit_Foot = {coords={5, 3},  grid={1, 1}, pivot={7.5, 9.0}},
+      .Rifle            = {coord={0, 2},  grid={1, 1}, pivot={4.5, 8.5}},
+      .Shotgun          = {coord={1, 2},  grid={1, 1}, pivot={4.5, 8.5}},
+      .Muzzle_Flash     = {coord={0, 3},  grid={1, 1}, pivot={8.5, 8.5}},
+      .Bullet           = {coord={1, 3},  grid={1, 1}, pivot={8.5, 8.5}},
+      .Smoke_Particle   = {coord={2, 3},  grid={1, 1}, pivot={8.5, 8.5}},
+      .Blood_Particle   = {coord={3, 3},  grid={1, 1}, pivot={8.5, 8.5}},
 
-      .Deer_Idle_0      = {coords={0, 4},  grid={1, 1}, pivot={7.5, 8.5}},
-      .Deer_Idle_1      = {coords={1, 4},  grid={1, 1}, pivot={7.5, 8.5}},
-      .Deer_Idle_2      = {coords={2, 4},  grid={1, 1}, pivot={7.5, 8.5}},
-      .Deer_Idle_3      = {coords={3, 4},  grid={1, 1}, pivot={7.5, 8.5}},
-      .Deer_Walk_0      = {coords={4, 4},  grid={1, 1}, pivot={7.5, 8.5}},
-      .Deer_Walk_1      = {coords={5, 4},  grid={1, 1}, pivot={7.5, 8.5}},
-      .Deer_Walk_2      = {coords={6, 4},  grid={1, 1}, pivot={7.5, 8.5}},
-      .Deer_Walk_3      = {coords={7, 4},  grid={1, 1}, pivot={7.5, 8.5}},
-      .Deer_Corpse      = {coords={8, 4},  grid={2, 1}, pivot={15.0, 15.0}},
+      .Item_Venison     = {coord={4, 3},  grid={1, 1}, pivot={7.5, 9.0}},
+      .Item_Rabbit_Foot = {coord={5, 3},  grid={1, 1}, pivot={7.5, 9.0}},
 
-      .Rabbit_Idle_0    = {coords={0, 5},  grid={1, 1}, pivot={9.5, 9.5}},
-      .Rabbit_Idle_1    = {coords={1, 5},  grid={1, 1}, pivot={9.5, 9.5}},
-      .Rabbit_Idle_2    = {coords={2, 5},  grid={1, 1}, pivot={9.5, 9.5}},
-      .Rabbit_Idle_3    = {coords={3, 5},  grid={1, 1}, pivot={9.5, 9.5}},
-      .Rabbit_Walk_0    = {coords={4, 5},  grid={1, 1}, pivot={7.5, 8.5}},
-      .Rabbit_Walk_1    = {coords={5, 5},  grid={1, 1}, pivot={7.5, 8.5}},
-      .Rabbit_Walk_2    = {coords={6, 5},  grid={1, 1}, pivot={7.5, 8.5}},
-      .Rabbit_Walk_3    = {coords={7, 5},  grid={1, 1}, pivot={7.5, 8.5}},
-      .Rabbit_Corpse    = {coords={8, 5},  grid={1, 1}, pivot={8.5, 15.0}},
+      .Deer_Idle_0      = {coord={0, 4},  grid={1, 1}, pivot={7.5, 8.5}},
+      .Deer_Idle_1      = {coord={1, 4},  grid={1, 1}, pivot={7.5, 8.5}},
+      .Deer_Idle_2      = {coord={2, 4},  grid={1, 1}, pivot={7.5, 8.5}},
+      .Deer_Idle_3      = {coord={3, 4},  grid={1, 1}, pivot={7.5, 8.5}},
+      .Deer_Walk_0      = {coord={4, 4},  grid={1, 1}, pivot={7.5, 8.5}},
+      .Deer_Walk_1      = {coord={5, 4},  grid={1, 1}, pivot={7.5, 8.5}},
+      .Deer_Walk_2      = {coord={6, 4},  grid={1, 1}, pivot={7.5, 8.5}},
+      .Deer_Walk_3      = {coord={7, 4},  grid={1, 1}, pivot={7.5, 8.5}},
+      .Deer_Corpse      = {coord={8, 4},  grid={2, 1}, pivot={15.0, 15.0}},
+
+      .Rabbit_Idle_0    = {coord={0, 5},  grid={1, 1}, pivot={9.5, 9.5}},
+      .Rabbit_Idle_1    = {coord={1, 5},  grid={1, 1}, pivot={9.5, 9.5}},
+      .Rabbit_Idle_2    = {coord={2, 5},  grid={1, 1}, pivot={9.5, 9.5}},
+      .Rabbit_Idle_3    = {coord={3, 5},  grid={1, 1}, pivot={9.5, 9.5}},
+      .Rabbit_Walk_0    = {coord={4, 5},  grid={1, 1}, pivot={7.5, 8.5}},
+      .Rabbit_Walk_1    = {coord={5, 5},  grid={1, 1}, pivot={7.5, 8.5}},
+      .Rabbit_Walk_2    = {coord={6, 5},  grid={1, 1}, pivot={7.5, 8.5}},
+      .Rabbit_Walk_3    = {coord={7, 5},  grid={1, 1}, pivot={7.5, 8.5}},
+      .Rabbit_Corpse    = {coord={8, 5},  grid={1, 1}, pivot={8.5, 15.0}},
       
-      .Blood_Pool_0     = {coords={0, 6},  grid={1, 1}, pivot={8.0, 10.0}},
-      .Blood_Pool_1     = {coords={1, 6},  grid={1, 1}, pivot={8.0, 10.0}},
-      .Blood_Pool_2     = {coords={2, 6},  grid={1, 1}, pivot={8.0, 10.0}},
-      .Blood_Pool_3     = {coords={3, 6},  grid={1, 1}, pivot={8.0, 10.0}},
-      .Blood_Pool_4     = {coords={4, 6},  grid={1, 1}, pivot={8.0, 10.0}},
-      .Blood_Pool_5     = {coords={5, 6},  grid={1, 1}, pivot={8.0, 10.0}},
+      .Blood_Pool_0     = {coord={0, 6},  grid={1, 1}, pivot={8.0, 10.0}},
+      .Blood_Pool_1     = {coord={1, 6},  grid={1, 1}, pivot={8.0, 10.0}},
+      .Blood_Pool_2     = {coord={2, 6},  grid={1, 1}, pivot={8.0, 10.0}},
+      .Blood_Pool_3     = {coord={3, 6},  grid={1, 1}, pivot={8.0, 10.0}},
+      .Blood_Pool_4     = {coord={4, 6},  grid={1, 1}, pivot={8.0, 10.0}},
+      .Blood_Pool_5     = {coord={5, 6},  grid={1, 1}, pivot={8.0, 10.0}},
 
-      .Tile_Dirt        = {coords={0, 7},  grid={1, 1}, pivot={8.0, 8.0}},
-      .Tile_Grass_0     = {coords={1, 7},  grid={1, 1}, pivot={8.0, 8.0}},
-      .Tile_Grass_1     = {coords={2, 7},  grid={1, 1}, pivot={8.0, 8.0}},
-      .Tile_Grass_2     = {coords={3, 7},  grid={1, 1}, pivot={8.0, 8.0}},
-      .Tile_Stone_0     = {coords={4, 7},  grid={1, 1}, pivot={8.0, 8.0}},
-      .Tile_Stone_1     = {coords={5, 7},  grid={1, 1}, pivot={8.0, 8.0}},
-      .Tile_Wall        = {coords={6, 7},  grid={1, 1}, pivot={8.0, 8.0}},
+      .Tile_Dirt        = {coord={0, 7},  grid={1, 1}, pivot={8.0, 8.0}},
+      .Tile_Grass_0     = {coord={1, 7},  grid={1, 1}, pivot={8.0, 8.0}},
+      .Tile_Grass_1     = {coord={2, 7},  grid={1, 1}, pivot={8.0, 8.0}},
+      .Tile_Grass_2     = {coord={3, 7},  grid={1, 1}, pivot={8.0, 8.0}},
+      .Tile_Stone_0     = {coord={4, 7},  grid={1, 1}, pivot={8.0, 8.0}},
+      .Tile_Stone_1     = {coord={5, 7},  grid={1, 1}, pivot={8.0, 8.0}},
+      .Tile_Wall        = {coord={6, 7},  grid={1, 1}, pivot={8.0, 8.0}},
     }
 
     for &sprite in res.sprites
     {
-      sprite.texture = .Sprite_Map
-      sprite.pivot /= basic.array_cast(sprite.grid, f32) * 16
+      sprite.coord *= CELL_SIZE
+      sprite.grid *= CELL_SIZE
+      sprite.pivot /= sprite.grid
     }
   }
 
   // - Sounds ---
   {
     res.sounds = {
-      .Nil       = {},
-      .Thunk     = {path="res/sounds/thunk.wav",     group=.Effect},
-      .Gun_Shot  = {path="res/sounds/gun_shot.wav",  group=.Effect},
-      .Minecraft = {path="res/sounds/minecraft.wav", group=.Music},
+      .Nil             = {},
+      .Thunk           = {path="res/sounds/thunk.wav",     group=.Effect},
+      .Gun_Shot        = {path="res/sounds/gun_shot.wav",  group=.Effect},
+      .Minecraft       = {path="res/sounds/minecraft.wav", group=.Music},
+      .Forest_Ambience = {path="res/sounds/forest_ambient.flac", group=.Ambience},
+    }
+  }
+
+  // - Font ---
+  {
+    ft_err := init_font(#load("../res/fonts/Jersey10.ttf"))
+    if ft_err != nil
+    {
+      println("Error [freetype]:", ft_err)
     }
   }
 
@@ -429,13 +460,14 @@ init_resources :: proc(arena: ^mem.Arena)
     }
   }
 
-  // - Particles ---
+  // - :particles ---
   {
     res.particles = {
       .Nil = {},
       .Gun_Smoke = {
         sprite = .Smoke_Particle,
         emmision_kind = .Burst,
+        props = {},
         colors = {{0.5, 0.5, 0.5, 0}, {0.4, 0.4, 0.4, 0}, {0.3, 0.3, 0.3, 0}},
         count = 4,
         lifetime = 3.0,
@@ -447,10 +479,12 @@ init_resources :: proc(arena: ^mem.Arena)
       .Hurt_Blood = {
         sprite = .Blood_Particle,
         emmision_kind = .Burst,
+        props = {.Persist},
         colors = {{0.5, 0, 0, 0}, {0.4, 0, 0, 0}, {0.3, 0, 0, 0}},
-        count = 10,
-        lifetime = 0.3,
-        scl = {0.5, 0.5},
+        count = 5,
+        lifetime = 0.1,
+        lifetime_var = 0.05,
+        scl = {0.3, 0.3},
         scl_var = 0.2,
         vel = {96, 96},
         vel_dt = {0, 256},
@@ -458,7 +492,7 @@ init_resources :: proc(arena: ^mem.Arena)
     }
   }
 
-  // - Player ---
+  // - :player ---
   {
     res.player = {
       animations = #partial {
@@ -480,6 +514,10 @@ init_resources :: proc(arena: ^mem.Arena)
           .Idle = .Deer_Idle,
           .Walk = .Deer_Walk,
         },
+        collider = Circle{
+          origin = {0, 0},
+          radius = 6,
+        },
         corpse = .Deer_Corpse,
         blood_pool = .Blood_Pool_Expand_L,
         wander_range = {10, 50},
@@ -494,6 +532,10 @@ init_resources :: proc(arena: ^mem.Arena)
         animations = #partial {
           .Idle = .Rabbit_Idle,
           .Walk = .Rabbit_Walk,
+        },
+        collider = Circle{
+          origin = {-1, 4},
+          radius = 4,
         },
         corpse = .Rabbit_Corpse,
         blood_pool = .Blood_Pool_Expand_M,
@@ -536,13 +578,14 @@ init_resources :: proc(arena: ^mem.Arena)
         animations = #partial {
           .Idle = .Item_Venison,
         },
-        value = 33, 
+        value = 3,
       },
       .Rabbit_Foot = {
         name = "Rabbit's Foot",
         animations = #partial {
           .Idle = .Item_Rabbit_Foot,
         },
+        value = 5,
       },
     }
   }

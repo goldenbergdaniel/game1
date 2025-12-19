@@ -1,28 +1,31 @@
 package platform
 
 import "core:fmt"
+import "core:math"
+import "core:strings"
+import "ext:sdl"
+import imgui "ext:dear_imgui"
+import imgui_sdl "ext:dear_imgui/imgui_impl_sdl3"
+import imgui_gl "ext:dear_imgui/imgui_impl_opengl3"
 import "../basic/mem"
-
-@(private)
-EVENT_QUEUE_CAP :: 16
 
 Window :: struct
 {
-  handle:       rawptr,
-  imio_handle:  rawptr,
-  event_queue:  Event_Queue,
-  should_close: bool,
-  draw_ctx:     struct #raw_union
+  handle:       ^sdl.Window,
+  imio_handle:  ^imgui.IO,
+  render_ctx:   struct #raw_union
   {
     gl:         struct
     {
-      sdl_ctx:  rawptr,
+      ctx:  		sdl.GLContext,
     },
   },
+  should_close: bool,
 }
 
 Window_Props :: enum
 {
+	Always_On_Top,
   Borderless,
   Fullscreen,
   Resizeable,
@@ -56,185 +59,156 @@ Event_Kind :: enum
   Mouse_Btn_Up,
 }
 
-Key_Kind :: enum
+create_window :: proc(desc: Window_Desc, arena: ^mem.Arena) -> Window
 {
-  Nil,
-  A,
-  B,
-  C,
-  D,
-  E,
-  F,
-  G,
-  H,
-  I,
-  J,
-  K,
-  L,
-  M,
-  N,
-  O,
-  P,
-  Q,
-  R,
-  S,
-  T,
-  U,
-  V,
-  W,
-  X,
-  Y,
-  Z,
-  S_0,
-  S_1,
-  S_2,
-  S_3,
-  S_4,
-  S_5,
-  S_6,
-  S_7,
-  S_8,
-  S_9,
-  Open_Bracket,
-  Close_Bracket,
-  Forward_Slash,
-  Backward_Slash,
-  Semicolon,
-  Apostrophe,
-  Comma,
-  Period,
-  Backtick,
-  Left_Alt,
-  Right_Alt,
-  Left_Ctrl,
-  Right_Ctrl,
-  Left_Shift,
-  Right_Shift,
-  Up,
-  Down,
-  Left,
-  Right,
-  Page_Up,
-  Page_Down,
-  Space,
-  Tab,
-  Enter,
-  Backspace,
-  Escape,
-  F1,
-  F2,
-  F3,
-  F4,
-  F5,
-  F6,
-  F7,
-  F8,
-  F9,
-  F10,
-  F11,
-  F12,
-}
+	result: Window
 
-Mouse_Btn_Kind :: enum
-{
-  Nil,
-  Left,
-  Right,
-  Middle,
-}
+	scratch := mem.temp_begin(mem.scratch())
+	defer mem.temp_end(scratch)
 
-Input :: struct
-{
-  keys:            [Key_Kind]bool,
-  prev_keys:       [Key_Kind]bool,
-  mouse_btns:      [Mouse_Btn_Kind]bool,
-  prev_mouse_btns: [Mouse_Btn_Kind]bool,
-  mouse_pos:       [2]f32,
-}
+	when ODIN_OS == .Linux
+	{
+		deco: cstring = .Borderless in desc.props ? "0" : "1"
+		sdl.SetHint("SDL_VIDEO_WAYLAND_ALLOW_LIBDECOR", deco)
+		sdl.SetHint("SDL_VIDEO_DOUBLE_BUFFER", "1")
+	}
+	
+	_ = sdl.Init({.VIDEO, .EVENTS})
 
-Input_Source :: union
-{
-  Key_Kind,
-  Mouse_Btn_Kind,
-}
+	window_flags: sdl.WindowFlags
 
-global_input: ^Input = &{}
+	when ODIN_OS == .Darwin
+	{
+		window_flags += {.METAL}
+	}
+	else
+	{
+		window_flags += {.OPENGL}
 
-// global: struct
-// {
-//   d3d11_device_ctx: rawptr,
-//   d3d11_device:     rawptr,
-//   metal_device:     rawptr,
-// }
+		sdl.GL_SetAttribute(.CONTEXT_MAJOR_VERSION, 4)
+		sdl.GL_SetAttribute(.CONTEXT_MINOR_VERSION, 6)
+		sdl.GL_SetAttribute(.RED_SIZE, 8)
+		sdl.GL_SetAttribute(.GREEN_SIZE, 8)
+		sdl.GL_SetAttribute(.BLUE_SIZE, 8)
+		sdl.GL_SetAttribute(.DOUBLEBUFFER, 1)
+		sdl.GL_SetAttribute(.MULTISAMPLESAMPLES, 2)
+	}
+	
+	for prop in desc.props
+	{
+		#partial switch prop
+		{
+		case .Always_On_Top:
+			window_flags += {.ALWAYS_ON_TOP}
+		case .Borderless:
+			window_flags += {.BORDERLESS}
+		case .Fullscreen:
+			window_flags += {.FULLSCREEN}
+		case .Maximized:
+			window_flags += {.MAXIMIZED}
+		case .Resizeable:
+			window_flags += {.RESIZABLE}
+		}
+	}
 
-create_window :: #force_inline proc(
-	desc:  Window_Desc,
-	arena: ^mem.Arena,
-) -> (
-  result: Window,
-){
-  when ODIN_OS == .Windows
-  {
-    result = windows_create_window(desc.title, desc.width, desc.height, arena)
-	  init_event_queue(&result.event_queue, arena)
-  }
-  else
-  {
-    result = sdl_create_window(desc, arena)
-  }
+  title_cstr := strings.clone_to_cstring(desc.title, mem.allocator(scratch.arena))
+	sdl_window := sdl.CreateWindow(title_cstr, i32(desc.width), i32(desc.height), window_flags)
+
+	when ODIN_OS == .Darwin
+	{
+
+	}
+	else
+	{
+		gl_ctx := sdl.GL_CreateContext(sdl_window)
+		sdl.GL_MakeCurrent(sdl_window, gl_ctx)
+		
+		vsync: i32 = .Vsync in desc.props ? 1 : 0
+		sdl.GL_SetSwapInterval(vsync)
+
+		when false
+		{
+			fmt.println("    OpenGL Version:", gl.GetString(gl.VERSION))
+			fmt.println("       SDL Version:", sdl.GetVersion())
+			fmt.println("Dear ImGui Version:", imgui.GetVersion())
+		}
+	}
+	
+	imgui.CreateContext()
+	imgui.StyleColorsDark()
+	imgui_sdl.InitForOpenGL(sdl_window, gl_ctx)
+
+	when ODIN_OS == .Darwin
+	{
+
+	}
+	else
+	{
+		imgui_gl.Init()
+
+		result.render_ctx.gl.ctx = gl_ctx
+	}
+
+	result.handle = sdl_window
+	result.imio_handle = imgui.GetIO()
 
 	return result
 }
 
-destroy_window :: #force_inline proc(window: ^Window)
+destroy_window :: proc(window: ^Window)
 {
-  when ODIN_OS == .Windows do windows_release_os_resources(window)
-	else                     do sdl_destroy_window(window)
+	imgui_gl.Shutdown()
+	imgui_sdl.Shutdown()
+	imgui.DestroyContext()
+	sdl.DestroyWindow(window.handle)
+	sdl.Quit()
 }
 
 window_toggle_fullscreen :: proc(window: ^Window)
 {
-  when ODIN_OS == .Windows do return
-  else                     do sdl_window_toggle_fullscreen(window)
+	fs := transmute(b64) (sdl.GetWindowFlags(window.handle) & sdl.WINDOW_FULLSCREEN)
+	sdl.SetWindowFullscreen(window.handle, bool(!fs))
 }
 
-window_size :: #force_inline proc(window: ^Window) -> [2]i32
+window_get_size :: proc(window: ^Window) -> [2]f32
 {
-  result: [2]i32
+	result: [2]i32
 
-  when ODIN_OS == .Windows do result = windows_window_size(window)
-	else                     do result = sdl_window_size(window)
+	sdl.GetWindowSize(auto_cast window.handle, &result.x, &result.y)
 
-  return result
+	return {
+		cast(f32) result.x,
+		cast(f32) result.y,
+	}
 }
 
-window_swap :: #force_inline proc(window: ^Window)
+window_draw :: proc(window: ^Window)
 {
-  when ODIN_OS != .Windows do sdl_gl_window_swap(window)
+	sdl.GL_SwapWindow(window.handle)
 }
 
-@(private)
-poll_event :: #force_inline proc(window: ^Window, event:  ^Event) -> bool
+window_pump_events :: proc(window: ^Window)
 {
-	result: bool
-  
-  when ODIN_OS == .Windows do result = windows_poll_event(window, event)
-	else                     do result = sdl_poll_event(window, event)
+  poll_event :: proc(window: ^Window, event: ^Event) -> bool
+  {
+  	result: bool
+  	sdl_event: sdl.Event
+		
+  	result = sdl.PollEvent(&sdl_event)
+  	event^ = sdl_translate_event(&sdl_event)
 
-	return result
-}
+  	imgui_sdl.ProcessEvent(&sdl_event)
+  	if window.imio_handle.WantCaptureMouse && event.mouse_btn_kind != .Nil
+  	{
+  		event.kind = .Nil
+  	}
 
-pump_events :: #force_inline proc(window: ^Window)
-{
-  when ODIN_OS == .Windows do windows_pump_events(window)
-	else                     do sdl_pump_events()
-
-  count: int
+  	return result
+  }
 
   event: Event
   for poll_event(window, &event)
   {
-    count += 1
     switch event.kind
     {
     case .Nil:
@@ -252,193 +226,39 @@ pump_events :: #force_inline proc(window: ^Window)
   }
 }
 
-imgui_begin :: #force_inline proc()
-{
-  when ODIN_OS == .Windows do windows_imgui_begin()
-  else                     do sdl_imgui_begin()
-}
-
-imgui_end :: #force_inline proc()
-{
-  when ODIN_OS == .Windows do windows_imgui_end()
-  else                     do sdl_imgui_end()
-}
-
-@(private)
-Event_Queue :: struct
-{
-  data:  []Event,
-  front: int,
-  back:  int,
-}
-
-@(private)
-init_event_queue :: proc(queue: ^Event_Queue, arena: ^mem.Arena)
-{
-  queue.data = make([]Event, EVENT_QUEUE_CAP, mem.allocator(arena))
-}
-
-@(private)
-push_event :: proc(queue: ^Event_Queue, event: Event)
-{
-  queue.data[queue.back] = event
-  queue.back += 1
-}
-
-@(private)
-pop_event :: proc(queue: ^Event_Queue) -> ^Event
-{
-  result: ^Event
-
-  if queue.front == queue.back
-  {
-    queue.front = 0
-    queue.back = 0
-  }
-  else
-  {
-    result = &queue.data[queue.front]
-    queue.front += 1
-  }
-
-  return result
-}
-
-remember_prev_input :: proc()
-{
-  for key in Key_Kind
-  {
-    global_input.prev_keys[key] = global_input.keys[key]
-  }
-
-  for btn in Mouse_Btn_Kind
-  {
-    global_input.prev_mouse_btns[btn] = global_input.mouse_btns[btn]
-  }
-}
-
 @(require_results)
-key_pressed :: proc(key: Key_Kind) -> bool
+get_cursor_position :: proc() -> [2]f32
 {
-  return global_input.keys[key]
+	result: [2]f32
+	_ = sdl.GetMouseState(&result.x, &result.y)
+	return {math.round(result.x), math.round(result.y)}
 }
 
-@(require_results)
-key_just_pressed :: proc(key: Key_Kind) -> bool
+get_display_scale :: proc(window: ^Window) -> f32
 {
-  return global_input.keys[key] && !global_input.prev_keys[key]
+	display_id := sdl.GetDisplayForWindow(window.handle)
+	return sdl.GetDisplayContentScale(display_id)
 }
 
-@(require_results)
-key_released :: proc(key: Key_Kind) -> bool
+get_display_bounds :: proc(window: ^Window) -> [4]f32
 {
-  return !global_input.keys[key]
+	display_id := sdl.GetDisplayForWindow(window.handle)
+	rect: sdl.Rect
+	sdl.GetDisplayBounds(display_id, &rect)
+	return {f32(rect.x), f32(rect.y), f32(rect.w), f32(rect.h)}
 }
 
-@(require_results)
-key_just_released :: proc(key: Key_Kind) -> bool
+imgui_begin :: proc()
 {
-  return !global_input.keys[key] && global_input.prev_keys[key]
+  imgui_gl.NewFrame()
+  imgui_sdl.NewFrame()
+  imgui.NewFrame()
 }
 
-consume_key :: proc(key: Key_Kind)
+imgui_end :: proc()
 {
-  global_input.keys[key] = false
-  // global_input.prev_keys[key] = false
+  imgui.Render()
+  imgui_gl.RenderDrawData(imgui.GetDrawData())
 }
 
-@(require_results)
-mouse_btn_pressed :: proc(btn: Mouse_Btn_Kind) -> bool
-{
-  return global_input.mouse_btns[btn]
-}
-
-@(require_results)
-mouse_btn_just_pressed :: proc(btn: Mouse_Btn_Kind) -> bool
-{
-  return global_input.mouse_btns[btn] && !global_input.prev_mouse_btns[btn]
-}
-
-@(require_results)
-mouse_btn_released :: proc(btn: Mouse_Btn_Kind) -> bool
-{
-  return !global_input.mouse_btns[btn]
-}
-
-@(require_results)
-mouse_btn_just_released :: proc(btn: Mouse_Btn_Kind) -> bool
-{
-  return !global_input.mouse_btns[btn] && global_input.prev_mouse_btns[btn]
-}
-
-consume_mouse_btn :: proc(btn: Mouse_Btn_Kind)
-{
-  global_input.mouse_btns[btn] = false
-  global_input.prev_mouse_btns[btn] = false
-}
-
-@(require_results)
-input_pressed :: proc(input: Input_Source) -> bool
-{
-  switch v in input
-  {
-  case Key_Kind:       return key_pressed(v)
-  case Mouse_Btn_Kind: return mouse_btn_pressed(v)
-  case:                return false
-  }
-}
-
-@(require_results)
-input_just_pressed :: proc(input: Input_Source) -> bool
-{
-  switch v in input
-  {
-  case Key_Kind:       return key_just_pressed(v)
-  case Mouse_Btn_Kind: return mouse_btn_just_pressed(v)
-  case:                return false
-  }
-}
-
-@(require_results)
-input_released :: proc(input: Input_Source) -> bool
-{
-  switch v in input
-  {
-  case Key_Kind:       return key_released(v)
-  case Mouse_Btn_Kind: return mouse_btn_released(v)
-  case:                return false
-  }
-}
-
-@(require_results)
-input_just_released :: proc(input: Input_Source) -> bool
-{
-  switch v in input
-  {
-  case Key_Kind:       return key_just_released(v)
-  case Mouse_Btn_Kind: return mouse_btn_just_released(v)
-  case:                return false
-  }
-}
-
-consume_input :: proc(input: Input_Source)
-{
-  switch v in input
-  {
-  case Key_Kind:       consume_key(v)
-  case Mouse_Btn_Kind: consume_mouse_btn(v)
-  }
-}
-
-@(require_results)
-cursor_position :: #force_inline proc() -> [2]f32
-{
-  result: [2]f32
-
-  when ODIN_OS == .Windows do result = windows_cursor_pos()
-	else                     do result = sdl_cursor_pos()
-
-  return result
-}
-
-gl_set_proc_address :: sdl_gl_set_proc_address
+gl_set_proc_address :: sdl.gl_set_proc_address
