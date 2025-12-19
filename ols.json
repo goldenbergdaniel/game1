@@ -1,5 +1,5 @@
 {
-  "": "https://raw.githubusercontent.com/DanielGavin/ols/master/misc/ols.schema.json",
+  "$schema": "https://raw.githubusercontent.com/DanielGavin/ols/master/misc/ols.schema.json",
   "collections": [
     {
       "name": "ext",
@@ -22,7 +22,7 @@
   [
     {
       "name": "main", 
-      "checker_path": ["game", "game/render", "game/platform"]
+      "checker_path": ["game"]
     }
   ]
 }

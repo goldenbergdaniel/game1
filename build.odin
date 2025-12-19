@@ -67,8 +67,6 @@ main :: proc()
   fmt.printf("[mode:%s]\n", mode)
   fmt.printf("[%s]\n", PACKAGE)
 
-  // os2.set_env("SDL_VIDEO_DRIVER", "wayland")
-
   process, start_err := os2.process_start(game_process_desc)
   if start_err != nil do fmt.panicf("Error: %s\n", start_err)
   _, _ = os2.process_wait(process)
