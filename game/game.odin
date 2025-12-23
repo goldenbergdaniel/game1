@@ -20,6 +20,7 @@ import "ui"
 global: struct
 {
   frame_arena:     mem.Arena,
+  ui_frame_arena:  mem.Arena,
   world_mem:       mem.Heap,
   gui_tree:        ui.Tree,
   audio:           struct
@@ -42,12 +43,13 @@ init_global :: proc()
 {
   // WARN(dg): What if multiple games running on same thread? This needs to change.
   _ = mem.arena_init_growing(&global.frame_arena)
+  _ = mem.arena_init_growing(&global.ui_frame_arena)
   _ = mem.heap_init(&global.world_mem, mem.default_allocator(), mem.MIB * 16)
 
   global.temp.noise_sources.allocator = mem.allocator(&global.frame_arena)
   global.audio.music_volume = 1.0
 
-  ui.tree_init(&global.gui_tree, 1024, &user.perm_arena)
+  ui.tree_init(&global.gui_tree, 1024, &user.perm_arena, &global.ui_frame_arena)
 }
 
 
@@ -801,7 +803,6 @@ render_scratch :: proc()
 {
   render.begin_pass({
     shader = &res.shaders[.Sprite],
-    texture = &res.textures[.Sprite_Map],
     camera = vmath.translation_3x3f({0, 0}),
     projection = vmath.orthographic_3x3f(0, WORLD_WIDTH, 0, WORLD_HEIGHT),
     viewport = user.viewport,
@@ -810,9 +811,9 @@ render_scratch :: proc()
 
   @(static)
   vertices := [3]render.Vertex{
-    {{WORLD_WIDTH/2-50, WORLD_HEIGHT-50}, {1, 0, 0, 1}, {0, 1, 0, 0}, {0, 1}},
-    {{WORLD_WIDTH/2,    50},              {1, 0, 0, 1}, {1, 0, 0, 0}, {0, 1}},
-    {{WORLD_WIDTH/2+50, WORLD_HEIGHT-50}, {1, 0, 0, 1}, {0, 1, 0, 0}, {0, 1}},
+    {{WORLD_WIDTH/2-50, WORLD_HEIGHT-50}, {1, 0, 0, 1}, {0, 1, 0, 0}, {0, 1}, 0},
+    {{WORLD_WIDTH/2,    50},              {1, 0, 0, 1}, {1, 0, 0, 0}, {0, 1}, 0},
+    {{WORLD_WIDTH/2+50, WORLD_HEIGHT-50}, {1, 0, 0, 1}, {0, 1, 0, 0}, {0, 1}, 0},
   }
 
   render.push_triangle(vertices)
@@ -826,7 +827,6 @@ game_render :: proc(gm: ^Game)
 
   render.begin_pass({
     shader = &res.shaders[.Sprite],
-    texture = &res.textures[.Sprite_Map],
     camera = vmath.transform_3x3f(-gm.camera.pos, gm.camera.rot, gm.camera.scl),
     projection = vmath.orthographic_3x3f(0, WORLD_WIDTH, 0, WORLD_HEIGHT),
     viewport = user.viewport,

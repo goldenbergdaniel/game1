@@ -15,12 +15,11 @@ WORLD_STEP   :: 1.0/40
 
 User :: struct
 {
-  perm_arena:  mem.Arena,
-  frame_arena: mem.Arena,
-  window:      platform.Window,
-  viewport:    v4f32,
-  screen:      Screen,
-  show_dbgui:  bool,
+  perm_arena: mem.Arena,
+  window:     platform.Window,
+  viewport:   v4f32,
+  screen:     Screen,
+  show_dbgui: bool,
 }
 
 Screen :: enum
@@ -48,13 +47,6 @@ main :: proc()
   if arena_err != nil
   {
     fmt.eprintln("Failed to allocate static arena!", arena_err)
-    return
-  }
-
-  arena_err = mem.arena_init_growing(&user.frame_arena)
-  if arena_err != nil
-  {
-    fmt.eprintln("Failed to allocate growing arena!", arena_err)
     return
   }
 

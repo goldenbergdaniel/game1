@@ -1,7 +1,7 @@
 package imgui_impl_vulkan
 
 import imgui "../"
-import vk "vendor:vulkan"
+import vk "ext:vulkan"
 
 when      ODIN_OS == .Windows { foreign import lib "../imgui_windows_x64.lib" }
 else when ODIN_OS == .Linux   { foreign import lib "../imgui_linux_x64.a" }

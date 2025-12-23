@@ -6,6 +6,7 @@ import "core:os/os2"
 import "basic/mem"
 import "platform"
 import "render"
+import "ui"
 
 Resources :: struct
 {
@@ -30,7 +31,8 @@ Resources :: struct
 
 Texture_Name :: enum
 {
-  Sprite_Map,
+  Sprite_Atlas,
+  Glyph_Atlas,
 }
 
 Shader_Name :: enum
@@ -270,7 +272,7 @@ init_resources :: proc(arena: ^mem.Arena)
                                                 #load("../res/shaders/sprite.frag.glsl"))
   }
 
-  // - Textures ---
+  // - Sprites ---
   {
     img: ^qoi.Image
     err: qoi.Error
@@ -281,11 +283,8 @@ init_resources :: proc(arena: ^mem.Arena)
       panicf("Failed to open texture file!", err)
     }
 
-    res.textures[.Sprite_Map] = render.create_texture(img.pixels.buf[:], i32(img.width), i32(img.height))
-  }
+    res.textures[.Sprite_Atlas] = render.create_texture(img.pixels.buf[:], img.width, img.height)
 
-  // - Sprites ---
-  {
     CELL_SIZE :: 16
 
     res.sprites = {
@@ -370,20 +369,29 @@ init_resources :: proc(arena: ^mem.Arena)
   {
     res.sounds = {
       .Nil             = {},
-      .Thunk           = {path="res/sounds/thunk.wav",     group=.Effect},
-      .Gun_Shot        = {path="res/sounds/gun_shot.wav",  group=.Effect},
-      .Minecraft       = {path="res/sounds/minecraft.wav", group=.Music},
+      .Thunk           = {path="res/sounds/thunk.wav",           group=.Effect},
+      .Gun_Shot        = {path="res/sounds/gun_shot.wav",        group=.Effect},
+      .Minecraft       = {path="res/sounds/minecraft.wav",       group=.Music},
       .Forest_Ambience = {path="res/sounds/forest_ambient.flac", group=.Ambience},
     }
   }
 
-  // - Font ---
+  // - Fonts ---
   {
-    ft_err := init_font(#load("../res/fonts/Jersey10.ttf"))
-    if ft_err != nil
+    ui.set_dpi(uint(platform.get_display_dpi(&user.window)))
+
+    // NOTE(dg): Size for Jersey10 must be [14, 28, 42, 56, 70, 84, 98]
+    font, err := ui.load_font("res/fonts/Jersey10.ttf", 14, arena)
+    if err == nil
     {
-      println("Error [freetype]:", ft_err)
+      res.textures[.Glyph_Atlas] = render.create_texture(font.pixels, font.width, font.height, format=1)
     }
+    else
+    {
+      println("Error [freetype]:", err)
+    }
+
+    // os2.exit(0)
   }
 
   // - Animations ---

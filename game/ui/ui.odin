@@ -14,7 +14,7 @@ global_tree: ^Tree
 Tree :: struct
 {
   boxes:       []Box,
-  cache:       map[string]Box,
+  cache:       map[Box_ID]Retained_Box_Data,
   capacity:    int,
   count:       int,
   root:        ^Box,
@@ -22,22 +22,22 @@ Tree :: struct
   cursor_pos:  [2]f32,
   input_down:  [enum{Curr, Prev}]bool,
   perm_arena:  ^mem.Arena,
-  frame_arena: mem.Arena,
+  temp_arena: ^mem.Arena,
 }
 
-tree_init :: proc(tree: ^Tree, cap: int, arena: ^mem.Arena)
+tree_init :: proc(tree: ^Tree, cap: int, perm_arena, temp_arena: ^mem.Arena)
 {
-  tree.boxes = make([]Box, cap, mem.allocator(arena))
-  tree.cache = make(map[string]Box, cap, mem.allocator(arena))
+  tree.boxes = make([]Box, cap, mem.allocator(perm_arena))
+  tree.cache = make(map[Box_ID]Retained_Box_Data, cap, mem.allocator(perm_arena))
   tree.capacity = cap
-  tree.root = tree_alloc(tree)
+  tree.root = tree_alloc_box(tree)
   tree.curr = tree.root
-  tree.perm_arena = arena
-  _ = mem.arena_init_growing(&tree.frame_arena)
+  tree.perm_arena = perm_arena
+  tree.temp_arena = temp_arena
 }
 
 @(require_results)
-tree_alloc :: proc(tree: ^Tree) -> ^Box
+tree_alloc_box :: proc(tree: ^Tree) -> ^Box
 {
   assert(tree.count < tree.capacity)
   
@@ -58,16 +58,15 @@ tree_alloc :: proc(tree: ^Tree) -> ^Box
 
 tree_clear :: proc(tree: ^Tree)
 {
-  for &node in tree.boxes[:]
+  for &box in tree.boxes[:]
   {
-    node = {}
+    box = {}
   }
 
   tree.count = 1
-
-  mem.arena_clear(&tree.frame_arena)
 }
 
+@(private)
 tree_resolve_layout :: proc(tree: ^Tree)
 {
   if tree.root == nil do return
@@ -78,13 +77,13 @@ tree_resolve_layout :: proc(tree: ^Tree)
   // - Standalone sizes ---
   {
     iter := make_iterator_flat(tree)
-    for node in iterate_flat(&iter)
+    for box in iterate_flat(&iter)
     {
       for axis in 0..=1
       {
-        if node.size[axis].kind == .Pixels
+        if box.size[axis].kind == .Pixels
         {
-          node.computed_abs_dim[axis] = node.size[axis].value
+          box.computed_abs_dim[axis] = box.size[axis].value
         }
       }
     }
@@ -93,13 +92,13 @@ tree_resolve_layout :: proc(tree: ^Tree)
   // - Upward sizes ---
   {
     iter := make_iterator_preorder(tree.root, scratch)
-    for node in iterate_preorder(&iter)
+    for box in iterate_preorder(&iter)
     {
-      for axis in 0..=1
+      for axis in 0..<2
       {
-        if node.size[axis].kind == .Percent && node.parent.size[axis].kind != .Sum_Of_Children
+        if box.size[axis].kind == .Percent && box.parent.size[axis].kind != .Sum_Of_Children
         {
-          node.computed_abs_dim[axis] = node.parent.computed_abs_dim[axis] * node.size[axis].value
+          box.computed_abs_dim[axis] = box.parent.computed_abs_dim[axis] * box.size[axis].value
         }
       }
     }
@@ -108,7 +107,7 @@ tree_resolve_layout :: proc(tree: ^Tree)
   // - Downward sizes ---
   {
     iter := make_iterator_postorder(tree.root, scratch)
-    for node in iterate_postorder(&iter)
+    for box in iterate_postorder(&iter)
     {
 
     }
@@ -117,20 +116,20 @@ tree_resolve_layout :: proc(tree: ^Tree)
   // - Relative positions ---
   {
     iter := make_iterator_preorder(tree.root, scratch)
-    for node in iterate_preorder(&iter)
+    for box in iterate_preorder(&iter)
     {
       offset: [2]f32
 
-      for child := node.first; child != nil; child = child.next
+      for child := box.first; child != nil; child = child.next
       {
         offset += child.offset
 
-        for axis in 0..=1
+        for axis in 0..<2
         {
           child.computed_rel_pos[axis] = offset[axis]
         }
 
-        offset[node.child_align] += child.computed_abs_dim[node.child_align]
+        offset[box.child_align] += child.computed_abs_dim[box.child_align]
       }
     }
   }
@@ -138,16 +137,16 @@ tree_resolve_layout :: proc(tree: ^Tree)
   // - Final pass ---
   {
     iter := make_iterator_flat(tree)
-    for node in iterate_flat(&iter)
+    for box in iterate_flat(&iter)
     {
-      node.rect_dim = node.computed_abs_dim
-      node.rect_pos = node.computed_rel_pos
+      box.rect_dim = box.computed_abs_dim
+      box.rect_pos = box.computed_rel_pos
 
-      if .Floating not_in node.props
+      if .Floating not_in box.props
       {
-        for ancestor := node.parent; ancestor != nil; ancestor = ancestor.parent
+        for ancestor := box.parent; ancestor != nil; ancestor = ancestor.parent
         {
-          node.rect_pos += ancestor.computed_rel_pos
+          box.rect_pos += ancestor.computed_rel_pos
 
           if .Floating in ancestor.props do break
         }
@@ -158,18 +157,21 @@ tree_resolve_layout :: proc(tree: ^Tree)
   }
 }
 
+@(private)
 tree_resolve_interaction :: proc(tree: ^Tree)
 {
   iter := make_iterator_flat(tree)
-  for node in iterate_flat(&iter)
+  for box in iterate_flat(&iter)
   {
     cursor := tree.cursor_pos
 
-    x_intersect := cursor.x >= node.rect_pos.x && cursor.x <= node.rect_pos.x + node.rect_dim.x
-    y_intersect := cursor.y >= node.rect_pos.y && cursor.y <= node.rect_pos.y + node.rect_dim.y
+    box.interaction[.Prev] = box.interaction[.Curr]
 
-    node.interaction.hovered = x_intersect && y_intersect
-    node.interaction.pressed = node.interaction.hovered && tree.input_down[.Curr]
+    x_intersect := cursor.x >= box.rect_pos.x && cursor.x <= box.rect_pos.x + box.rect_dim.x
+    y_intersect := cursor.y >= box.rect_pos.y && cursor.y <= box.rect_pos.y + box.rect_dim.y
+
+    box.interaction[.Curr].hovered = x_intersect && y_intersect
+    box.interaction[.Curr].pressed = box.interaction[.Curr].hovered && tree.input_down[.Curr]
   }
 }
 
@@ -178,18 +180,18 @@ tree_print_bfs :: proc(tree: ^Tree)
   scratch := mem.temp_begin(mem.scratch())
   defer mem.temp_end(scratch)
 
-  nodes: [dynamic]^Box
-  nodes.allocator = mem.allocator(scratch.arena)
-  append(&nodes, tree.root)
+  boxes: [dynamic]^Box
+  boxes.allocator = mem.allocator(scratch.arena)
+  append(&boxes, tree.root)
 
-  for i := 0; i < len(nodes); i += 1
+  for i := 0; i < len(boxes); i += 1
   {
-    node := nodes[i]
-    fmt.println(node.name)
+    box := boxes[i]
+    fmt.println(box.name)
 
-    for curr := node.first; curr != nil; curr = curr.next
+    for curr := box.first; curr != nil; curr = curr.next
     {
-      append(&nodes, curr)
+      append(&boxes, curr)
     }
   }
 }
@@ -203,19 +205,23 @@ tree_print_dfs :: proc(tree: ^Tree, way: enum{Preorder, Postorder})
   {
   case .Preorder:
     iter := make_iterator_preorder(tree.root, scratch)
-    for node, idx in iterate_preorder(&iter)
+    for box, idx in iterate_preorder(&iter)
     {
-      fmt.println(idx, node.name)
+      fmt.println(idx, box.name)
     }
 
   case .Postorder:
     iter := make_iterator_postorder(tree.root, scratch)
-    for node, idx in iterate_postorder(&iter)
+    for box, idx in iterate_postorder(&iter)
     {
-      fmt.println(idx, node.name)
+      fmt.println(idx, box.name)
     }
   }
 }
+
+
+// Iterators //////////////////////////////////////////////////////////////////////////////
+
 
 Iterator_Flat :: struct
 {
@@ -231,13 +237,13 @@ make_iterator_flat :: proc(tree: ^Tree) -> Iterator_Flat
 iterate_flat :: proc(it: ^Iterator_Flat) -> (elem: ^Box, idx: int, ok: bool)
 {
   start := it.idx
-  for &node in it.tree.boxes[start:]
+  for &box in it.tree.boxes[start:]
   {
     defer it.idx += 1
 
-    if node.parent != nil || it.idx == 0
+    if box.parent != nil || it.idx == 0
     {
-      return &node, it.idx-1, true
+      return &box, it.idx-1, true
     }
   }
 
@@ -332,44 +338,55 @@ iterate_postorder :: proc(it: ^Iterator_Postorder) -> (elem: ^Box, idx: int, ok:
 
 Box :: struct
 {
-  parent:            ^Box,
-  first:             ^Box,
-  last:              ^Box,
-  next:              ^Box,
-  prev:              ^Box,
-  id:                string,
-  name:              string,
-  idx:               Maybe(int),
-  text:              string,
-  using layout:      Layout,
-  descendant_layout: Layout,
-  retained:          bool,
-  computed_rel_pos:  [2]f32,
-  computed_abs_dim:  [2]f32,
+  parent:              ^Box,
+  first:               ^Box,
+  last:                ^Box,
+  next:                ^Box,
+  prev:                ^Box,
 
-  using persistant:  struct
-  {
-    rect_pos:        [2]f32,
-    rect_dim:        [2]f32,
-    interaction:     Interaction,
-    counter:         int,
-  },
+  id:                  Box_ID,
+  name:                string,
+  idx:                 Maybe(int),
+  using layout:        Layout,
+  descendant_layout:   Layout,
+  retain:              bool,
+
+  text:                string,
+  sprite:              int,
+
+  computed_rel_pos:    [2]f32,
+  computed_abs_dim:    [2]f32,
+  rect_pos:            [2]f32,
+  rect_dim:            [2]f32,
+
+  using retained_data: Retained_Box_Data,
+}
+
+@(private)
+Retained_Box_Data :: struct
+{
+  interaction: [enum{Curr, Prev}]Interaction,
+  counter:     int,
 }
 
 Layout :: struct
 {
-  props:       bit_set[Box_Prop],
-  offset:      [2]f32,
-  size:        [2]Size,
-  color:       [4]f32,
-  child_align: Alignment,
+  props:            bit_set[Box_Prop],
+  offset:           [2]f32,
+  size:             [2]Size,
+  color:            [4]f32,
+  child_align:      Alignment,
+  text_size:        f32,
+  text_line_height: f32,
 }
 
-Interaction :: bit_field u8
+Interaction :: struct
 {
-  hovered: bool | 1,
-  pressed: bool | 1,
+  hovered: bool,
+  pressed: bool,
 }
+
+Box_ID :: distinct string
 
 Box_Prop :: enum
 {
@@ -504,11 +521,11 @@ box_generate_id :: proc(box: ^Box)
   {
     if box.parent == nil do continue
 
-    id := strings.builder_make(mem.allocator(&global_tree.frame_arena))
+    id := strings.builder_make(mem.allocator(global_tree.temp_arena))
 
     if box.parent.parent != nil
     {
-      strings.write_string(&id, box.parent.id)
+      strings.write_string(&id, string(box.parent.id))
       strings.write_string(&id, ".")
     }
 
@@ -524,8 +541,24 @@ box_generate_id :: proc(box: ^Box)
       strings.write_string(&id, box.name)
     }
     
-    box.id = strings.clone_from_bytes(id.buf[:], mem.allocator(&global_tree.frame_arena))
-    // fmt.println("ID:", box.id)
+    box.id = cast(Box_ID) strings.clone_from_bytes(id.buf[:], mem.allocator(global_tree.temp_arena))
+  }
+}
+
+@(private)
+box_cache_retained_data :: proc(box: ^Box)
+{
+  global_tree.cache[box.id] = box.retained_data
+}
+
+@(private)
+box_fetch_retained_data :: proc(box: ^Box)
+{
+  data, ok := global_tree.cache[box.id]
+  if ok
+  {
+    box.retained_data = data
+    // fmt.printf("Fetched %s with count %i\n", box.id, box.counter)
   }
 }
 
@@ -537,9 +570,10 @@ begin_tree :: proc(
   tree:     ^Tree,
   using st: struct
   {
-    window_size: [2]f32, 
-    cursor_pos:  [2]f32,
-    input_down:  bool,
+    background_color: [4]f32,
+    window_size:      [2]f32,
+    cursor_pos:       [2]f32,
+    input_down:       bool,
   },
 ){
   tree_clear(tree)
@@ -551,6 +585,7 @@ begin_tree :: proc(
   global_tree = tree
 
   layout_size(.Pixels, window_size)
+  layout_fill_color(background_color)
 }
 
 end_tree :: proc()
@@ -564,14 +599,12 @@ end_tree :: proc()
   iter := make_iterator_preorder(global_tree.root, temp)
   for box in iterate_preorder(&iter)
   {
-    if box.retained
+    if box.retain
     {
-      global_tree.cache[box.id] = box^
-      fmt.printf("Cached %s with count %i\n", box.id, box.counter)
+      box_cache_retained_data(box)
     }
   }
 
-  mem.arena_clear(&global_tree.frame_arena)
   global_tree.input_down[.Prev] = global_tree.input_down[.Curr]
   global_tree = nil
 }
@@ -579,22 +612,17 @@ end_tree :: proc()
 @(require_results)
 create_box :: proc(name: string, idx: Maybe(int), retained: bool) -> ^Box
 {
-  box := tree_alloc(global_tree)
+  box := tree_alloc_box(global_tree)
   box.parent = global_tree.curr
   box.name = name
   box.idx = idx
-  box.retained = retained
+  box.retain = retained
 
   box_generate_id(box)
 
   if retained
   {
-    persistent, ok := global_tree.cache[box.id]
-    if ok
-    {
-      box.persistant = persistent
-      fmt.printf("Fetched %s with count %i\n", box.id, box.counter)
-    }
+    box_fetch_retained_data(box)
   }
   
   return box
@@ -621,63 +649,91 @@ P :: parent
 
 set_layout :: proc(layout: Layout)
 {
+  assert(global_tree.curr != nil)
   global_tree.curr.layout = layout
 }
 
 set_descendant_layout :: proc(layout: Layout)
 {
+  assert(global_tree.curr != nil)
   global_tree.curr.descendant_layout = layout
 }
 
 is_hovered :: proc() -> bool
 {
-  global_tree.curr.retained = true
-  return global_tree.curr.interaction.hovered
+  assert(global_tree.curr != nil)
+  global_tree.curr.retain = true
+  return global_tree.curr.interaction[.Curr].hovered
 }
 
 is_pressed :: proc() -> bool
 {
-  return global_tree.curr.interaction.pressed
+  assert(global_tree.curr != nil)
+  return global_tree.curr.interaction[.Curr].pressed
+}
+
+is_just_pressed :: proc() -> bool
+{
+  assert(global_tree.curr != nil)
+  return global_tree.curr.interaction[.Curr].pressed && 
+        !global_tree.curr.interaction[.Prev].pressed
 }
 
 layout_size :: proc(kind: Size_Kind, val: [2]f32)
 {
+  assert(global_tree.curr != nil)
   global_tree.curr.size[0] = Size{kind, val[0]}
   global_tree.curr.size[1] = Size{kind, val[1]}
 }
 
 layout_width :: proc(kind: Size_Kind, val: f32)
 {
+  assert(global_tree.curr != nil)
   global_tree.curr.size.x = Size{kind, val}
 }
 
 layout_height :: proc(kind: Size_Kind, val: f32)
 {
+  assert(global_tree.curr != nil)
   global_tree.curr.size.y = Size{kind, val}
 }
 
 layout_offset :: proc(off: [2]f32)
 {
+  assert(global_tree.curr != nil)
   global_tree.curr.offset = off
 }
 
 layout_fill_color :: proc(color: [4]f32)
 {
+  assert(global_tree.curr != nil)
   global_tree.curr.color = color
 }
 
 layout_props :: proc(props: bit_set[Box_Prop])
 {
+  assert(global_tree.curr != nil)
   global_tree.curr.props = props
 }
 
 layout_child_align :: proc(align: Alignment)
 {
+  assert(global_tree.curr != nil)
   global_tree.curr.child_align = align
 }
 
+layout_text_size :: proc(size: f32)
+{
+  global_tree.curr.text_size = size
+}
 
-// Widget ////////////////////////////////////////////////////////////////////////////////
+layout_text_line_height :: proc(height: f32)
+{
+  global_tree.curr.text_line_height = height
+}
+
+
+// Widgets ///////////////////////////////////////////////////////////////////////////////
 
 
 box :: proc(name: string, idx: Maybe(int) = nil) -> ^Box
@@ -697,11 +753,15 @@ spacer :: proc(width: Size, height: Size, idx: Maybe(int) = nil) -> ^Box
   return spacer
 }
 
-text :: proc(content: string, idx: Maybe(int) = nil) -> ^Box
+text :: proc(fmt_str: string, fmt_args: ..any, idx: Maybe(int) = nil) -> ^Box
 {
   text := create_box("Text", idx, false)
 
   begin_box(text)
+  layout_text_size(2)
+  layout_text_line_height(1)
+  layout_fill_color({1, 1, 1, 0})
+  content := fmt.aprintf(fmt_str, ..fmt_args, allocator=mem.allocator(global_tree.temp_arena))
   global_tree.curr.text = content
   end_box()
 

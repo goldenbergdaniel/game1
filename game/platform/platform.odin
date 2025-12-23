@@ -240,6 +240,11 @@ get_display_scale :: proc(window: ^Window) -> f32
 	return sdl.GetDisplayContentScale(display_id)
 }
 
+get_display_dpi :: proc(window: ^Window) -> int
+{
+	return cast(int) get_display_scale(window) * 96
+}
+
 get_display_bounds :: proc(window: ^Window) -> [4]f32
 {
 	display_id := sdl.GetDisplayForWindow(window.handle)

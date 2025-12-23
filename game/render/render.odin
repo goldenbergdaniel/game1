@@ -18,18 +18,19 @@ Vertex :: struct
   tint:  v4f32,
   color: v4f32,
   uv:    v2f32,
+  tex:   u32,
 }
 
 Shader :: struct
 {
   id:       u32,
-  uniforms: struct{tex, light: i32},
+  uniforms: struct{tex, fnt, light: i32},
 }
 
 Texture :: struct
 {
   id:     u32,
-  data:   []byte,
+  pixels: []byte,
   width:  i32,
   height: i32,
 }
@@ -37,7 +38,6 @@ Texture :: struct
 Pass :: struct
 {
   shader:      ^Shader,
-  texture:     ^Texture,
   projection:  m3x3f32,
   camera:      m3x3f32,
   viewport:    v4f32,
@@ -87,9 +87,9 @@ create_shader :: #force_inline proc(vsrc, fsrc: string) -> Shader
   else                          do panic("Fatal [render]: Invalid backend selected!")
 }
 
-create_texture :: #force_inline proc(data: []byte, width, height: i32) -> Texture
+create_texture :: #force_inline proc(data: []byte, width, height: int, format := 4) -> Texture
 {
-  /**/ when BACKEND == "opengl" do return gl_create_texture(data, width, height)
+  /**/ when BACKEND == "opengl" do return gl_create_texture(data, i32(width), i32(height), format)
   else                          do panic("Fatal [render]: Invalid backend selected!")
 }
 
@@ -108,7 +108,7 @@ begin_pass :: proc(pass: Pass)
   if !renderer.initialized do panic("Fatal [render]: Renderer is not initialized!")
   if renderer.pass_open do panic("Fatal [render]: Render pass is already open!")
 
-  assert(pass.shader != nil && pass.texture != nil)
+  // assert(pass.shader != nil && pass.texture != nil)
 
   renderer.pass = pass
   renderer.pass_open = true
@@ -151,13 +151,7 @@ push_vertex :: proc(vertex: Vertex)
     draw()
   }
 
-  renderer.vertices[renderer.vertices_count] = Vertex{
-    pos = vertex.pos,
-    tint = vertex.tint,
-    color = vertex.color,
-    uv = vertex.uv,
-  }
-
+  renderer.vertices[renderer.vertices_count] = vertex
   renderer.vertices_count += 1
 }
 
@@ -214,13 +208,8 @@ push_rectangle_indices :: proc()
   renderer.indices[index_count - 1] = layout[5] + offset
 }
 
-coords_from_texture :: proc(
-  texture: ^Texture, 
-  coord:   v2f32,
-  grid:    v2f32,
-) -> (
-  tl, tr, br, bl: v2f32,
-){
+uv_from_texture :: proc(texture: ^Texture, coord, size: v2f32) -> (tl, tr, br, bl: v2f32)
+{
   width := cast(f32) texture.width
   height := cast(f32) texture.height
 
@@ -230,18 +219,18 @@ coords_from_texture :: proc(
   }
 
   tr = {
-    (coord.x + grid.x) / width, 
+    (coord.x + size.x) / width, 
     coord.y / height,
   }
 
   br = {
-    (coord.x + grid.x) / width, 
-    (coord.y + grid.y) / height,
+    (coord.x + size.x) / width, 
+    (coord.y + size.y) / height,
   }
 
   bl = {
     coord.x / width, 
-    (coord.y + grid.y) / height,
+    (coord.y + size.y) / height,
   }
 
   return

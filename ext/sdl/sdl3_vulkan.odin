@@ -1,6 +1,6 @@
 package sdl3
 
-import vk "vendor:vulkan"
+import vk "ext:vulkan"
 
 @(default_calling_convention="c", link_prefix="SDL_")
 foreign lib {

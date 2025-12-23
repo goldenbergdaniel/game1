@@ -6,6 +6,7 @@ struct Vertex
   float tint[4];
   float color[4];
   float uv[2];
+  uint tex;
 };
 
 layout(binding=0)
@@ -23,48 +24,36 @@ readonly buffer ssbo
 
 out vec4 v_tint;
 out vec4 v_color;
+out uint v_tex;
 out vec2 v_tex_coord;
 
-vec2 get_position()
+void main()
 {
-  return vec2(
+  vec2 position = vec2(
     vertices[gl_VertexID].position[0], 
     vertices[gl_VertexID].position[1]
   );
-}
 
-vec4 get_tint()
-{
-  return vec4(
+  gl_Position = u_projection * u_camera * vec4(position.xy, 1.0, 1.0);
+
+  v_tint = vec4(
     vertices[gl_VertexID].tint[0], 
     vertices[gl_VertexID].tint[1], 
     vertices[gl_VertexID].tint[2],
     vertices[gl_VertexID].tint[3]
   );
-}
 
-vec4 get_color()
-{
-  return vec4(
+  v_color = vec4(
     vertices[gl_VertexID].color[0], 
     vertices[gl_VertexID].color[1], 
     vertices[gl_VertexID].color[2],
     vertices[gl_VertexID].color[3]
   );
-}
-
-vec2 get_uv()
-{
-  return vec2(
+  
+  v_tex_coord = vec2(
     vertices[gl_VertexID].uv[0],
     vertices[gl_VertexID].uv[1]
   );
-}
 
-void main()
-{
-  gl_Position = u_projection * u_camera * vec4(get_position().xy, 1.0, 1.0);
-  v_tint = get_tint();
-  v_color = get_color();
-  v_tex_coord = get_uv();
+  v_tex = vertices[gl_VertexID].tex;
 }

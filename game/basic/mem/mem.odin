@@ -34,6 +34,8 @@ init_scratches :: proc "contextless" ()
 	}
 }
 
+alloc :: runtime.mem_alloc_bytes
+
 copy :: #force_inline proc "contextless" (dst, src: rawptr, len: int) -> rawptr
 {
 	intrinsics.mem_copy(dst, src, len)

@@ -11,7 +11,7 @@ main :: proc()
   target := fmt.tprintf("%s_%s", ODIN_OS_STRING, ODIN_ARCH_STRING)
 
   // - Mode ---
-  mode := "debug"
+  mode := "run"
   if len(os2.args) > 1
   {
     mode = os2.args[1]
@@ -23,7 +23,7 @@ main :: proc()
 
   // - Game ---
   game_process_desc: os2.Process_Desc
-  if mode == "debug"
+  if mode == "run" || mode == "debug"
   {
     game_process_desc = os2.Process_Desc{
       command = {
@@ -32,7 +32,8 @@ main :: proc()
         "game", 
         fmt.tprintf("-out:%s.bin", PACKAGE),
         "-collection:ext=ext", 
-        "-debug",
+        "-debug" if mode == "debug" else "",
+        "-keep-executable" if mode == "debug" else "",
         "-extra-linker-flags:\"-fuse-ld=mold\"",
         // "-sanitize:address",
       },

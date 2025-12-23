@@ -1,17 +1,9 @@
 package game
 
-import ft "ext:freetype"
+import "basic/mem"
 import "basic/vmath"
-import "platform"
 import "render"
-
-@(private="file")
-global: struct
-{
-  library:     ft.Library,
-  face:        ft.Face,
-  initialized: bool,
-}
+import "ui"
 
 
 // Sprite /////////////////////////////////////////////////////////////////////////////////////////
@@ -33,7 +25,6 @@ draw_sprite :: proc(
   color:  v4f32 = {0, 0, 0, 0},
 ){
   sprite_data := &res.sprites[sprite]
-  texture := render.get_pass().texture
   dim := scl * sprite_data.grid
 
   xform := vmath.translation_3x3f(pos - dim * sprite_data.pivot)
@@ -47,12 +38,14 @@ draw_sprite :: proc(
   p3 := xform * v3f32{1, 1, 1}
   p4 := xform * v3f32{0, 1, 1}
 
-  tl, tr, br, bl := render.coords_from_texture(texture, sprite_data.coord, sprite_data.grid)
+  tl, tr, br, bl := render.uv_from_texture(&res.textures[.Sprite_Atlas], 
+                                           sprite_data.coord, 
+                                           sprite_data.grid)
 
-  render.push_vertex({p1.xy, tint, color, tl})
-  render.push_vertex({p2.xy, tint, color, tr})
-  render.push_vertex({p3.xy, tint, color, br})
-  render.push_vertex({p4.xy, tint, color, bl})
+  render.push_vertex({p1.xy, tint, color, tl, 0})
+  render.push_vertex({p2.xy, tint, color, tr, 0})
+  render.push_vertex({p3.xy, tint, color, br, 0})
+  render.push_vertex({p4.xy, tint, color, bl, 0})
   render.push_rectangle_indices()
 }
 
@@ -60,36 +53,44 @@ draw_sprite :: proc(
 // Text //////////////////////////////////////////////////////////////////////////////////
 
 
-init_font :: proc(font: []byte) -> ft.Error
-{
-  ft.init_freetype(&global.library) or_return
-  ft.new_memory_face(global.library, raw_data(font), i64(len(font)), 0, &global.face) or_return
-
-  global.initialized = true
-
-  return nil
-}
-
 draw_text :: proc(
-  text:  string,
-  pos:   v2f32,
-  size:  int,
-  color: v4f32 = {1, 1, 1, 0},
+  text:        string,
+  pos:         v2f32,
+  size:        f32 = 1,
+  line_height: f32 = 1,
+  color:       v4f32 = {1, 1, 1, 0},
 ){
-  ft_err: ft.Error
-
-  dpi := cast(u32) platform.get_display_scale(&user.window) * 96
-  ft_err = ft.set_char_size(global.face, 0, cast(ft.F26Dot6) (size * 64), dpi, dpi)
-  if ft_err != nil
+  cursor: v2f32
+  for r in text
   {
-    println("Error [freetype]: Failed to set character size!", ft_err)
-    return
-  }
+    if r == '\n'
+    {
+      cursor.x = 0
+      cursor.y += 15 * line_height * size
+      continue
+    }
 
-  for char in text
-  {
-    // idx := ft.get_char_index(global.face, u64(char))
-    // printf("%c: %i\n", char, idx)
+    glyph := ui.glyph_from_rune(r)
+    tl, tr, br, bl := render.uv_from_texture(&res.textures[.Glyph_Atlas], 
+                                             array_cast(glyph.coord, f32), 
+                                             {f32(glyph.width), f32(glyph.height)})
+
+    offset := pos + {cursor.x + glyph.bearing.x * size, cursor.y - glyph.bearing.y * size}
+    xform := vmath.translation_3x3f(offset)
+    cursor += glyph.advance * size
+
+    xform *= vmath.scale_3x3f({f32(glyph.width), f32(glyph.height)} * size)
+
+    p1 := xform * v3f32{0, 0, 1}
+    p2 := xform * v3f32{1, 0, 1}
+    p3 := xform * v3f32{1, 1, 1}
+    p4 := xform * v3f32{0, 1, 1}
+
+    render.push_vertex({p1.xy, {1, 1, 1, 1}, color, tl, u32(1)})
+    render.push_vertex({p2.xy, {1, 1, 1, 1}, color, tr, u32(1)})
+    render.push_vertex({p3.xy, {1, 1, 1, 1}, color, br, u32(1)})
+    render.push_vertex({p4.xy, {1, 1, 1, 1}, color, bl, u32(1)})
+    render.push_rectangle_indices()
   }
 }
 
