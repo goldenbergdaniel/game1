@@ -132,12 +132,6 @@ render_gui_test :: proc()
               color=box.color)
   }
 
-  // draw_text("\"The light shines in the darkness,\nand the darkness has not overcome it.\"\nJohn 1:5", 
-  //            pos={100, 100}, 
-  //            size=4, 
-  //            line_height=1,
-  //            color={1, 1, 1, 0})
-
   render.end_pass()
 
   mem.arena_clear(&global.ui_frame_arena)

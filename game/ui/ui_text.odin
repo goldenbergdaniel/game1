@@ -77,7 +77,7 @@ load_font_from_bytes :: proc(bytes: []byte, size: int, arena: ^mem.Arena) -> (fo
     char_idx := ft.get_char_index(face, u64(c))
     if char_idx != 0
     {
-      ft.load_glyph(face, char_idx, {.Render}) or_return
+      ft.load_glyph(face, char_idx, {.Render, .No_Hinting}) or_return
 
       glyph := Glyph{
         char = rune(c),
@@ -157,12 +157,12 @@ load_font_from_bytes :: proc(bytes: []byte, size: int, arena: ^mem.Arena) -> (fo
       atlas_pos[.Abs].x += glyph.width + 1
     }
 
-    // atlas, _ := image.pixels_to_image(transmute([][1]byte) atlas_bmp, atlas_width, atlas_height)
-    // err := netpbm.save_to_file("atlas.pbm", &atlas)
-    // if err != nil
-    // {
-      // fmt.eprintln("Error [ui]: Failed to save atlas to file.", err)
-    // }
+    atlas, _ := image.pixels_to_image(transmute([][1]byte) atlas_bmp, atlas_width, atlas_height)
+    err := netpbm.save_to_file("atlas.pbm", &atlas)
+    if err != nil
+    {
+      fmt.eprintln("Error [ui]: Failed to save atlas to file.", err)
+    }
 
     font = Font{
       pixels = atlas_bmp,

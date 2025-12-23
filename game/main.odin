@@ -26,6 +26,7 @@ Screen :: enum
 {
   Main_Menu, 
   Game, 
+  Scratch,
 }
 
 user: User
@@ -152,6 +153,9 @@ main :: proc()
       alpha := accumulator / WORLD_STEP
       interpolate_games(&curr_game, &prev_game, &res_game, f32(alpha))
       game_render(&res_game)
+
+    case .Scratch:
+      render_scratch()
     }
 
     render_end_tick = time.tick_now()

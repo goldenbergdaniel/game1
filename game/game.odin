@@ -818,6 +818,12 @@ render_scratch :: proc()
 
   render.push_triangle(vertices)
 
+  draw_text("\"The light shines in the darkness,\nand the darkness has not overcome it.\"\nJohn 1:5", 
+             pos={100, 100}, 
+             size=0.5, 
+             line_height=1,
+             color={1, 1, 1, 0})
+
   render.end_pass()
 }
 
