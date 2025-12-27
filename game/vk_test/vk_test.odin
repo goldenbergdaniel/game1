@@ -80,8 +80,10 @@ g: struct
   {
     vertices:      vk.DeviceAddress,
   },
-  vertices:        [3]Vertex,
+  vertices:        [4]Vertex,
   vertex_buf:      Buffer,
+  indices:         [6]u16,
+  index_buf:       Buffer,
 }
 
 vma_init :: proc()
@@ -157,7 +159,7 @@ vk_init_instance :: proc()
     sType = .INSTANCE_CREATE_INFO,
     pApplicationInfo = &{
       sType = .APPLICATION_INFO,
-      pApplicationName = "GAME",
+      pApplicationName = "VULKAN",
       applicationVersion = vk.MAKE_VERSION(1, 0, 0),
       engineVersion = vk.MAKE_VERSION(1, 0, 0),
       apiVersion = vk.API_VERSION_1_4,
@@ -247,7 +249,7 @@ vk_init_device :: proc()
     vk.KHR_SWAPCHAIN_EXTENSION_NAME,
     vk.KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
     vk.KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
-    vk.EXT_SHADER_OBJECT_EXTENSION_NAME,
+    // vk.EXT_SHADER_OBJECT_EXTENSION_NAME,
   }
 
   next = &vk.PhysicalDeviceVulkan12Features{
@@ -264,18 +266,13 @@ vk_init_device :: proc()
     synchronization2 = true,
   }
 
-  next = &vk.PhysicalDeviceShaderObjectFeaturesEXT{
-    sType = .PHYSICAL_DEVICE_SHADER_OBJECT_FEATURES_EXT,
-    pNext = next,
-    shaderObject = true,
-  }
+  // next = &vk.PhysicalDeviceShaderObjectFeaturesEXT{
+    // sType = .PHYSICAL_DEVICE_SHADER_OBJECT_FEATURES_EXT,
+    // pNext = next,
+    // shaderObject = true,
+  // }
 
   vk.GetPhysicalDeviceMemoryProperties(g.device.physical, &g.device.memory_props)
-
-  physical_device_features: vk.PhysicalDeviceFeatures
-  vk.GetPhysicalDeviceFeatures(g.device.physical, &physical_device_features)
-  assert(physical_device_features.geometryShader == true)
-  assert(physical_device_features.tessellationShader == true)
 
   result = vk.CreateDevice(g.device.physical, &{
     sType = .DEVICE_CREATE_INFO,
@@ -496,13 +493,6 @@ main :: proc()
 
   result = vk.CreateCommandPool(g.device.handle, &{
     sType = .COMMAND_POOL_CREATE_INFO,
-    flags = {.RESET_COMMAND_BUFFER},
-    queueFamilyIndex = g.device.queue_family_idx,
-  }, nil, &g.frame_cmd_pool)
-  vk_check(result)
-
-  result = vk.CreateCommandPool(g.device.handle, &{
-    sType = .COMMAND_POOL_CREATE_INFO,
     flags = {.TRANSIENT},
     queueFamilyIndex = g.device.queue_family_idx,
   }, nil, &g.copy_cmd_pool)
@@ -514,6 +504,13 @@ main :: proc()
     level = .PRIMARY,
     commandBufferCount = 1,
   }, &g.copy_cmd)
+  vk_check(result)
+
+  result = vk.CreateCommandPool(g.device.handle, &{
+    sType = .COMMAND_POOL_CREATE_INFO,
+    flags = {.RESET_COMMAND_BUFFER},
+    queueFamilyIndex = g.device.queue_family_idx,
+  }, nil, &g.frame_cmd_pool)
   vk_check(result)
 
   // - Frame data ---
@@ -536,20 +533,53 @@ main :: proc()
     vk_check(result)
   }
 
-  g.viewport = vk.Viewport{
-    x = 0,
-    y = 0,
-    width = cast(f32) g.swapchain.extent.width, 
-    height = cast(f32) g.swapchain.extent.height, 
-    minDepth = 0,
-    maxDepth = 1,
-  }
+  // - Vertex and index buffer ---
+  {
+    vertices_size: vk.DeviceSize = len(g.vertices) * size_of(Vertex)
+    indices_size: vk.DeviceSize = len(g.vertices) * size_of(Vertex)
 
-  g.scissor = vk.Rect2D{
-    offset = {0, 0},
-    extent = g.swapchain.extent,
-  }
+    staging_buf := vk_create_buffer(vertices_size + indices_size, 
+                                    buf_flags={.TRANSFER_SRC}, 
+                                    alloc_flags={.MAPPED}, 
+                                    mem_flags={.HOST_VISIBLE})
 
+    g.vertex_buf = vk_create_buffer(vertices_size, 
+                                    buf_flags={.STORAGE_BUFFER, .TRANSFER_DST, .SHADER_DEVICE_ADDRESS}, 
+                                    alloc_flags={}, 
+                                    mem_flags={.DEVICE_LOCAL})
+
+    g.vertex_buf.address = vk.GetBufferDeviceAddress(g.device.handle, &{
+      sType = .BUFFER_DEVICE_ADDRESS_INFO,
+      buffer = g.vertex_buf.handle,
+    })
+
+    g.vertices = {
+      {{-0.5, -0.5, 0.0, 0.0}, {1.0, 0.0, 1.0, 1.0}},
+      {{ 0.5, -0.5, 0.0, 0.0}, {0.0, 1.0, 1.0, 1.0}},
+      {{ 0.5,  0.5, 0.0, 0.0}, {0.0, 0.0, 1.0, 1.0}},
+      {{-0.5,  0.5, 0.0, 0.0}, {1.0, 1.0, 1.0, 1.0}},
+    }
+
+    mem.copy(staging_buf.info.pMappedData, raw_data(g.vertices[:]), vertices_size)
+    // vk_copy_buffer(&staging_buf, &g.vertex_buf, verticies_size)
+
+    g.index_buf = vk_create_buffer(indices_size, 
+                                   buf_flags={.INDEX_BUFFER, .TRANSFER_DST}, 
+                                   alloc_flags={}, 
+                                   mem_flags={.DEVICE_LOCAL})
+
+    g.indices = {
+      0, 1, 3,
+      1, 2, 3,
+    }
+
+    indices_offset := rawptr(uintptr(staging_buf.info.pMappedData) + uintptr(vertices_size))
+    mem.copy(indices_offset, raw_data(g.indices[:]), indices_size)
+
+    vk_copy_buffers(&staging_buf, {&g.vertex_buf, &g.index_buf}, {vertices_size, indices_size})
+    vk_destroy_buffer(&staging_buf)
+  }
+  
   // - Pipeline ---
   {
     vs_data, _ := os.read_entire_file("game/vk_test/shaders/spirv/shader.vert.spv", context.allocator)
@@ -685,39 +715,6 @@ main :: proc()
     vk.DestroyShaderModule(g.device.handle, vs_module, nil)
     vk.DestroyShaderModule(g.device.handle, fs_module, nil)
   }
-
-  // - Vertex buffer ---
-  {
-    size: vk.DeviceSize = len(g.vertices) * size_of(Vertex)
-    staging_buf := vk_create_buffer(size, 
-                                    buf_flags={.TRANSFER_SRC}, 
-                                    alloc_flags={.MAPPED}, 
-                                    mem_flags={.HOST_VISIBLE})
-
-    g.vertices = {
-      {{-0.5,  0.5, 0.0, 0.0}, {1.0, 0.0, 0.0, 1.0}},
-      {{ 0.0, -0.5, 0.0, 0.0}, {0.0, 1.0, 0.0, 1.0}},
-      {{ 0.5,  0.5, 0.0, 0.0}, {0.0, 0.0, 1.0, 1.0}},
-    }
-
-    mem.copy(staging_buf.info.pMappedData, raw_data(g.vertices[:]), int(size))
-
-    g.vertex_buf = vk_create_buffer(size, 
-                                    buf_flags={.STORAGE_BUFFER, .TRANSFER_DST, .SHADER_DEVICE_ADDRESS}, 
-                                    alloc_flags={}, 
-                                    mem_flags={.DEVICE_LOCAL})
-
-    g.vertex_buf.address = vk.GetBufferDeviceAddress(g.device.handle, &{
-      sType = .BUFFER_DEVICE_ADDRESS_INFO,
-      buffer = g.vertex_buf.handle,
-    })
-
-    vk_copy_buffer(&staging_buf, &g.vertex_buf, size)
-
-    vk_destroy_buffer(&staging_buf)
-  }
-  
-  vk.ResetCommandPool(g.device.handle, g.copy_cmd_pool, {})
   
   running := true
   for running
@@ -752,8 +749,6 @@ main :: proc()
                                     &image_idx)
     vk_check(result)
     
-    render_done_sem := g.swapchain.image_ready_sems[image_idx]
-
     result = vk.BeginCommandBuffer(frame.cmd, &{
       sType = .COMMAND_BUFFER_BEGIN_INFO,
       flags = {.ONE_TIME_SUBMIT},
@@ -806,13 +801,30 @@ main :: proc()
 
     vk.CmdBindPipeline(frame.cmd, .GRAPHICS, g.pipeline)
 
+    g.viewport = vk.Viewport{
+      x = 0,
+      y = 0,
+      width = cast(f32) g.swapchain.extent.width, 
+      height = cast(f32) g.swapchain.extent.height, 
+      minDepth = 0,
+      maxDepth = 1,
+    }
+
     vk.CmdSetViewport(frame.cmd, 0, 1, &g.viewport)
+
+    g.scissor = vk.Rect2D{
+      offset = {0, 0},
+      extent = g.swapchain.extent,
+    }
+
     vk.CmdSetScissor(frame.cmd, 0, 1, &g.scissor)
 
-    g.push_constants.vertices = g.vertex_buf.address;
+    g.push_constants.vertices = g.vertex_buf.address
     vk.CmdPushConstants(frame.cmd, g.pipeline_layout, {.VERTEX}, 0, size_of(g.push_constants), &g.push_constants)
 
-    vk.CmdDraw(frame.cmd, 3, 1, 0, 0)
+    vk.CmdBindIndexBuffer(frame.cmd, g.index_buf.handle, 0, .UINT16)
+
+    vk.CmdDrawIndexed(frame.cmd, 6, 1, 0, 0, 0)
 
     // - END DRAW ---
 
@@ -835,7 +847,6 @@ main :: proc()
     }
     vk.CmdPipelineBarrier2(frame.cmd, &{
       sType = .DEPENDENCY_INFO,
-      dependencyFlags = {},
       imageMemoryBarrierCount = 1,
       pImageMemoryBarriers = &transition_to_present_barrier,
     })
@@ -845,29 +856,31 @@ main :: proc()
     result = vk.EndCommandBuffer(frame.cmd)
     vk_check(result)
 
-    wait_stage_flags := vk.PipelineStageFlags{.COLOR_ATTACHMENT_OUTPUT}
+    render_done_sem := g.swapchain.image_ready_sems[image_idx]
+
     submit_info := vk.SubmitInfo{
       sType = .SUBMIT_INFO,
       commandBufferCount = 1,
       pCommandBuffers = &frame.cmd,
       waitSemaphoreCount = 1,
       pWaitSemaphores = &frame.present_done_sem,
-      pWaitDstStageMask = &wait_stage_flags,
+      pWaitDstStageMask = &vk.PipelineStageFlags{.COLOR_ATTACHMENT_OUTPUT},
       signalSemaphoreCount = 1,
       pSignalSemaphores = &render_done_sem,
     }
     result = vk.QueueSubmit(g.device.queue, 1, &submit_info, frame.fence)
     vk_check(result)
 
-    present_info := vk.PresentInfoKHR{
+    // - PRESENT ---
+
+    result = vk.QueuePresentKHR(g.device.queue, &{
       sType = .PRESENT_INFO_KHR,
       waitSemaphoreCount = 1,
       pWaitSemaphores = &render_done_sem,
       swapchainCount = 1,
       pSwapchains = &g.swapchain.handle,
       pImageIndices = &image_idx,
-    }
-    result = vk.QueuePresentKHR(g.device.queue, &present_info)
+    })
     vk_check(result)
 
     g.frame_idx = (g.frame_idx + 1) % NUM_FRAMES_IN_FLIGHT
@@ -875,6 +888,7 @@ main :: proc()
 
   vk.DeviceWaitIdle(g.device.handle)
 
+  vk_destroy_buffer(&g.index_buf)
   vk_destroy_buffer(&g.vertex_buf)
 
   for i in 0..<NUM_FRAMES_IN_FLIGHT
@@ -927,7 +941,7 @@ vk_create_buffer :: proc(
   return buffer
 }
 
-vk_copy_buffer :: proc(src, dst: ^Buffer, size: vk.DeviceSize)
+vk_copy_buffers :: proc(src: ^Buffer, dsts: []^Buffer, sizes: []vk.DeviceSize)
 {
   result := vk.BeginCommandBuffer(g.copy_cmd, &{
     sType = .COMMAND_BUFFER_BEGIN_INFO,
@@ -935,19 +949,24 @@ vk_copy_buffer :: proc(src, dst: ^Buffer, size: vk.DeviceSize)
   })
   vk_check(result)
 
-  vk.CmdCopyBuffer(g.copy_cmd, src.handle, dst.handle, 1, &vk.BufferCopy{0, 0, size})
+  src_offset: vk.DeviceSize
+  for i in 0..<len(dsts)
+  {
+    vk.CmdCopyBuffer(g.copy_cmd, src.handle, dsts[i].handle, 1, &vk.BufferCopy{src_offset, 0, sizes[i]})
+    src_offset += sizes[i]
+  }
 
   vk.EndCommandBuffer(g.copy_cmd)
 
-  submit_info := vk.SubmitInfo{
+  result = vk.QueueSubmit(g.device.queue, 1, &vk.SubmitInfo{
     sType = .SUBMIT_INFO,
     commandBufferCount = 1,
     pCommandBuffers = &g.copy_cmd,
-  }
-  result = vk.QueueSubmit(g.device.queue, 1, &submit_info, 0)
+  }, 0)
   vk_check(result)
 
   vk.QueueWaitIdle(g.device.queue)
+  vk.ResetCommandPool(g.device.handle, g.copy_cmd_pool, {})
 }
 
 vk_destroy_buffer :: proc(buffer: ^Buffer)
@@ -1005,7 +1024,7 @@ vk_check :: proc(result: vk.Result, location := #caller_location)
 {
   if result == .TIMEOUT || result == .SUBOPTIMAL_KHR
   {
-    fmt.println("Info [render_vk]:", result, "at", location)
+    fmt.println("\033[33mWarning [render_vk]:\033[0m", result, "at", location)
   }
   else if result != .SUCCESS
   {
