@@ -11,6 +11,17 @@ MAKE_VERSION :: proc "contextless" (major, minor, patch: u32) -> u32 {
 	return (major<<22) | (minor<<12) | (patch)
 }
 
+MAJOR_MASK   :: 0xFFC00000  // bits 31..22
+MINOR_MASK   :: 0x003FF000  // bits 21..12
+PATCH_MASK   :: 0x00000FFF  // bits 11..0
+
+EXTRACT_VERSION :: proc "contextless" (version: u32) -> (major, minor, patch: u32) {
+  major = (version & MAJOR_MASK) >> 22
+  minor = (version & MINOR_MASK) >> 12
+  patch = version & PATCH_MASK
+  return major, minor, patch
+}
+
 // Base types
 Flags         :: distinct u32
 Flags64       :: distinct u64
@@ -28,14 +39,14 @@ RemoteAddressNV :: distinct rawptr // Declared inline before MemoryGetRemoteAddr
 
 // Base constants
 LOD_CLAMP_NONE                        :: 1000.0
-REMAINING_MIP_LEVELS                  :: ~u32(0)
-REMAINING_ARRAY_LAYERS                :: ~u32(0)
-WHOLE_SIZE                            :: ~u64(0)
-ATTACHMENT_UNUSED                     :: ~u32(0)
+REMAINING_MIP_LEVELS                  :: u32(-1)
+REMAINING_ARRAY_LAYERS                :: u32(-1)
+WHOLE_SIZE                            :: u64(-1)
+ATTACHMENT_UNUSED                     :: u32(-1)
 TRUE                                  :: 1
 FALSE                                 :: 0
-QUEUE_FAMILY_IGNORED                  :: ~u32(0)
-SUBPASS_EXTERNAL                      :: ~u32(0)
+QUEUE_FAMILY_IGNORED                  :: u32(-1)
+SUBPASS_EXTERNAL                      :: u32(-1)
 MAX_PHYSICAL_DEVICE_NAME_SIZE         :: 256
 UUID_SIZE                             :: 16
 MAX_MEMORY_TYPES                      :: 32
