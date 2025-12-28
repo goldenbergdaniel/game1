@@ -6,24 +6,35 @@ struct Vertex
 {
 	vec4 position;
 	vec4 color;
-}; 
+};
 
-layout(location=0) out vec4 v_color;
+layout(binding=0) 
+readonly uniform Uniform_Buffer
+{
+  vec4 light;
+} uniforms;
 
-layout(buffer_reference, std430) readonly buffer Vertex_Buffer
+layout(buffer_reference, std430) 
+readonly buffer Vertex_Buffer
 {
 	Vertex vertices[];
 };
 
-layout(push_constant) uniform Push_Constants
+layout(push_constant, std430) 
+uniform Push_Constants
 {
+  mat4 transform;
   Vertex_Buffer vertex_buf;
 } constants;
+
+layout(location=0) out vec4 v_color;
+layout(location=1) out vec4 v_light;
 
 void main()
 {
   Vertex vertex = constants.vertex_buf.vertices[gl_VertexIndex];
 
-  gl_Position = vec4(vertex.position.xy, 0, 1);
+  gl_Position = constants.transform * vertex.position;
   v_color = vertex.color;
+  v_light = uniforms.light;
 }
