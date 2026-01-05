@@ -36,18 +36,18 @@ init_scratches :: proc "contextless" ()
 
 alloc :: runtime.mem_alloc_bytes
 
-copy :: #force_inline proc "contextless" (dst, src: rawptr, len: int) -> rawptr
+copy :: #force_inline proc "contextless" (dst, src: rawptr, #any_int len: int) -> rawptr
 {
 	intrinsics.mem_copy(dst, src, len)
 	return dst
 }
 
-set :: #force_inline proc "contextless" (data: rawptr, value: byte, len: int) -> rawptr
+set :: #force_inline proc "contextless" (data: rawptr, value: byte, #any_int len: int) -> rawptr
 {
 	return runtime.memset(data, i32(value), len)
 }
 
-zero :: #force_inline proc "contextless" (data: rawptr, len: int) -> rawptr
+zero :: #force_inline proc "contextless" (data: rawptr, #any_int len: int) -> rawptr
 {
 	intrinsics.mem_zero(data, len)
 	return data

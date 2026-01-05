@@ -16,7 +16,7 @@ Endian :: enum
   LE,
 }
 
-create_buffer :: proc(data: []byte, kind: Endian) -> Buffer
+make_buffer :: proc(data: []byte, kind: Endian) -> Buffer
 {
   return {data, 0, 0, kind}
 }
@@ -126,48 +126,6 @@ read_bytes :: proc(buffer: ^Buffer, size := -1) -> []byte
   end := size == -1 ? len(buffer.data) : buffer.r_pos + size
   result := buffer.data[buffer.r_pos:end]
   buffer.r_pos += size == -1 ? end : size
-  return result
-}
-
-read_until :: proc
-{
-  read_until_byte,
-  read_until_bytes,
-}
-
-read_until_byte :: proc(buffer: ^Buffer, target: byte) -> []byte
-{
-  result: []byte
-  for b, i in buffer.data[buffer.r_pos:]
-  {
-    if b == target
-    {
-      result = buffer.data[buffer.r_pos:buffer.r_pos+i+1]
-      break
-    }
-  }
-
-  return result
-}
-
-read_until_bytes :: proc(buffer: ^Buffer, target: []byte) -> []byte
-{
-  result: []byte
-
-  for i in 0..<len(buffer.data[buffer.r_pos:])
-  {
-    for j in i..<len(buffer.data[buffer.r_pos:])
-    {
-      if i == j do continue
-      
-      if equal(buffer.data[i:j], target)
-      {
-        result = buffer.data[buffer.r_pos:buffer.r_pos+i+1]
-        break
-      }
-    }
-  }
-
   return result
 }
 

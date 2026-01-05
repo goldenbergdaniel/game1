@@ -76,6 +76,7 @@ init_renderer :: #force_inline proc(window: ^platform.Window)
   renderer.window = window
   
   /**/ when BACKEND == "opengl" do gl_init(window)
+  else when BACKEND == "vulkan" do vk_test(window)
   else                          do panic("Fatal [render]: Invalid backend selected!")
 
   renderer.initialized = true

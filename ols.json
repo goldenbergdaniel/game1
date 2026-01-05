@@ -7,6 +7,7 @@
     }
   ],
   "enable_document_symbols": true,
+  "enable_document_links": false,
   "enable_semantic_tokens": true,
   "enable_format": false,
   "enable_hover": true,
@@ -17,12 +18,20 @@
   "enable_checker_only_saved": true,
   "verbose": true,
   "checker_args": "-vet-style -vet-cast",
-  "profile": "main",
+  "profile": "vk_test",
   "profiles":
   [
     {
       "name": "main", 
       "checker_path": ["game"]
+    },
+    {
+      "name": "vk_test", 
+      "checker_path": ["vk_test"]
+    },
+    {
+      "name": "other", 
+      "checker_path": ["game/wav"]
     }
   ]
 }

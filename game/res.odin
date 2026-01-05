@@ -2,7 +2,6 @@
 package game
 
 import "core:image/qoi"
-import "core:os/os2"
 import "basic/mem"
 import "platform"
 import "render"
@@ -20,7 +19,6 @@ Resources :: struct
   textures:     [Texture_Name]render.Texture,
   sprites:      [Sprite_Name]Sprite,
   sounds:       [Sound_Name]Sound,
-  font:         []byte,
   animations:   [Animation_Name]Animation_Desc,
   particles:    [Particle_Name]Particle_Desc,
   creatures:    [Creature_Kind]Creature_Desc,

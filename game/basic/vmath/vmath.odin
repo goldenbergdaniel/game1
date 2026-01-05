@@ -300,6 +300,7 @@ vectorize :: proc(mat: ^[$R][$C]$T, math_proc: proc(T) -> T)
 
 m2f32 :: matrix[2,2]f32
 m3f32 :: matrix[3,3]f32
+m4f32 :: matrix[4,4]f32
 
 @(require_results)
 ident_2x2f :: #force_inline proc(val: f32) -> m2f32
@@ -317,6 +318,17 @@ ident_3x3f :: #force_inline proc(val: f32) -> m3f32
     val, 0, 0,
     0, val, 0,
     0, 0, val,
+  }
+}
+
+@(require_results)
+ident_4x4f :: #force_inline proc(val: f32) -> m4f32
+{
+  return {
+    val, 0, 0, 0,
+    0, val, 0, 0,
+    0, 0, val, 0,
+    0, 0, 0, val,
   }
 }
 

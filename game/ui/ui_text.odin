@@ -77,7 +77,7 @@ load_font_from_bytes :: proc(bytes: []byte, size: int, arena: ^mem.Arena) -> (fo
     char_idx := ft.get_char_index(face, u64(c))
     if char_idx != 0
     {
-      ft.load_glyph(face, char_idx, {.Render, .No_Hinting}) or_return
+      ft.load_glyph(face, char_idx, {.Render}) or_return
 
       glyph := Glyph{
         char = rune(c),

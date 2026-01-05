@@ -84,6 +84,9 @@ create_window :: proc(desc: Window_Desc, arena: ^mem.Arena) -> Window
 	else
 	{
 		window_flags += {.OPENGL}
+		// window_flags += {.VULKAN}
+
+		// sdl.Vulkan_LoadLibrary(nil)
 
 		sdl.GL_SetAttribute(.CONTEXT_MAJOR_VERSION, 4)
 		sdl.GL_SetAttribute(.CONTEXT_MINOR_VERSION, 6)
@@ -267,3 +270,4 @@ imgui_end :: proc()
 }
 
 gl_set_proc_address :: sdl.gl_set_proc_address
+vk_get_proc_address :: sdl.Vulkan_GetVkGetInstanceProcAddr

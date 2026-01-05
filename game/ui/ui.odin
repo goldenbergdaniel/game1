@@ -585,7 +585,7 @@ begin_tree :: proc(
   global_tree = tree
 
   layout_size(.Pixels, window_size)
-  layout_fill_color(background_color)
+  layout_color(background_color)
 }
 
 end_tree :: proc()
@@ -704,7 +704,7 @@ layout_offset :: proc(off: [2]f32)
   global_tree.curr.offset = off
 }
 
-layout_fill_color :: proc(color: [4]f32)
+layout_color :: proc(color: [4]f32)
 {
   assert(global_tree.curr != nil)
   global_tree.curr.color = color
@@ -760,7 +760,7 @@ text :: proc(fmt_str: string, fmt_args: ..any, idx: Maybe(int) = nil) -> ^Box
   begin_box(text)
   layout_text_size(2)
   layout_text_line_height(1)
-  layout_fill_color({1, 1, 1, 0})
+  layout_color({1, 1, 1, 0})
   content := fmt.aprintf(fmt_str, ..fmt_args, allocator=mem.allocator(global_tree.temp_arena))
   global_tree.curr.text = content
   end_box()
