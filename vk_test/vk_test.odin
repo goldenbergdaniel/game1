@@ -51,6 +51,13 @@ Texture :: struct
   info:       vma.AllocationInfo,
 }
 
+Pipeline :: struct
+{
+  handle:        vk.Pipeline,
+  layout:        vk.PipelineLayout,
+  
+}
+
 Vertex :: struct
 {
   position: [3]f32,
@@ -84,19 +91,20 @@ g: struct
   burst_cmd_pool:    vk.CommandPool,
   burst_cmd:         vk.CommandBuffer,
   burst_fence:       vk.Fence,
-  pipeline:          vk.Pipeline,
-  pipeline_layout:   vk.PipelineLayout,
-  texture:           Texture,
-  texture_desc_set:  vk.DescriptorSet,
-  texture_layout:    vk.DescriptorSetLayout,
+  pipelines:         [enum{Main, Post}]Pipeline,
+  textures:          [enum{Smile, Screen}]Texture,
   sampler:           vk.Sampler,
   viewport:          vk.Viewport,
   scissor:           vk.Rect2D,
 
-  push_constants:    struct
+  main_constants:    struct
   {
     transform:       matrix[4,4]f32,
     vertex_addr:     vk.DeviceAddress,
+  },
+  post_constants:    struct
+  {
+    enabled:         b32,
   },
   uniforms:          struct
   {
@@ -167,9 +175,9 @@ vk_init_instance :: proc()
       user_data: rawptr,
     ) -> b32 {
       context = runtime.default_context()
-      /**/ if .ERROR in severity do fmt.eprintln("\033[31mError [render_vk]:\033[0m", callback_data.pMessage)
-      else if .WARNING in severity do fmt.eprintln("\033[43mWarning [render_vk]:\033[0m", callback_data.pMessage)
-      else if .INFO in severity do fmt.eprintln("Info [render_vk]:", callback_data.pMessage)
+      /**/ if .ERROR in severity do fmt.eprintln("\033[31m[ERROR][render_vk]:\033[0m", callback_data.pMessage)
+      else if .WARNING in severity do fmt.eprintln("\033[43m[WARNING][render_vk]:\033[0m", callback_data.pMessage)
+      else if .INFO in severity do fmt.eprintln("[INFO][render_vk]:", callback_data.pMessage)
       return false
     },
     pNext = &layer_settings_ci,
@@ -458,27 +466,24 @@ main :: proc()
 
   result: vk.Result
 
-  result = vk.CreateCommandPool(g.device.handle, &{
+  vk_check(vk.CreateCommandPool(g.device.handle, &{
     sType = .COMMAND_POOL_CREATE_INFO,
     flags = {.TRANSIENT},
     queueFamilyIndex = g.device.queue_family_idx,
-  }, nil, &g.burst_cmd_pool)
-  vk_check(result)
+  }, nil, &g.burst_cmd_pool))
 
-  result = vk.AllocateCommandBuffers(g.device.handle, &{
+  vk_check(vk.AllocateCommandBuffers(g.device.handle, &{
     sType = .COMMAND_BUFFER_ALLOCATE_INFO,
     commandPool = g.burst_cmd_pool,
     level = .PRIMARY,
     commandBufferCount = 1,
-  }, &g.burst_cmd)
-  vk_check(result)
+  }, &g.burst_cmd))
 
-  result = vk.CreateCommandPool(g.device.handle, &{
+  vk_check(vk.CreateCommandPool(g.device.handle, &{
     sType = .COMMAND_POOL_CREATE_INFO,
     flags = {.RESET_COMMAND_BUFFER},
     queueFamilyIndex = g.device.queue_family_idx,
-  }, nil, &g.frame_cmd_pool)
-  vk_check(result)
+  }, nil, &g.frame_cmd_pool))
 
   desc_pool_sizes := [2]vk.DescriptorPoolSize{
     {
@@ -486,41 +491,36 @@ main :: proc()
       type = .UNIFORM_BUFFER,
     },
     {
-      descriptorCount = NUM_FRAMES_IN_FLIGHT,
+      descriptorCount = NUM_FRAMES_IN_FLIGHT * 2,
       type = .COMBINED_IMAGE_SAMPLER,
     },
   }
 
-  result = vk.CreateDescriptorPool(g.device.handle, &{
+  vk_check(vk.CreateDescriptorPool(g.device.handle, &{
     sType = .DESCRIPTOR_POOL_CREATE_INFO,
     maxSets = NUM_FRAMES_IN_FLIGHT,
     poolSizeCount = len(desc_pool_sizes),
     pPoolSizes = raw_data(desc_pool_sizes[:]),
-  }, nil, &g.desc_pool)
+  }, nil, &g.desc_pool))
 
-  result = vk.CreateFence(g.device.handle, &{sType=.FENCE_CREATE_INFO}, nil, &g.burst_fence)
-  vk_check(result)
+  vk_check(vk.CreateFence(g.device.handle, &{sType=.FENCE_CREATE_INFO}, nil, &g.burst_fence))
 
   // - Frame data ---
   for i in 0..<NUM_FRAMES_IN_FLIGHT
   {
     frame := &g.frames[i]
 
-    result = vk.CreateSemaphore(g.device.handle, &{sType=.SEMAPHORE_CREATE_INFO}, nil, &frame.present_sem)
-    vk_check(result)
+    vk_check(vk.CreateSemaphore(g.device.handle, &{sType=.SEMAPHORE_CREATE_INFO}, nil, &frame.present_sem))
+    vk_check(vk.CreateFence(g.device.handle, &{sType=.FENCE_CREATE_INFO, flags={.SIGNALED}}, nil, &frame.fence))
 
-    result = vk.CreateFence(g.device.handle, &{sType=.FENCE_CREATE_INFO, flags={.SIGNALED}}, nil, &frame.fence)
-    vk_check(result)
-
-    result = vk.AllocateCommandBuffers(g.device.handle, &{
+    vk_check(vk.AllocateCommandBuffers(g.device.handle, &{
       sType = .COMMAND_BUFFER_ALLOCATE_INFO,
       commandPool = g.frame_cmd_pool,
       level = .PRIMARY,
       commandBufferCount = 1,
-    }, &frame.cmd)
-    vk_check(result)
+    }, &frame.cmd))
 
-    layout_bindings := [2]vk.DescriptorSetLayoutBinding{
+    layout_bindings := [?]vk.DescriptorSetLayoutBinding{
       {
         binding = 0,
         descriptorCount = 1,
@@ -529,6 +529,12 @@ main :: proc()
       },
       {
         binding = 1,
+        descriptorCount = 1,
+        descriptorType = .COMBINED_IMAGE_SAMPLER,
+        stageFlags = {.FRAGMENT},
+      },
+      {
+        binding = 2,
         descriptorCount = 1,
         descriptorType = .COMBINED_IMAGE_SAMPLER,
         stageFlags = {.FRAGMENT},
@@ -547,12 +553,12 @@ main :: proc()
                                          mem_flags={.DEVICE_LOCAL})
   }
 
-  result = vk.AllocateDescriptorSets(g.device.handle, &{
+  vk_check(vk.AllocateDescriptorSets(g.device.handle, &{
     sType = .DESCRIPTOR_SET_ALLOCATE_INFO,
     descriptorPool = g.desc_pool,
     descriptorSetCount = len(g.desc_sets),
     pSetLayouts = raw_data(g.desc_layouts[:]),
-  }, raw_data(g.desc_sets[:]))
+  }, raw_data(g.desc_sets[:])))
 
   // - Vertex and index buffer ---
   {
@@ -602,10 +608,27 @@ main :: proc()
     img, err := qoi.load_from_file("res/textures/smile.qoi")
     if err != nil
     {
-      fmt.panicf("FATAL [render_vk]: Failed to open texture file!", err)
+      fmt.panicf("[FATAL][render_vk]: Failed to load 'smile.qoi'!", err)
     }
 
-    g.texture = vk_create_texture(img.pixels.buf[:], u32(img.width), u32(img.height))
+    g.textures[.Smile] = vk_create_texture(img.pixels.buf[:], 
+                                           u32(img.width), 
+                                           u32(img.height), 
+                                           .R8G8B8A8_SRGB,
+                                           .SHADER_READ_ONLY_OPTIMAL)
+
+    img, err = qoi.load_from_file("res/textures/screen.qoi")
+    if err != nil
+    {
+      fmt.panicf("[FATAL][render_vk]: Failed to load 'screen.qoi'!", err)
+    }
+
+    g.textures[.Screen] = vk_create_texture(img.pixels.buf[:], 
+                                            u32(img.width), 
+                                            u32(img.height), 
+                                            .R8G8B8A8_UNORM,
+                                            .COLOR_ATTACHMENT_OPTIMAL,
+                                            {.COLOR_ATTACHMENT})
 
     vk_check(vk.CreateSampler(g.device.handle, &{
       sType = .SAMPLER_CREATE_INFO,
@@ -619,7 +642,7 @@ main :: proc()
 
   for i in 0..<NUM_FRAMES_IN_FLIGHT
   {
-    write_desc_sets := [len(g.desc_sets)]vk.WriteDescriptorSet{
+    write_desc_sets := [?]vk.WriteDescriptorSet{
       {
         sType = .WRITE_DESCRIPTOR_SET,
         descriptorCount = 1,
@@ -638,7 +661,19 @@ main :: proc()
         dstSet = g.desc_sets[i],
         dstBinding = 1,
         pImageInfo = &{
-          imageView = g.texture.view,
+          imageView = g.textures[.Smile].view,
+          sampler = g.sampler,
+          imageLayout = .SHADER_READ_ONLY_OPTIMAL,
+        },
+      },
+      {
+        sType = .WRITE_DESCRIPTOR_SET,
+        descriptorCount = 1,
+        descriptorType = .COMBINED_IMAGE_SAMPLER,
+        dstSet = g.desc_sets[i],
+        dstBinding = 2,
+        pImageInfo = &{
+          imageView = g.textures[.Screen].view,
           sampler = g.sampler,
           imageLayout = .SHADER_READ_ONLY_OPTIMAL,
         },
@@ -648,10 +683,146 @@ main :: proc()
     vk.UpdateDescriptorSets(g.device.handle, len(write_desc_sets), &write_desc_sets[0], 0, nil)
   }
 
-  // - Pipeline ---
+  // - Main pipeline ---
   {
     vs_data: []u8 = #load("shaders/out/shader.vert.spv")
     fs_data: []u8 = #load("shaders/out/shader.frag.spv")
+
+    vs_module: vk.ShaderModule
+    result = vk.CreateShaderModule(g.device.handle, &{
+      sType = .SHADER_MODULE_CREATE_INFO,
+      codeSize = len(vs_data),
+      pCode = cast(^u32) raw_data(vs_data),
+    }, nil, &vs_module)
+    defer vk.DestroyShaderModule(g.device.handle, vs_module, nil)
+    vk_check(result)
+
+    fs_module: vk.ShaderModule
+    result = vk.CreateShaderModule(g.device.handle, &{
+      sType = .SHADER_MODULE_CREATE_INFO,
+      codeSize = len(fs_data),
+      pCode = cast(^u32) raw_data(fs_data),
+    }, nil, &fs_module)
+    defer vk.DestroyShaderModule(g.device.handle, fs_module, nil)
+    vk_check(result)
+
+    shader_stage_cis := [2]vk.PipelineShaderStageCreateInfo{
+      {
+        sType = .PIPELINE_SHADER_STAGE_CREATE_INFO,
+        stage = {.VERTEX},
+        module = vs_module,
+        pName = "main",
+      },
+      {
+        sType = .PIPELINE_SHADER_STAGE_CREATE_INFO,
+        stage = {.FRAGMENT},
+        module = fs_module,
+        pName = "main",
+      },
+    }
+
+    vertex_input_ci := vk.PipelineVertexInputStateCreateInfo{
+      sType = .PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+    }
+
+    input_assembly_ci := vk.PipelineInputAssemblyStateCreateInfo{
+      sType = .PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+      topology = .TRIANGLE_LIST,
+      primitiveRestartEnable = false,
+    }
+
+    viewport_state_ci := vk.PipelineViewportStateCreateInfo{
+      sType = .PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+      viewportCount = 1,
+      scissorCount = 1,
+    }
+
+    rasterization_state_ci := vk.PipelineRasterizationStateCreateInfo{
+      sType = .PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+      polygonMode = .FILL,
+      cullMode = {.BACK},
+      frontFace = .CLOCKWISE,
+      lineWidth = 1.0,
+    }
+
+    multisampling_ci := vk.PipelineMultisampleStateCreateInfo{
+      sType = .PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+      rasterizationSamples = {._1},
+      sampleShadingEnable = false,
+      minSampleShading = 1.0,
+    }
+
+    blend_attach_st := vk.PipelineColorBlendAttachmentState{
+      blendEnable = false,
+      colorWriteMask = {.R, .G, .B, .A},
+    }
+
+    blend_state_ci := vk.PipelineColorBlendStateCreateInfo{
+      sType = .PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+      logicOpEnable = false,
+      logicOp = .COPY,
+      attachmentCount = 1,
+      pAttachments = &blend_attach_st,
+    }
+
+    format := vk.Format.R8G8B8A8_UNORM
+    rendering_ci := vk.PipelineRenderingCreateInfo{
+      sType = .PIPELINE_RENDERING_CREATE_INFO,
+      colorAttachmentCount = 1,
+      pColorAttachmentFormats = &format,
+    }
+
+    depth_stencil_ci := vk.PipelineDepthStencilStateCreateInfo{
+      sType = .PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+      depthTestEnable = false,
+      stencilTestEnable = false,
+    }
+
+    dynamic_states := [2]vk.DynamicState{.VIEWPORT, .SCISSOR}
+    dynamic_state_ci := vk.PipelineDynamicStateCreateInfo{
+      sType = .PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+      dynamicStateCount = len(dynamic_states),
+      pDynamicStates = raw_data(dynamic_states[:]),
+    }
+
+    push_constants_ranges := []vk.PushConstantRange{
+      {
+        stageFlags = {.VERTEX},
+        size = size_of(g.main_constants),
+      },
+    }
+
+    result = vk.CreatePipelineLayout(g.device.handle, &{
+      sType = .PIPELINE_LAYOUT_CREATE_INFO,
+      pushConstantRangeCount = 1,
+      pPushConstantRanges = raw_data(push_constants_ranges),
+      setLayoutCount = len(g.desc_layouts),
+      pSetLayouts = raw_data(g.desc_layouts[:]),
+    }, nil, &g.pipelines[.Main].layout)
+    vk_check(result)
+
+    result = vk.CreateGraphicsPipelines(g.device.handle, 0, 1, &vk.GraphicsPipelineCreateInfo{
+      sType = .GRAPHICS_PIPELINE_CREATE_INFO,
+      pNext = &rendering_ci,
+      layout = g.pipelines[.Main].layout,
+      stageCount = len(shader_stage_cis),
+      pStages = raw_data(shader_stage_cis[:]),
+      pVertexInputState = &vertex_input_ci,
+      pInputAssemblyState = &input_assembly_ci,
+      pViewportState = &viewport_state_ci,
+      pRasterizationState = &rasterization_state_ci,
+      pMultisampleState = &multisampling_ci,
+      pColorBlendState = &blend_state_ci,
+      pDepthStencilState = &depth_stencil_ci,
+      pDynamicState = &dynamic_state_ci,
+    }, nil, &g.pipelines[.Main].handle)
+    vk_check(result)
+  }
+
+  // - Postprocessor pipeline ---
+  {
+    vs_data: []u8 = #load("shaders/out/postprocess.vert.spv")
+    fs_data: []u8 = #load("shaders/out/postprocess.frag.spv")
 
     vs_module: vk.ShaderModule
     result = vk.CreateShaderModule(g.device.handle, &{
@@ -751,8 +922,8 @@ main :: proc()
 
     push_constants_ranges := []vk.PushConstantRange{
       {
-        stageFlags = {.VERTEX},
-        size = size_of(g.push_constants),
+        stageFlags = {.FRAGMENT},
+        size = size_of(g.post_constants),
       },
     }
 
@@ -762,13 +933,13 @@ main :: proc()
       pPushConstantRanges = raw_data(push_constants_ranges),
       setLayoutCount = len(g.desc_layouts),
       pSetLayouts = raw_data(g.desc_layouts[:]),
-    }, nil, &g.pipeline_layout)
+    }, nil, &g.pipelines[.Post].layout)
     vk_check(result)
 
     result = vk.CreateGraphicsPipelines(g.device.handle, 0, 1, &vk.GraphicsPipelineCreateInfo{
       sType = .GRAPHICS_PIPELINE_CREATE_INFO,
       pNext = &rendering_ci,
-      layout = g.pipeline_layout,
+      layout = g.pipelines[.Post].layout,
       stageCount = len(shader_stage_cis),
       pStages = raw_data(shader_stage_cis[:]),
       pVertexInputState = &vertex_input_ci,
@@ -779,7 +950,7 @@ main :: proc()
       pColorBlendState = &blend_state_ci,
       pDepthStencilState = &depth_stencil_ci,
       pDynamicState = &dynamic_state_ci,
-    }, nil, &g.pipeline)
+    }, nil, &g.pipelines[.Post].handle)
     vk_check(result)
   }
 
@@ -883,6 +1054,114 @@ main :: proc()
                           src_stages={.TRANSFER}, src_access={.TRANSFER_WRITE},
                           dst_stages={.VERTEX_SHADER}, dst_access={.SHADER_READ})
 
+    vk_cmd_image_barrier(frame.cmd, g.textures[.Screen].image,
+                         old_layout=.UNDEFINED, new_layout=.COLOR_ATTACHMENT_OPTIMAL,
+                         src_stages={.ALL_COMMANDS}, src_access={.MEMORY_READ},
+                         dst_stages={.COLOR_ATTACHMENT_OUTPUT}, dst_access={.COLOR_ATTACHMENT_WRITE})
+
+    vk.CmdBeginRendering(frame.cmd, &{
+      sType = .RENDERING_INFO,
+      renderArea = {{0, 0}, g.swapchain.extent},
+      layerCount = 1,
+      colorAttachmentCount = 1,
+      pColorAttachments = &vk.RenderingAttachmentInfo{
+        sType = .RENDERING_ATTACHMENT_INFO,
+        imageView = g.textures[.Screen].view,
+        imageLayout = .COLOR_ATTACHMENT_OPTIMAL,
+        loadOp = .CLEAR,
+        storeOp = .STORE,
+        clearValue = {color={float32={0.0, 0.0, 0.0, 0.0}}},
+      },
+    })
+
+    // - BEGIN DRAW PASS 1 ---
+
+    vk.CmdBindPipeline(frame.cmd, .GRAPHICS, g.pipelines[.Main].handle)
+    vk.CmdBindIndexBuffer(frame.cmd, g.index_buf.handle, 0, .UINT8)
+    vk.CmdBindDescriptorSets(frame.cmd, .GRAPHICS, g.pipelines[.Main].layout, 0, 1, &g.desc_sets[g.frame_idx], 0, nil)
+
+    vk.CmdSetViewport(frame.cmd, 0, 1, &g.viewport)
+    vk.CmdSetScissor(frame.cmd, 0, 1, &g.scissor)
+
+    g.main_constants.vertex_addr = g.vertex_buf.address
+    g.main_constants.transform = cast(vmath.m4f32) transform
+    vk.CmdPushConstants(frame.cmd, g.pipelines[.Main].layout, {.VERTEX}, 0, 
+                        size_of(g.main_constants), &g.main_constants)
+
+    vk.CmdDrawIndexed(frame.cmd, len(g.indices), 1, 0, 0, 0)
+
+    // - END DRAW PASS 1 ---
+
+    vk.CmdEndRendering(frame.cmd)
+
+    vk_cmd_image_barrier(frame.cmd, g.textures[.Screen].image,
+                         src_stages={.COLOR_ATTACHMENT_OUTPUT}, src_access={.MEMORY_WRITE},
+                         dst_stages={.ALL_COMMANDS}, dst_access={})
+
+    for &vert in g.vertices
+    {
+      vert.position.xy -= 0.5
+    }
+
+    vk.CmdUpdateBuffer(frame.cmd, g.vertex_buf.handle, 0, len(g.vertices)*size_of(Vertex), &g.vertices)
+    vk_cmd_buffer_barrier(frame.cmd, g.vertex_buf.handle,
+                          src_stages={.TRANSFER}, src_access={.TRANSFER_WRITE},
+                          dst_stages={.VERTEX_ATTRIBUTE_INPUT}, dst_access={.VERTEX_ATTRIBUTE_READ})
+
+    g.uniforms.light.rgb = 0.1
+    vk.CmdUpdateBuffer(frame.cmd, g.frames[g.frame_idx].uniform_buf.handle, 0, size_of(g.uniforms), &g.uniforms)
+    vk_cmd_buffer_barrier(frame.cmd, g.frames[g.frame_idx].uniform_buf.handle,
+                          src_stages={.TRANSFER}, src_access={.TRANSFER_WRITE},
+                          dst_stages={.VERTEX_SHADER}, dst_access={.SHADER_READ})
+
+    vk_cmd_image_barrier(frame.cmd, g.textures[.Screen].image,
+                         src_stages={.ALL_COMMANDS}, src_access={.MEMORY_READ},
+                         dst_stages={.COLOR_ATTACHMENT_OUTPUT}, dst_access={.MEMORY_WRITE})
+
+    vk.CmdBeginRendering(frame.cmd, &{
+      sType = .RENDERING_INFO,
+      renderArea = {{0, 0}, g.swapchain.extent},
+      layerCount = 1,
+      colorAttachmentCount = 1,
+      pColorAttachments = &vk.RenderingAttachmentInfo{
+        sType = .RENDERING_ATTACHMENT_INFO,
+        imageView = g.textures[.Screen].view,
+        imageLayout = .COLOR_ATTACHMENT_OPTIMAL,
+        loadOp = .LOAD,
+        storeOp = .STORE,
+      },
+    })
+
+    // - BEGIN DRAW PASS 2 ---
+
+    g.main_constants.transform = cast(vmath.m4f32) (transform * vmath.scale_3x3f(0.5))
+    vk.CmdPushConstants(frame.cmd, g.pipelines[.Main].layout, {.VERTEX}, 0, size_of(g.main_constants), &g.main_constants)
+
+    vk.CmdDrawIndexed(frame.cmd, len(g.indices), 1, 0, 0, 0)
+
+    // - END DRAW PASS 2 ---
+
+    vk.CmdEndRendering(frame.cmd)
+
+    vk_cmd_image_barrier(frame.cmd, g.textures[.Screen].image,
+                         src_stages={.COLOR_ATTACHMENT_OUTPUT}, src_access={.MEMORY_WRITE},
+                         dst_stages={.ALL_COMMANDS}, dst_access={})
+
+    for &vert in g.vertices
+    {
+      vert.position.xy += 0.5
+    }
+
+    vk.CmdUpdateBuffer(frame.cmd, g.vertex_buf.handle, 0, len(g.vertices)*size_of(Vertex), &g.vertices)
+    vk_cmd_buffer_barrier(frame.cmd, g.vertex_buf.handle,
+                          src_stages={.TRANSFER}, src_access={.TRANSFER_WRITE},
+                          dst_stages={.VERTEX_ATTRIBUTE_INPUT}, dst_access={.VERTEX_ATTRIBUTE_READ})
+
+    vk_cmd_image_barrier(frame.cmd, g.textures[.Screen].image,
+                         old_layout=.COLOR_ATTACHMENT_OPTIMAL, new_layout=.SHADER_READ_ONLY_OPTIMAL,
+                         src_stages={.COLOR_ATTACHMENT_OUTPUT}, src_access={.MEMORY_WRITE},
+                         dst_stages={.FRAGMENT_SHADER}, dst_access={.SHADER_READ})
+
     vk_cmd_image_barrier(frame.cmd, g.swapchain.images[image_idx],
                          old_layout=.UNDEFINED, new_layout=.COLOR_ATTACHMENT_OPTIMAL,
                          src_stages={.ALL_COMMANDS}, src_access={.MEMORY_READ},
@@ -903,64 +1182,18 @@ main :: proc()
       },
     })
 
-    // - BEGIN DRAW PASS 1 ---
+    // - BEGIN DRAW PASS 3 ---
+    
+    vk.CmdBindDescriptorSets(frame.cmd, .GRAPHICS, g.pipelines[.Post].layout, 0, 1, &g.desc_sets[g.frame_idx], 0, nil)
+    vk.CmdBindPipeline(frame.cmd, .GRAPHICS, g.pipelines[.Post].handle)
 
-    vk.CmdBindPipeline(frame.cmd, .GRAPHICS, g.pipeline)
-    vk.CmdBindIndexBuffer(frame.cmd, g.index_buf.handle, 0, .UINT8)
-    vk.CmdBindDescriptorSets(frame.cmd, .GRAPHICS, g.pipeline_layout, 0, 1, &g.desc_sets[g.frame_idx], 0, nil)
+    g.post_constants.enabled = true
+    vk.CmdPushConstants(frame.cmd, g.pipelines[.Post].layout, {.FRAGMENT}, 0, 
+                        size_of(g.post_constants), &g.post_constants)
 
-    vk.CmdSetViewport(frame.cmd, 0, 1, &g.viewport)
-    vk.CmdSetScissor(frame.cmd, 0, 1, &g.scissor)
+    vk.CmdDraw(frame.cmd, 6, 1, 0, 0)
 
-    g.push_constants.vertex_addr = g.vertex_buf.address
-    g.push_constants.transform = cast(vmath.m4f32) transform
-    vk.CmdPushConstants(frame.cmd, g.pipeline_layout, {.VERTEX}, 0, size_of(g.push_constants), &g.push_constants)
-
-    vk.CmdDrawIndexed(frame.cmd, len(g.indices), 1, 0, 0, 0)
-
-    // - END DRAW PASS 1 ---
-
-    vk.CmdEndRendering(frame.cmd)
-
-    vk_cmd_image_barrier(frame.cmd, g.swapchain.images[image_idx],
-                         src_stages={.COLOR_ATTACHMENT_OUTPUT}, src_access={.MEMORY_WRITE},
-                         dst_stages={.ALL_COMMANDS}, dst_access={})
-
-    for &vert in g.vertices
-    {
-      vert.position.xy -= 0.5
-    }
-
-    vk.CmdUpdateBuffer(frame.cmd, g.vertex_buf.handle, 0, len(g.vertices)*size_of(Vertex), &g.vertices)
-
-    g.uniforms.light.rgb = 0.1
-    vk.CmdUpdateBuffer(frame.cmd, g.frames[g.frame_idx].uniform_buf.handle, 0, size_of(g.uniforms), &g.uniforms)
-    vk_cmd_buffer_barrier(frame.cmd, g.vertex_buf.handle,
-                          src_stages={.TRANSFER}, src_access={.TRANSFER_WRITE},
-                          dst_stages={.VERTEX_ATTRIBUTE_INPUT}, dst_access={.VERTEX_ATTRIBUTE_READ})
-
-    vk.CmdBeginRendering(frame.cmd, &{
-      sType = .RENDERING_INFO,
-      renderArea = {{0, 0}, g.swapchain.extent},
-      layerCount = 1,
-      colorAttachmentCount = 1,
-      pColorAttachments = &vk.RenderingAttachmentInfo{
-        sType = .RENDERING_ATTACHMENT_INFO,
-        imageView = g.swapchain.image_views[image_idx],
-        imageLayout = .COLOR_ATTACHMENT_OPTIMAL,
-        loadOp = .LOAD,
-        storeOp = .STORE,
-      },
-    })
-
-    // - BEGIN DRAW PASS 2 ---
-
-    g.push_constants.transform = cast(vmath.m4f32) (transform * vmath.scale_3x3f(0.5))
-    vk.CmdPushConstants(frame.cmd, g.pipeline_layout, {.VERTEX}, 0, size_of(g.push_constants), &g.push_constants)
-
-    vk.CmdDrawIndexed(frame.cmd, len(g.indices), 1, 0, 0, 0)
-
-    // - END DRAW PASS 2 ---
+    // - END DRAW PASS 3 ---
 
     vk.CmdEndRendering(frame.cmd)
 
@@ -969,19 +1202,13 @@ main :: proc()
                          src_stages={.COLOR_ATTACHMENT_OUTPUT}, src_access={.MEMORY_WRITE},
                          dst_stages={}, dst_access={})
 
-    for &vert in g.vertices
-    {
-      vert.position.xy += 0.5
-    }
-    vk.CmdUpdateBuffer(frame.cmd, g.vertex_buf.handle, 0, len(g.vertices)*size_of(Vertex), &g.vertices)
-
     // - END COMMAND BUFFER ---
 
     vk_check(vk.EndCommandBuffer(frame.cmd))
 
     render_done_sem := g.swapchain.image_ready_sems[image_idx]
 
-    result = vk.QueueSubmit(g.device.queue, 1, &vk.SubmitInfo{
+    vk_check(vk.QueueSubmit(g.device.queue, 1, &vk.SubmitInfo{
       sType = .SUBMIT_INFO,
       commandBufferCount = 1,
       pCommandBuffers = &frame.cmd,
@@ -990,20 +1217,18 @@ main :: proc()
       pWaitDstStageMask = &vk.PipelineStageFlags{.COLOR_ATTACHMENT_OUTPUT},
       signalSemaphoreCount = 1,
       pSignalSemaphores = &render_done_sem,
-    }, frame.fence)
-    vk_check(result)
+    }, frame.fence))
 
     // - PRESENT ---
 
-    result = vk.QueuePresentKHR(g.device.queue, &{
+    vk_check(vk.QueuePresentKHR(g.device.queue, &{
       sType = .PRESENT_INFO_KHR,
-      waitSemaphoreCount = 1,
-      pWaitSemaphores = &render_done_sem,
       swapchainCount = 1,
       pSwapchains = &g.swapchain.handle,
       pImageIndices = &image_idx,
-    })
-    vk_check(result)
+      waitSemaphoreCount = 1,
+      pWaitSemaphores = &render_done_sem,
+    }))
 
     g.frame_idx = (g.frame_idx + 1) % NUM_FRAMES_IN_FLIGHT
   }
@@ -1013,7 +1238,8 @@ main :: proc()
   vk.DeviceWaitIdle(g.device.handle)
 
   vk.DestroySampler(g.device.handle, g.sampler, nil)
-  vk_destroy_texture(&g.texture)
+
+  for &tex in g.textures do vk_destroy_texture(&tex)
 
   vk_destroy_buffer(&g.index_buf)
   vk_destroy_buffer(&g.vertex_buf)
@@ -1035,8 +1261,11 @@ main :: proc()
   vk.DestroyCommandPool(g.device.handle, g.burst_cmd_pool, nil)
   vk.DestroyCommandPool(g.device.handle, g.frame_cmd_pool, nil)
 
-  vk.DestroyPipelineLayout(g.device.handle, g.pipeline_layout, nil)
-  vk.DestroyPipeline(g.device.handle, g.pipeline, nil)
+  for pip in g.pipelines
+  {
+    vk.DestroyPipelineLayout(g.device.handle, pip.layout, nil)
+    vk.DestroyPipeline(g.device.handle, pip.handle, nil)
+  }
 
   vk_destroy_swapchain(&g.swapchain)
   vk_destroy_device(&g.device)
@@ -1184,12 +1413,17 @@ vk_destroy_buffer :: proc(buffer: ^Buffer)
   vma.DestroyBuffer(g.gpu_allocator, buffer.handle, buffer.allocation)
 }
 
-vk_create_texture :: proc(pixels: []byte, width, height: u32) -> Texture
+vk_create_texture :: proc(
+  pixels:      []byte, 
+  width:       u32, 
+  height:      u32, 
+  format:      vk.Format,
+  layout:      vk.ImageLayout = .SHADER_READ_ONLY_OPTIMAL,
+  usage_flags: vk.ImageUsageFlags = {}
+) -> Texture
 {
   texture: Texture
   result: vk.Result
-
-  format := vk.Format.R8G8B8A8_SRGB
 
   image_ci := vk.ImageCreateInfo{
     sType = .IMAGE_CREATE_INFO,
@@ -1203,7 +1437,7 @@ vk_create_texture :: proc(pixels: []byte, width, height: u32) -> Texture
     mipLevels = 1,
     arrayLayers = 1,
     samples = {._1},
-    usage = {.TRANSFER_DST, .SAMPLED},
+    usage = usage_flags + {.TRANSFER_DST, .SAMPLED},
     tiling = .OPTIMAL,
     initialLayout = .UNDEFINED,
   }
@@ -1251,7 +1485,7 @@ vk_create_texture :: proc(pixels: []byte, width, height: u32) -> Texture
                             })
 
     vk_cmd_image_barrier(cmd, texture.image, 
-                         old_layout=.TRANSFER_DST_OPTIMAL, new_layout=.SHADER_READ_ONLY_OPTIMAL,
+                         old_layout=.TRANSFER_DST_OPTIMAL, new_layout=layout,
                          src_stages={.TRANSFER}, src_access={.TRANSFER_WRITE},
                          dst_stages={.FRAGMENT_SHADER}, dst_access={.SHADER_READ})
 
