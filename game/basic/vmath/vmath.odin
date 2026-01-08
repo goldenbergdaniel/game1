@@ -4,6 +4,8 @@ import "base:intrinsics"
 import "base:builtin"
 import "core:math"
 
+DEPTH :: "vulkan"
+
 
 // Vector ///////////////////////////////////////////////////////////////////////////
 
@@ -342,11 +344,57 @@ translation_3x3f :: proc(v: v2f32) -> m3f32
 }
 
 @(require_results)
-scale_3x3f :: proc(v: v2f32) -> m3f32
+translation_4x4f :: proc(v: v3f32) -> m4f32
 {
-  result: m3f32 = ident_3x3f(1)
+  // result: m4f32 = ident_4x4f(1)
+  // result[0,3] = v.x
+  // result[1,3] = v.y
+  // result[2,3] = v.z
+  // return result
+  return {
+    1, 0, 0, v.x,
+    0, 1, 0, v.y,
+    0, 0, 1, v.z,
+    0, 0, 0, 1,
+  }
+}
+
+@(require_results)
+scale_2x2f :: proc(v: v2f32) -> m2f32
+{
+  result: m2f32
   result[0,0] = v.x
   result[1,1] = v.y
+  return result
+}
+
+@(require_results)
+scale_3x3f :: proc(v: v2f32) -> m3f32
+{
+  result: m3f32
+  result[0,0] = v.x
+  result[1,1] = v.y
+  result[2,2] = 1
+  return result
+}
+
+@(require_results)
+scale_4x4f :: proc(v: v3f32) -> m4f32
+{
+  result: m4f32
+  result[0,0] = v.x
+  result[1,1] = v.y
+  result[2,2] = v.z
+  result[3,3] = 1
+  return result
+}
+
+@(require_results)
+shear_2x2f :: proc(v: v2f32) -> m2f32
+{
+  result: m2f32
+  result[0,1] = v.x
+  result[1,0] = v.y
   return result
 }
 
@@ -362,7 +410,7 @@ shear_3x3f :: proc(v: v2f32) -> m3f32
 @(require_results)
 rotation_2x2f :: proc(rads: f32) -> m2f32
 {
-  result: m2f32 = ident_2x2f(1)
+  result: m2f32
   result[0,0] = math.cos(rads)
   result[0,1] = -math.sin(rads)
   result[1,0] = math.sin(rads)
@@ -373,12 +421,52 @@ rotation_2x2f :: proc(rads: f32) -> m2f32
 @(require_results)
 rotation_3x3f :: proc(rads: f32) -> m3f32
 {
-  result: m3f32 = ident_3x3f(1)
+  result: m3f32
   result[0,0] = math.cos(rads)
   result[0,1] = -math.sin(rads)
   result[1,0] = math.sin(rads)
   result[1,1] = math.cos(rads)
+  result[2,2] = 1.0
   return result
+}
+
+@(require_results)
+rotation_x_4x4f :: proc(rads: f32) -> m4f32
+{
+  using math
+
+  return {
+    1, 0, 0, 0,
+    0, cos(rads), -sin(rads), 0,
+    0, sin(rads), cos(rads), 0,
+    0, 0, 0, 1,
+  }
+}
+
+@(require_results)
+rotation_y_4x4f :: proc(rads: f32) -> m4f32
+{
+  using math
+
+  return {
+    cos(rads), 0, sin(rads), 0,
+    0, 1, 0, 0,
+    -sin(rads), 0, cos(rads), 0,
+    0, 0, 0, 1,
+  }
+}
+
+@(require_results)
+rotation_z_4x4f :: proc(rads: f32) -> m4f32
+{
+  using math
+
+  return {
+    cos(rads), -sin(rads), 0, 0,
+    sin(rads), cos(rads), 0, 0,
+    0, 0, 1, 0,
+    0, 0, 0, 1,
+  }
 }
 
 @(require_results)
@@ -393,11 +481,42 @@ transform_3x3f :: proc(pos: v2f32, rot: f32, scl: v2f32) -> m3f32
 @(require_results)
 orthographic_3x3f :: proc(left, right, top, bot: f32) -> m3f32
 {
-  result: m3f32 = ident_3x3f(1)
+  result: m3f32
   result[0,0] = 2.0 / (right - left)
   result[1,1] = 2.0 / (top - bot)
   result[0,2] = -(right + left) / (right - left)
   result[1,2] = -(top + bot) / (top - bot)
   result[2,2] = 1.0
   return result
+}
+
+// NOTE: z = [0, 1]
+@(require_results)
+orthographic_4x4f :: proc "contextless" (left, right, top, bot, near, far: f32) -> m4f32 #no_bounds_check
+{
+  result: m4f32
+  result[0,0] = +2.0 / (right - left)
+  result[1,1] = +2.0 / (top - bot)
+  result[2,2] = -2.0 / (far - near) when DEPTH == "opengl" else -1.0 / (far - near)
+  result[0,3] = -(right + left) / (right - left)
+  result[1,3] = -(top + bot) / (top - bot)
+  result[2,3] = -(far + near) / (far - near) when DEPTH == "opengl" else -near/(far-near)
+  result[3,3] = 1.0
+  // result[2] = -result[2]
+  return result
+}
+
+perspective_4x4f :: proc "contextless" (fov, aspect, near, far: f32) -> m4f32 #no_bounds_check
+{
+  tan_half_fov := math.tan(0.5 * fov)
+
+  result: m4f32
+	result[0,0] = +1 / (aspect * tan_half_fov)
+	result[1,1] = +1 / tan_half_fov
+	result[2,2] = +(far + near) / (far - near) when DEPTH == "opengl" else far / (far-near)
+	result[2,3] = -2*far*near / (far - near) when DEPTH == "opengl" else (far * near) / (far - near)
+	result[3,2] = 1
+  // result[3,3] = 1 
+  result[2] = -result[2]
+	return result
 }

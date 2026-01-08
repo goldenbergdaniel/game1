@@ -1,0 +1,241 @@
+Usage: slangc [options...] [--] <input files>
+
+General
+=======
+
+General options
+
+  -D<name>[=<value>], -D <name>[=<value>]: Insert a preprocessor macro.
+    The space between - D and <name> is optional. If no <value> is specified, Slang will define the macro with an empty 
+    value.
+  -depfile <path>: Save the source file dependency list in a file.
+  -entry <name>: Specify the name of an entry-point function.
+    When compiling from a single file, this defaults to main if you specify a stage using -stage.
+    Multiple -entry options may be used in a single invocation. When they do, the file associated with the entry point 
+    will be the first one found when searching to the left in the command line.
+    If no -entry options are given, compiler will use [shader(...)] attributes to detect entry points.
+  -specialize <typename>: Specialize the last entrypoint with <typename>.
+  -emit-ir: Emit IR typically as a '.slang-module' when outputting to a container.
+  -h or -h <help-category>: Print this message, or help in specified category.
+    To get a list of values that can be used for <help-category>, use "slangc -h help-category"
+  -help-style <help-style>: Help formatting style
+    To get a list of values that can be used for <help-style>, use "slangc -h help-style"
+  -I<path>, -I <path>: Add a path to be used in resolving '#include' and 'import' operations.
+  -lang <language>: Set the language for the following input files.
+    To get a list of values that can be used for <language>, use "slangc -h language"
+  -matrix-layout-column-major: Set the default matrix layout to column-major.
+  -matrix-layout-row-major: Set the default matrix layout to row-major.
+  -restrictive-capability-check: Many capability warnings will become an error.
+  -ignore-capabilities: Do not warn or error if capabilities are violated
+  -minimum-slang-optimization: Perform minimum code optimization in Slang to favor compilation time.
+  -disable-non-essential-validations: Disable non-essential IR validations such as use of uninitialized variables.
+  -disable-source-map: Disable source mapping in the Obfuscation.
+  -module-name <name>: Set the module name to use when compiling multiple .slang source files into a single module.
+  -o <path>: Specify a path where generated output should be written.
+    If no -target or -stage is specified, one may be inferred from file extension (see <file-extension>). If multiple 
+    -target options and a single -entry are present, each -o associates with the first -target to its left. Otherwise, 
+    if multiple -entry options are present, each -o associates with the first -entry to its left, and with the -target 
+    that matches the one inferred from <path>.
+  -profile <profile>[+<capability>...]: Specify the shader profile for code generation.
+    Accepted profiles are:
+    * sm_{4_0,4_1,5_0,5_1,6_0,6_1,6_2,6_3,6_4,6_5,6_6}
+    * glsl_{110,120,130,140,150,330,400,410,420,430,440,450,460}
+    Additional profiles that include -stage information:
+    * {vs,hs,ds,gs,ps}_<version>
+    See -capability for information on <capability>
+    When multiple -target options are present, each -profile associates with the first -target to its left.
+    To get a list of values that can be used for <capability>, use "slangc -h capability"
+  -stage <stage>: Specify the stage of an entry-point function.
+    When multiple -entry options are present, each -stage associated with the first -entry to its left.
+    May be omitted if entry-point function has a [shader(...)] attribute; otherwise required for each -entry option.
+    To get a list of values that can be used for <stage>, use "slangc -h stage"
+  -target <target>: Specifies the format in which code should be generated.
+    To get a list of values that can be used for <target>, use "slangc -h target"
+  -v, -version: Display the build version. This is the contents of git describe --tags.
+    It is typically only set from automated builds(such as distros available on github).A user build will by default be 
+    'unknown'.
+  -std <language-version>: Specifies the language standard that should be used.
+    To get a list of values that can be used for <language-version>, use "slangc -h language-version"
+  -warnings-as-errors all or -warnings-as-errors <id>[,<id>...]: all - Treat all warnings as errors.
+    <id>[,<id>...]: Treat specific warning ids as errors.
+  -warnings-disable <id>[,<id>...]: Disable specific warning ids.
+  -W<id>: Enable a warning with the specified id.
+  -Wno-<id>: Disable warning with <id>
+  -dump-warning-diagnostics: Dump to output list of warning diagnostic numeric and name ids.
+  --: Treat the rest of the command line as input files.
+  -report-downstream-time: Reports the time spent in the downstream compiler.
+  -report-perf-benchmark: Reports compiler performance benchmark results.
+  -report-checkpoint-intermediates: Reports information about checkpoint contexts used for reverse-mode automatic 
+    differentiation.
+  -skip-spirv-validation: Skips spirv validation.
+  -source-embed-style <source-embed-style>: If source embedding is enabled, defines the style used. When enabled (with 
+    any style other than `none`), will write compile results into embeddable source for the target language. If no 
+    output file is specified, the output is written to stdout. If an output file is specified it is written either to 
+    that file directly (if it is appropriate for the target language), or it will be output to the filename with an 
+    appropriate extension.
+
+    Note for C/C++ with u16/u32/u64 types it is necessary to have "#include <stdint.h>" before the generated file.
+    To get a list of values that can be used for <source-embed-style>, use "slangc -h source-embed-style"
+  -source-embed-name <name>: The name used as the basis for variables output for source embedding.
+  -source-embed-language <language>: The language to be used for source embedding. Defaults to C/C++. Currently only 
+    C/C++ are supported
+    To get a list of values that can be used for <language>, use "slangc -h language"
+  -disable-short-circuit: Disable short-circuiting for "&&" and "||" operations
+  -unscoped-enum: Treat enums types as unscoped by default.
+  -preserve-params: Preserve all resource parameters in the output code, even if they are not used by the shader.
+  -conformance <typeName>:<interfaceName>[=<sequentialID>]: Include additional type conformance during linking for 
+    dynamic dispatch.
+  -reflection-json <path>: Emit reflection data in JSON format to a file.
+  -msvc-style-bitfield-packing: Pack bitfields according to MSVC rules (msb first, new field when underlying type size 
+    changes) rather than gcc-style (lsb first)
+
+Target
+======
+
+Target code generation options
+
+  -capability <capability>[+<capability>...]: Add optional capabilities to a code generation target. See Capabilities 
+    below.
+    To get a list of values that can be used for <capability>, use "slangc -h capability"
+  -default-image-format-unknown: Set the format of R/W images with unspecified format to 'unknown'. Otherwise try to 
+    guess the format.
+  -disable-dynamic-dispatch: Disables generating dynamic dispatch code.
+  -disable-specialization: Disables generics and specialization pass.
+  -fp-mode <fp-mode>, -floating-point-mode <fp-mode>: Control floating point optimizations
+    To get a list of values that can be used for <fp-mode>, use "slangc -h fp-mode"
+  -denorm-mode-fp16 <fp-denormal-mode>: Control handling of 16-bit denormal floating point values in SPIR-V (any, 
+    preserve, ftz)
+    To get a list of values that can be used for <fp-denormal-mode>, use "slangc -h fp-denormal-mode"
+  -denorm-mode-fp32 <fp-denormal-mode>: Control handling of 32-bit denormal floating point values in SPIR-V and DXIL 
+    (any, preserve, ftz)
+    To get a list of values that can be used for <fp-denormal-mode>, use "slangc -h fp-denormal-mode"
+  -denorm-mode-fp64 <fp-denormal-mode>: Control handling of 64-bit denormal floating point values in SPIR-V (any, 
+    preserve, ftz)
+    To get a list of values that can be used for <fp-denormal-mode>, use "slangc -h fp-denormal-mode"
+  -g, -g<debug-info-format>, -g<debug-level>: Include debug information in the generated code, where possible.
+    <debug-level> is the amount of information, 0..3, unspecified means 2
+    <debug-info-format> specifies a debugging info format
+    It is valid to have multiple -g options, such as a <debug-level> and a <debug-info-format>
+    To get a list of values that can be used for <debug-info-format>, use "slangc -h debug-info-format"
+    To get a list of values that can be used for <debug-level>, use "slangc -h debug-level"
+  -line-directive-mode <line-directive-mode>: Sets how the `#line` directives should be produced. Available options are:
+    If not specified, default behavior is to use C-style `#line` directives for HLSL and C/C++ output, and traditional 
+    GLSL-style `#line` directives for GLSL output.
+    To get a list of values that can be used for <line-directive-mode>, use "slangc -h line-directive-mode"
+  -O<optimization-level>: Set the optimization level.
+    To get a list of values that can be used for <optimization-level>, use "slangc -h optimization-level"
+  -obfuscate: Remove all source file information from outputs.
+  -force-glsl-scalar-layout, -fvk-use-scalar-layout: Make data accessed through ConstantBuffer, ParameterBlock, 
+    StructuredBuffer, ByteAddressBuffer and general pointers follow the 'scalar' layout when targeting GLSL or SPIRV.
+  -fvk-use-dx-layout: Pack members using FXCs member packing rules when targeting GLSL or SPIRV.
+  -fvk-use-c-layout: Make data accessed through ConstantBuffer, ParameterBlock, StructuredBuffer, ByteAddressBuffer and 
+    general pointers follow the C/C++ structure layout rules when targeting SPIRV.
+  -fvk-<vulkan-shift>-shift <N> <space>: For example '-fvk-b-shift <N> <space>' shifts by N the inferred binding 
+    numbers for all resources in 'b' registers of space <space>. For a resource attached with :register(bX, <space>) 
+    but not [vk::binding(...)], sets its Vulkan descriptor set to <space> and binding number to X + N. If you need to 
+    shift the inferred binding numbers for more than one space, provide more than one such option. If more than one 
+    such option is provided for the same space, the last one takes effect. If you need to shift the inferred binding 
+    numbers for all sets, use 'all' as <space>.
+    * [DXC 
+    description](https://github.com/Microsoft/DirectXShaderCompiler/blob/main/docs/SPIR-V.rst#implicit-binding-number-assignment)
+    * [GLSL wiki](https://github.com/KhronosGroup/glslang/wiki/HLSL-FAQ#auto-mapped-binding-numbers)
+    To get a list of values that can be used for <vulkan-shift>, use "slangc -h vulkan-shift"
+  -fvk-bind-globals <N> <descriptor-set>: Places the $Globals cbuffer at descriptor set <descriptor-set> and binding 
+    <N>.
+    It lets you specify the descriptor for the source at a certain register.
+    * [DXC 
+    description](https://github.com/Microsoft/DirectXShaderCompiler/blob/main/docs/SPIR-V.rst#implicit-binding-number-assignment)
+  -fvk-invert-y: Negates (additively inverts) SV_Position.y before writing to stage output.
+  -fvk-use-dx-position-w: Reciprocates (multiplicatively inverts) SV_Position.w after reading from stage input. For use 
+    in fragment shaders only.
+  -fvk-use-entrypoint-name: Uses the entrypoint name from the source instead of 'main' in the spirv output.
+  -fvk-use-gl-layout: Use std430 layout instead of D3D buffer layout for raw buffer load/stores.
+  -fspv-reflect: Include reflection decorations in the resulting SPIRV for shader parameters.
+  -enable-effect-annotations: Enables support for legacy effect annotation syntax.
+  -emit-spirv-via-glsl: Generate SPIR-V output by compiling generated GLSL with glslang
+  -emit-spirv-directly: Generate SPIR-V output directly (default)
+  -spirv-core-grammar: A path to a specific spirv.core.grammar.json to use when generating SPIR-V output
+  -incomplete-library: Allow generating code from incomplete libraries with unresolved external functions
+  -bindless-space-index <index>: Specify the space index for the system defined global bindless resource array.
+  -separate-debug-info: Emit debug data to a separate file, and strip it from the main output file.
+
+Downstream
+==========
+
+Downstream compiler options
+
+  -<compiler>-path <path>: Specify path to a downstream <compiler> executable or library.
+    To get a list of values that can be used for <compiler>, use "slangc -h compiler"
+  -default-downstream-compiler <language> <compiler>: Set a default compiler for the given language. See -lang for the 
+    list of languages.
+    To get a list of values that can be used for <language>, use "slangc -h language"
+    To get a list of values that can be used for <compiler>, use "slangc -h compiler"
+  -X<compiler> <option> -X<compiler>... <options> -X.: Pass arguments to downstream <compiler>. Just -X<compiler> 
+    passes just the next argument to the downstream compiler. -X<compiler>... options -X. will pass *all* of the 
+    options inbetween the opening -X and -X. to the downstream compiler.
+    To get a list of values that can be used for <compiler>, use "slangc -h compiler"
+  -pass-through <compiler>: Pass the input through mostly unmodified to the existing compiler <compiler>.
+    These are intended for debugging/testing purposes, when you want to be able to see what these existing compilers do 
+    with the "same" input and options
+    To get a list of values that can be used for <compiler>, use "slangc -h compiler"
+
+Debugging
+=========
+
+Compiler debugging/instrumentation options
+
+  -dump-ast: Dump the AST to a .slang-ast file next to the input.
+  -dump-intermediate-prefix <prefix>: File name prefix for -dump-intermediates outputs, default is no prefix
+  -dump-intermediates: Dump intermediate outputs for debugging.
+  -dump-ir: Dump the IR for debugging.
+  -dump-ir-ids: Dump the IDs with -dump-ir (debug builds only)
+  -E, -output-preprocessor: Output the preprocessing result and exit.
+  -no-codegen: Skip the code generation step, just check the code and generate layout.
+  -output-includes: Print the hierarchy of the processed source files.
+  -serial-ir: [REMOVED] Serialize the IR between front-end and back-end.
+  -skip-codegen: Skip the code generation phase.
+  -validate-ir: Validate the IR between the phases.
+  -verbose-paths: When displaying diagnostic output aim to display more detailed path information. In practice this is 
+    typically the complete 'canonical' path to the source file used.
+  -verify-debug-serial-ir: Verify IR in the front-end.
+  -dump-module: Disassemble and print the module IR.
+  -get-module-info: Print the name and version of a serialized IR Module
+  -get-supported-module-versions: Print the minimum and maximum module versions this compiler supports
+
+Experimental
+============
+
+Experimental options (use at your own risk)
+
+  -file-system <file-system-type>: Set the filesystem hook to use for a compile request.
+    To get a list of values that can be used for <file-system-type>, use "slangc -h file-system-type"
+  -heterogeneous: Output heterogeneity-related code.
+  -no-mangle: Do as little mangling of names as possible.
+  -no-hlsl-binding: Do not include explicit parameter binding semantics in the output HLSL code,except for parameters 
+    that has explicit bindings in the input source.
+  -no-hlsl-pack-constant-buffer-elements: Do not pack elements of constant buffers into structs in the output HLSL code.
+  -validate-uniformity: Perform uniformity validation analysis.
+  -allow-glsl: Enable GLSL as an input language.
+  -enable-experimental-passes: Enable experimental compiler passes
+  -enable-experimental-dynamic-dispatch: Enable experimental dynamic dispatch features
+  -embed-downstream-ir: Embed downstream IR into emitted slang IR
+  -experimental-feature: Enable experimental features (loading builtin neural module)
+
+Deprecated
+==========
+
+Deprecated options (allowed but ignored; may be removed in future)
+
+  -parameter-blocks-use-register-spaces: Parameter blocks will use register spaces
+  -zero-initialize: Initialize all variables to zero.Structs will set all struct-fields without an init expression to 
+    0.All variables will call their default constructor if not explicitly initialized as usual.
+
+Getting Help for Specific Categories
+=====================================
+
+To get help for a specific category of options or values, use: slangc -h <help-category>
+  <help-category> can be: General, Target, Downstream, Debugging, Repro, Experimental, Internal, Deprecated, compiler, 
+  language, language-version, archive-type, line-directive-mode, debug-info-format, fp-mode, fp-denormal-mode, 
+  help-style, optimization-level, debug-level, file-system-type, source-embed-style, target, stage, vulkan-shift, 
+  capability, file-extension, help-category
+

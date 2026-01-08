@@ -16,7 +16,6 @@ import "ui"
 
 // Global //////////////////////////////////////////////////////////////////////////////////
 
-
 global: struct
 {
   frame_arena:     mem.Arena,
@@ -1879,7 +1878,7 @@ entity_xform :: proc(en: ^Entity) -> m3f32
   {
     pivot := res.sprites[en.sprite].pivot
     dim := tt.local(en).scl * {16, 16}
-    local_pos := vmath.rotation_2x2f(tt.local(en).rot) * (v2f32{-dim.x, -dim.y} * pivot)
+    local_pos := vmath.rotation_2x2f(tt.local(en).rot) * (-dim * pivot)
     return local_pos + tt.local(en).pos
   }
 
