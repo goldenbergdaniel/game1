@@ -8,6 +8,7 @@ Input :: struct
   mouse_btns:     [Mouse_Btn_Kind]bool,
   key_down:       bool,
   mouse_btn_down: bool,
+  mouse_scroll:   [2]f32,
 }
 
 Input_Source :: union
@@ -224,6 +225,10 @@ sdl_translate_event :: proc(sdl_event: ^sdl.Event) -> Event
 			kind = .Mouse_Btn_Up, 
 			mouse_btn_kind = sdl_mouse_btn_map[sdl_event.button.button],
 		}
+
+  case .MOUSE_WHEEL:
+    global_input.mouse_scroll.x = sdl_event.wheel.x
+    global_input.mouse_scroll.y = sdl_event.wheel.y
 	}
 
 	return result

@@ -3,15 +3,18 @@ package platform
 import "core:fmt"
 import "core:math"
 import "core:strings"
+import os "core:os/os2"
 import "ext:sdl"
 import imgui "ext:dear_imgui"
 import imgui_sdl "ext:dear_imgui/imgui_impl_sdl3"
 import imgui_gl "ext:dear_imgui/imgui_impl_opengl3"
+import imgui_vk "ext:dear_imgui/imgui_impl_vulkan"
 import "../basic/mem"
 
 Window :: struct
 {
   handle:       ^sdl.Window,
+	desc:					Window_Desc,
   imio_handle:  ^imgui.IO,
   render_ctx:   struct #raw_union
   {
@@ -33,12 +36,13 @@ Window_Props :: enum
   Vsync,
 }
 
-Window_Desc :: struct
+Window_Desc :: struct #all_or_none
 {
-  title:  string,
-  width:  int,
-  height: int,
-  props:  bit_set[Window_Props],
+  title:  	string,
+  width:  	int,
+  height: 	int,
+  props:  	bit_set[Window_Props],
+	renderer:	enum{OpenGL, Vulkan},
 }
 
 Event :: struct
@@ -62,6 +66,7 @@ Event_Kind :: enum
 create_window :: proc(desc: Window_Desc, arena: ^mem.Arena) -> Window
 {
 	result: Window
+	result.desc = desc
 
 	scratch := mem.temp_begin(mem.scratch())
 	defer mem.temp_end(scratch)
@@ -73,7 +78,11 @@ create_window :: proc(desc: Window_Desc, arena: ^mem.Arena) -> Window
 		sdl.SetHint("SDL_VIDEO_DOUBLE_BUFFER", "1")
 	}
 	
-	_ = sdl.Init({.VIDEO, .EVENTS})
+	if !sdl.Init({.VIDEO, .EVENTS})
+	{
+		fmt.eprintln("[FATAL][platform]: Failed to init SDL3!")
+		os.exit(1)
+	}
 
 	window_flags: sdl.WindowFlags
 
@@ -83,18 +92,21 @@ create_window :: proc(desc: Window_Desc, arena: ^mem.Arena) -> Window
 	}
 	else
 	{
-		window_flags += {.OPENGL}
-		// window_flags += {.VULKAN}
-
-		// sdl.Vulkan_LoadLibrary(nil)
-
-		sdl.GL_SetAttribute(.CONTEXT_MAJOR_VERSION, 4)
-		sdl.GL_SetAttribute(.CONTEXT_MINOR_VERSION, 6)
-		sdl.GL_SetAttribute(.RED_SIZE, 8)
-		sdl.GL_SetAttribute(.GREEN_SIZE, 8)
-		sdl.GL_SetAttribute(.BLUE_SIZE, 8)
-		sdl.GL_SetAttribute(.DOUBLEBUFFER, 1)
-		sdl.GL_SetAttribute(.MULTISAMPLESAMPLES, 2)
+		if desc.renderer == .Vulkan
+		{
+			window_flags += {.VULKAN}
+		}
+		else
+		{
+			window_flags += {.OPENGL}
+			sdl.GL_SetAttribute(.CONTEXT_MAJOR_VERSION, 4)
+			sdl.GL_SetAttribute(.CONTEXT_MINOR_VERSION, 6)
+			sdl.GL_SetAttribute(.RED_SIZE, 8)
+			sdl.GL_SetAttribute(.GREEN_SIZE, 8)
+			sdl.GL_SetAttribute(.BLUE_SIZE, 8)
+			sdl.GL_SetAttribute(.DOUBLEBUFFER, 1)
+			sdl.GL_SetAttribute(.MULTISAMPLESAMPLES, 2)
+		}
 	}
 	
 	for prop in desc.props
@@ -117,11 +129,7 @@ create_window :: proc(desc: Window_Desc, arena: ^mem.Arena) -> Window
   title_cstr := strings.clone_to_cstring(desc.title, mem.allocator(scratch.arena))
 	sdl_window := sdl.CreateWindow(title_cstr, i32(desc.width), i32(desc.height), window_flags)
 
-	when ODIN_OS == .Darwin
-	{
-
-	}
-	else
+	if desc.renderer == .OpenGL
 	{
 		gl_ctx := sdl.GL_CreateContext(sdl_window)
 		sdl.GL_MakeCurrent(sdl_window, gl_ctx)
@@ -135,34 +143,28 @@ create_window :: proc(desc: Window_Desc, arena: ^mem.Arena) -> Window
 			fmt.println("       SDL Version:", sdl.GetVersion())
 			fmt.println("Dear ImGui Version:", imgui.GetVersion())
 		}
-	}
-	
-	imgui.CreateContext()
-	imgui.StyleColorsDark()
-	imgui_sdl.InitForOpenGL(sdl_window, gl_ctx)
-
-	when ODIN_OS == .Darwin
-	{
-
-	}
-	else
-	{
-		imgui_gl.Init()
 
 		result.render_ctx.gl.ctx = gl_ctx
 	}
 
 	result.handle = sdl_window
-	result.imio_handle = imgui.GetIO()
 
 	return result
 }
 
 destroy_window :: proc(window: ^Window)
 {
-	imgui_gl.Shutdown()
-	imgui_sdl.Shutdown()
-	imgui.DestroyContext()
+	switch window.desc.renderer
+	{
+	case .OpenGL:
+		imgui_gl.Shutdown()
+		imgui_sdl.Shutdown()
+		imgui.DestroyContext()
+
+	case .Vulkan:
+		// Not implemented
+	}
+
 	sdl.DestroyWindow(window.handle)
 	sdl.Quit()
 }
@@ -200,11 +202,18 @@ window_pump_events :: proc(window: ^Window)
   	result = sdl.PollEvent(&sdl_event)
   	event^ = sdl_translate_event(&sdl_event)
 
-  	imgui_sdl.ProcessEvent(&sdl_event)
-  	if window.imio_handle.WantCaptureMouse && event.mouse_btn_kind != .Nil
-  	{
-  		event.kind = .Nil
-  	}
+		switch window.desc.renderer
+		{
+		case .OpenGL:
+	  	imgui_sdl.ProcessEvent(&sdl_event)
+	  	if window.imio_handle.WantCaptureMouse && event.mouse_btn_kind != .Nil
+	  	{
+	  		event.kind = .Nil
+	  	}
+
+		case .Vulkan:
+			// Not implemented
+		}
 
   	return result
   }
@@ -229,6 +238,31 @@ window_pump_events :: proc(window: ^Window)
   }
 }
 
+window_init_imgui :: proc(window: ^Window)
+{
+	switch window.desc.renderer
+	{
+	case .OpenGL:
+		imgui.CreateContext()
+		imgui.StyleColorsDark()
+		imgui_sdl.InitForOpenGL(window.handle, window.render_ctx.gl.ctx)
+		imgui_gl.Init()
+		window.imio_handle = imgui.GetIO()
+
+	case .Vulkan:
+		// imgui.CreateContext()
+		// imgui.StyleColorsDark()
+		// imgui_sdl.InitForVulkan(sdl_window)
+		// imgui_vk.Init(&{
+		// })
+	}
+}
+
+window_set_relative_cursor :: proc(window: ^Window, enabled: bool) -> bool
+{
+	return sdl.SetWindowRelativeMouseMode(window.handle, enabled)
+}
+
 @(require_results)
 get_cursor_position :: proc() -> [2]f32
 {
@@ -237,17 +271,26 @@ get_cursor_position :: proc() -> [2]f32
 	return {math.round(result.x), math.round(result.y)}
 }
 
+@(require_results)
+get_mouse_scroll :: proc() -> [2]f32
+{
+	return global_input.mouse_scroll
+}
+
+@(require_results)
 get_display_scale :: proc(window: ^Window) -> f32
 {
 	display_id := sdl.GetDisplayForWindow(window.handle)
 	return sdl.GetDisplayContentScale(display_id)
 }
 
+@(require_results)
 get_display_dpi :: proc(window: ^Window) -> int
 {
 	return cast(int) get_display_scale(window) * 96
 }
 
+@(require_results)
 get_display_bounds :: proc(window: ^Window) -> [4]f32
 {
 	display_id := sdl.GetDisplayForWindow(window.handle)
