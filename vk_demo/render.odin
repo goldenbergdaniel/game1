@@ -931,7 +931,7 @@ vk_init_instance :: proc()
       else if .INFO in severity do fmt.eprintln("[INFO][render_vk]:", callback_data.pMessage)
       return false
     },
-    pNext = &layer_settings_ci,
+    pNext = &layer_settings_ci when ODIN_DEBUG else nil,
   }
 
   next = &debug_messenger_ci
@@ -945,8 +945,8 @@ vk_init_instance :: proc()
       engineVersion = vk.MAKE_VERSION(1, 0, 0),
       apiVersion = vk.API_VERSION_1_4,
     },
-    enabledLayerCount = cast(u32) len(layers),
-    ppEnabledLayerNames = raw_data(layers[:]),
+    enabledLayerCount = cast(u32) len(layers) when ODIN_DEBUG else 0,
+    ppEnabledLayerNames = raw_data(layers[:]) when ODIN_DEBUG else nil,
     enabledExtensionCount = cast(u32) len(extensions),
     ppEnabledExtensionNames = raw_data(extensions[:]),
     pNext = next,

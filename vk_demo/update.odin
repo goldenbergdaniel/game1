@@ -66,12 +66,13 @@ start :: proc(using gm: ^Game)
   cube.rot = {0, 0, 0}
 }
 
-update :: proc(using gm: ^Game, t, dt: f64)
+update :: proc(using gm: ^Game, t, dt: f32)
 {
   set_current_game(gm)
 
   window_size := platform.window_get_size(&user.window)
   cursor_pos := platform.get_cursor_position()
+  mouse_scroll := platform.get_mouse_scroll()
 
   if !window_focused && mouse_btn_down(.Left)
   {
@@ -92,7 +93,7 @@ update :: proc(using gm: ^Game, t, dt: f64)
     gm.camera.yaw -= (cursor_offset.x / 5) * CAMERA_SENSITIVITY_H
     gm.camera.pitch -= (cursor_offset.y / 5) * CAMERA_SENSITIVITY_V
 
-    gm.camera.fov -= platform.get_mouse_scroll().y * CAMERA_ZOOM_MULT
+    gm.camera.fov -= mouse_scroll.y * CAMERA_ZOOM_MULT
     gm.camera.fov = clamp(camera.fov, 1, 120)
   }
 
@@ -103,6 +104,19 @@ update :: proc(using gm: ^Game, t, dt: f64)
   else if gm.camera.pitch < -89
   {
     gm.camera.pitch = -89
+  }
+
+  if key_down(.Q)
+  {
+    gm.camera.roll = 30
+  }
+  else if key_down(.E)
+  {
+    gm.camera.roll = -30
+  }
+  else
+  {
+    gm.camera.roll = 0
   }
 
   camera_dir: v3f
@@ -162,31 +176,33 @@ update :: proc(using gm: ^Game, t, dt: f64)
 
   if key_down(.R)
   {
-    camera.pos = {0, 0, 3}
+    camera.pos = {0, 0, 0}
     camera.yaw = -90
     camera.pitch = 0
+    camera.roll = 0
     camera.fov = CAMERA_FOV
-
-    cube.pos = {0, 0, 0}
-    cube.rot = {0, 0, 0}
   }
+
+  cube.rot.y += dt/2
 
   // print_camera(gm.camera)
 
   gm.projection = vmath.IDENTITY_4X4F
 
-  gm.projection *= vmath.perspective_4x4f(gm.camera.fov/math.DEG_PER_RAD, window_size.x/window_size.y, 0.1, 1000)
+  gm.projection *= vmath.perspective(gm.camera.fov/math.DEG_PER_RAD, window_size.x/window_size.y, 0.1, 1000)
 
-  gm.projection *= vmath.lookat_4x4f(gm.camera.pos, gm.camera.front, gm.camera.right, gm.camera.up)
+  gm.projection *= vmath.rotation_4x4f(gm.camera.roll/math.DEG_PER_RAD, gm.camera.front)
+  gm.projection *= vmath.lookat(gm.camera.pos, gm.camera.front, gm.camera.right, gm.camera.up)
 
   gm.projection *= vmath.translation_4x4f(cube.pos)
-  gm.projection *= vmath.rotation_x_4x4f(cube.rot.x/math.DEG_PER_RAD)
+  gm.projection *= vmath.rotation_4x4f(cube.rot.x/math.DEG_PER_RAD, {1, 0, 0})
+  gm.projection *= vmath.rotation_4x4f(cube.rot.y/math.DEG_PER_RAD, {0, 1, 0})
   gm.projection *= vmath.rotation_y_4x4f(cube.rot.y/math.DEG_PER_RAD)
 
   gm.prev_keys = platform.global_input.keys
   gm.prev_mouse_btns = platform.global_input.mouse_btns
   gm.prev_cursor_pos = platform.get_cursor_position()
-  platform.global_input.mouse_scroll = {0, 0}
+  platform.reset_mouse_scroll()
 
   set_current_game(nil)
 }
@@ -194,10 +210,11 @@ update :: proc(using gm: ^Game, t, dt: f64)
 print_camera :: proc(camera: Camera)
 {
   fmt.printf("pos: <%f, %f, %f>\n", camera.pos.x, camera.pos.y, camera.pos.z)
-  fmt.printf("yp: <%f, %f>\n", camera.yaw, camera.pitch)
-  fmt.printf("f: <%f, %f, %f>\n", camera.front.x, camera.front.y, camera.front.z)
-  fmt.printf("r: <%f, %f, %f>\n", camera.right.x, camera.right.y, camera.right.z)
-  fmt.printf("u: <%f, %f, %f>\n", camera.up.x, camera.up.y, camera.up.z)
+  fmt.printf("yp:  <%f, %f>\n", camera.yaw, camera.pitch)
+  fmt.printf("fov: <%f, %f>\n", camera.fov)
+  fmt.printf("f:   <%f, %f, %f>\n", camera.front.x, camera.front.y, camera.front.z)
+  fmt.printf("r:   <%f, %f, %f>\n", camera.right.x, camera.right.y, camera.right.z)
+  fmt.printf("u:   <%f, %f, %f>\n", camera.up.x, camera.up.y, camera.up.z)
 }
 
 // Input ///////////////////////////////////////////////////////////////////////////////////
