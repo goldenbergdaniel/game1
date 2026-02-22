@@ -8,7 +8,7 @@ import "../game/platform"
 
 CAMERA_FOV           :: 70
 CAMERA_ZOOM_MULT     :: 4
-CAMERA_MOV_SPEED     :: 0.025
+CAMERA_MOV_SPEED     :: 0.05
 CAMERA_SENSITIVITY_H :: 0.5
 CAMERA_SENSITIVITY_V :: 0.5
 
@@ -17,8 +17,10 @@ Game :: struct
   prev_keys:       [platform.Key_Kind]bool,
   prev_mouse_btns: [platform.Mouse_Btn_Kind]bool,
   prev_cursor_pos: v2f,
-  camera:          Camera,
   projection:      m4x4f,
+  movement_mode:   enum{Free_Fly, Grounded},
+  camera:          Camera,
+  player:          Entity,
 }
 
 Camera :: struct
@@ -37,6 +39,7 @@ Entity :: struct
 {
   pos:   v3f,
   rot:   v3f,
+  vel:   v3f,
   scale: v3f,
 }
 
@@ -58,12 +61,15 @@ set_current_game :: #force_inline proc(gm: ^Game)
 
 start :: proc(using gm: ^Game)
 {
-  camera.pos = {0, 0, 0}
+  camera.pos = {0, 2, 0}
   camera.yaw = -90
   camera.fov = CAMERA_FOV
 
-  cube.pos = {0, 0, -2}
-  cube.rot = {0, 0, 0}
+  cube.pos = {0, -1, -2}
+  cube.rot = {0, 90, 0}
+  cube.scale = {100, 0.1, 100}
+
+  movement_mode = .Grounded
 }
 
 update :: proc(using gm: ^Game, t, dt: f32)
@@ -108,11 +114,11 @@ update :: proc(using gm: ^Game, t, dt: f32)
 
   if key_down(.Q)
   {
-    gm.camera.roll = 30
+    gm.camera.roll = 15
   }
   else if key_down(.E)
   {
-    gm.camera.roll = -30
+    gm.camera.roll = -15
   }
   else
   {
@@ -123,9 +129,23 @@ update :: proc(using gm: ^Game, t, dt: f32)
   camera_dir.x = math.cos(gm.camera.yaw/math.DEG_PER_RAD) * math.cos(gm.camera.pitch/math.DEG_PER_RAD)
   camera_dir.y = math.sin(gm.camera.pitch/math.DEG_PER_RAD)
   camera_dir.z = math.sin(gm.camera.yaw/math.DEG_PER_RAD) * math.cos(gm.camera.pitch/math.DEG_PER_RAD)
-  gm.camera.front = vmath.normalize(camera_dir)
-  gm.camera.right = vmath.normalize(vmath.cross(v3f{0, 1, 0}, gm.camera.front))
-  gm.camera.up    = vmath.cross(gm.camera.front, gm.camera.right)
+  camera.front = vmath.normalize(camera_dir)
+  camera.right = vmath.normalize(vmath.cross(v3f{0, 1, 0}, gm.camera.front))
+  camera.up    = vmath.cross(gm.camera.front, gm.camera.right)
+
+  if key_just_down(.P)
+  {
+    if gm.movement_mode == .Free_Fly
+    {
+      gm.movement_mode = .Grounded
+    }
+    else
+    {
+      gm.movement_mode = .Free_Fly
+    }
+
+    fmt.println("[INFO][game]: Switched to", gm.movement_mode)
+  }
 
   speed_mul: f32 = 1.0
   if key_down(.Left_Ctrl)
@@ -137,41 +157,98 @@ update :: proc(using gm: ^Game, t, dt: f32)
     speed_mul = 0.5
   }
 
-  if key_down(.W) && !key_down(.S)
+  switch gm.movement_mode
   {
-    dir := gm.camera.front
-    dir.y = 0
-    dir = vmath.normalize(dir)
+  case .Grounded:
+    if key_down(.W) && !key_down(.S)
+    {
+      dir := gm.camera.front
+      dir.y = 0
+      dir = vmath.normalize(dir)
 
-    gm.camera.pos += dir * CAMERA_MOV_SPEED * speed_mul
-  }
+      gm.camera.pos += dir * CAMERA_MOV_SPEED * speed_mul
+    }
 
-  if key_down(.S) && !key_down(.W)
-  {
-    dir := gm.camera.front
-    dir.y = 0
-    dir = vmath.normalize(dir)
+    if key_down(.S) && !key_down(.W)
+    {
+      dir := gm.camera.front
+      dir.y = 0
+      dir = vmath.normalize(dir)
 
-    gm.camera.pos -= dir * CAMERA_MOV_SPEED * speed_mul
-  }
+      gm.camera.pos -= dir * CAMERA_MOV_SPEED * speed_mul
+    }
 
-  if key_down(.D) && !key_down(.A)
-  {
-    gm.camera.pos += gm.camera.right * CAMERA_MOV_SPEED * speed_mul
-  }
+    if key_down(.D) && !key_down(.A)
+    {
+      dir := gm.camera.right
+      dir.y = 0
+      dir = vmath.normalize(dir)
+      gm.camera.pos += dir * CAMERA_MOV_SPEED * speed_mul
+    }
 
-  if key_down(.A) && !key_down(.D)
-  {
-    gm.camera.pos -= gm.camera.right * CAMERA_MOV_SPEED * speed_mul
-  }
-  if key_down(.Space) && !key_down(.Left_Shift)
-  {
-    gm.camera.pos.y += CAMERA_MOV_SPEED * speed_mul
-  }
+    if key_down(.A) && !key_down(.D)
+    {
+      dir := gm.camera.right
+      dir.y = 0
+      dir = vmath.normalize(dir)
+      gm.camera.pos -= dir * CAMERA_MOV_SPEED * speed_mul
+    }
 
-  if key_down(.Left_Shift) && !key_down(.Space)
-  {
-    gm.camera.pos.y -= CAMERA_MOV_SPEED * speed_mul
+    if camera.pos.y <= 0
+    {
+      player.vel.y = 0
+    }
+
+    player.vel.y -= 0.2 * dt
+
+    if key_down(.Space) && camera.pos.y <= 0
+    {
+      player.vel.y += 0.7
+    }
+
+    camera.pos.y += player.vel.y * dt
+    camera.pos.y = max(camera.pos.y, 0)
+
+  case .Free_Fly:
+    if key_down(.W) && !key_down(.S)
+    {
+      dir := gm.camera.front
+      dir = vmath.normalize(dir)
+
+      gm.camera.pos += dir * CAMERA_MOV_SPEED * speed_mul
+    }
+
+    if key_down(.S) && !key_down(.W)
+    {
+      dir := gm.camera.front
+      dir = vmath.normalize(dir)
+
+      gm.camera.pos -= dir * CAMERA_MOV_SPEED * speed_mul
+    }
+
+    if key_down(.D) && !key_down(.A)
+    {
+      dir := gm.camera.right
+      dir = vmath.normalize(dir)
+      gm.camera.pos += dir * CAMERA_MOV_SPEED * speed_mul
+    }
+
+    if key_down(.A) && !key_down(.D)
+    {
+      dir := gm.camera.right
+      dir = vmath.normalize(dir)
+      gm.camera.pos -= dir * CAMERA_MOV_SPEED * speed_mul
+    }
+
+    if key_down(.Space) && !key_down(.Left_Shift)
+    {
+      gm.camera.pos.y += CAMERA_MOV_SPEED * speed_mul
+    }
+
+    if key_down(.Left_Shift) && !key_down(.Space)
+    {
+      gm.camera.pos.y -= CAMERA_MOV_SPEED * speed_mul
+    }
   }
 
   if key_down(.R)
@@ -183,7 +260,7 @@ update :: proc(using gm: ^Game, t, dt: f32)
     camera.fov = CAMERA_FOV
   }
 
-  cube.rot.y += dt/2
+  // cube.rot.y += dt/2
 
   // print_camera(gm.camera)
 
@@ -195,6 +272,7 @@ update :: proc(using gm: ^Game, t, dt: f32)
   gm.projection *= vmath.lookat(gm.camera.pos, gm.camera.front, gm.camera.right, gm.camera.up)
 
   gm.projection *= vmath.translation_4x4f(cube.pos)
+  gm.projection *= vmath.scale_4x4f(cube.scale)
   gm.projection *= vmath.rotation_4x4f(cube.rot.x/math.DEG_PER_RAD, {1, 0, 0})
   gm.projection *= vmath.rotation_4x4f(cube.rot.y/math.DEG_PER_RAD, {0, 1, 0})
   gm.projection *= vmath.rotation_y_4x4f(cube.rot.y/math.DEG_PER_RAD)
@@ -210,7 +288,7 @@ update :: proc(using gm: ^Game, t, dt: f32)
 print_camera :: proc(camera: Camera)
 {
   fmt.printf("pos: <%f, %f, %f>\n", camera.pos.x, camera.pos.y, camera.pos.z)
-  fmt.printf("yp:  <%f, %f>\n", camera.yaw, camera.pitch)
+  fmt.printf("ypr: <%f, %f, %f>\n", camera.yaw, camera.pitch, camera.roll)
   fmt.printf("fov: <%f, %f>\n", camera.fov)
   fmt.printf("f:   <%f, %f, %f>\n", camera.front.x, camera.front.y, camera.front.z)
   fmt.printf("r:   <%f, %f, %f>\n", camera.right.x, camera.right.y, camera.right.z)

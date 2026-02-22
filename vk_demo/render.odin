@@ -233,10 +233,10 @@ vk_init :: proc(window: ^platform.Window)
 
     g.vertices = {
       // Front
-      {position={-0.5, -0.5, -0.5}, tint={0,1,0,1}, color={0,0,0,0}, uv={0,1}},
-      {position={ 0.5, -0.5, -0.5}, tint={0,1,0,1}, color={0,0,0,0}, uv={1,1}},
-      {position={ 0.5,  0.5, -0.5}, tint={0,1,0,1}, color={0,0,0,0}, uv={1,0}},
-      {position={-0.5,  0.5, -0.5}, tint={0,1,0,1}, color={0,0,0,0}, uv={0,0}},
+      {position={-0.5, -0.5, -0.5}, tint={1,1,1,1}, color={0,0,0,0}, uv={0,1}},
+      {position={ 0.5, -0.5, -0.5}, tint={1,1,1,1}, color={0,0,0,0}, uv={1,1}},
+      {position={ 0.5,  0.5, -0.5}, tint={1,1,1,1}, color={0,0,0,0}, uv={1,0}},
+      {position={-0.5,  0.5, -0.5}, tint={1,1,1,1}, color={0,0,0,0}, uv={0,0}},
 
       // Back
       {position={ 0.5, -0.5,  0.5}, tint={1,1,1,1}, color={0,0,0,0}, uv={0,1}},
@@ -245,28 +245,28 @@ vk_init :: proc(window: ^platform.Window)
       {position={ 0.5,  0.5,  0.5}, tint={1,1,1,1}, color={0,0,0,0}, uv={0,0}},
 
       // Left
-      {position={-0.5, -0.5,  0.5}, tint={1,0,0,1}, color={0,0,0,0}, uv={0,1}},
-      {position={-0.5, -0.5, -0.5}, tint={1,0,0,1}, color={0,0,0,0}, uv={1,1}},
-      {position={-0.5,  0.5, -0.5}, tint={1,0,0,1}, color={0,0,0,0}, uv={1,0}},
-      {position={-0.5,  0.5,  0.5}, tint={1,0,0,1}, color={0,0,0,0}, uv={0,0}},
+      {position={-0.5, -0.5,  0.5}, tint={1,1,1,1}, color={0,0,0,0}, uv={0,1}},
+      {position={-0.5, -0.5, -0.5}, tint={1,1,1,1}, color={0,0,0,0}, uv={1,1}},
+      {position={-0.5,  0.5, -0.5}, tint={1,1,1,1}, color={0,0,0,0}, uv={1,0}},
+      {position={-0.5,  0.5,  0.5}, tint={1,1,1,1}, color={0,0,0,0}, uv={0,0}},
 
       // Right
-      {position={ 0.5, -0.5, -0.5}, tint={0,0,1,1}, color={0,0,0,0}, uv={0,1}},
-      {position={ 0.5, -0.5,  0.5}, tint={0,0,1,1}, color={0,0,0,0}, uv={1,1}},
-      {position={ 0.5,  0.5,  0.5}, tint={0,0,1,1}, color={0,0,0,0}, uv={1,0}},
-      {position={ 0.5,  0.5, -0.5}, tint={0,0,1,1}, color={0,0,0,0}, uv={0,0}},
+      {position={ 0.5, -0.5, -0.5}, tint={1,1,1,1}, color={0,0,0,0}, uv={0,1}},
+      {position={ 0.5, -0.5,  0.5}, tint={1,1,1,1}, color={0,0,0,0}, uv={1,1}},
+      {position={ 0.5,  0.5,  0.5}, tint={1,1,1,1}, color={0,0,0,0}, uv={1,0}},
+      {position={ 0.5,  0.5, -0.5}, tint={1,1,1,1}, color={0,0,0,0}, uv={0,0}},
 
       // Top
-      {position={-0.5, -0.5,  0.5}, tint={1,1,0,1}, color={0,0,0,0}, uv={0,1}},
-      {position={ 0.5, -0.5,  0.5}, tint={1,1,0,1}, color={0,0,0,0}, uv={1,1}},
-      {position={ 0.5, -0.5, -0.5}, tint={1,1,0,1}, color={0,0,0,0}, uv={1,0}},
-      {position={-0.5, -0.5, -0.5}, tint={1,1,0,1}, color={0,0,0,0}, uv={0,0}},
+      {position={-0.5, -0.5,  0.5}, tint={1,1,1,1}, color={0,0,0,0}, uv={0,1}},
+      {position={ 0.5, -0.5,  0.5}, tint={1,1,1,1}, color={0,0,0,0}, uv={1,1}},
+      {position={ 0.5, -0.5, -0.5}, tint={1,1,1,1}, color={0,0,0,0}, uv={1,0}},
+      {position={-0.5, -0.5, -0.5}, tint={1,1,1,1}, color={0,0,0,0}, uv={0,0}},
 
       // Bottom
-      {position={-0.5,  0.5, -0.5}, tint={1,0,1,1}, color={0,0,0,0}, uv={0,1}},
-      {position={ 0.5,  0.5, -0.5}, tint={1,0,1,1}, color={0,0,0,0}, uv={1,1}},
-      {position={ 0.5,  0.5,  0.5}, tint={1,0,1,1}, color={0,0,0,0}, uv={1,0}},
-      {position={-0.5,  0.5,  0.5}, tint={1,0,1,1}, color={0,0,0,0}, uv={0,0}},
+      {position={-0.5,  0.5, -0.5}, tint={1,1,1,1}, color={0,0,0,0}, uv={0,1}},
+      {position={ 0.5,  0.5, -0.5}, tint={1,1,1,1}, color={0,0,0,0}, uv={1,1}},
+      {position={ 0.5,  0.5,  0.5}, tint={1,1,1,1}, color={0,0,0,0}, uv={1,0}},
+      {position={-0.5,  0.5,  0.5}, tint={1,1,1,1}, color={0,0,0,0}, uv={0,0}},
     }
 
     mem.copy(staging_buf.info.pMappedData, raw_data(g.vertices[:]), vertices_size)
