@@ -63,8 +63,9 @@ main :: proc()
       }
     }
 
-    update(&game, f32(t), f32(dt))
+    update(&game, f32(dt))
     t += dt
+    game.t = f32(t)
 
     vk_render(&game)
 

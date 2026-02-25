@@ -2,16 +2,19 @@ package vk_demo
 
 import "base:runtime"
 import "core:fmt"
+import "core:slice"
+import "core:strings"
 import "core:image/qoi"
 import "core:image/png"
 import os "core:os/os2"
+import "ext:cgltf"
 import "ext:sdl"
 import vk "ext:vulkan"
 import "ext:vma"
 import "../game/basic/mem"
 import "../game/platform"
 
-USE_MAILBOX :: false
+USE_MAILBOX          :: false
 NUM_FRAMES_IN_FLIGHT :: 2
 
 Device :: struct
@@ -51,25 +54,27 @@ Image :: struct
   info:       vma.AllocationInfo,
 }
 
-Pipeline :: struct
-{
-  handle: vk.Pipeline,
-  layout: vk.PipelineLayout, 
-}
-
 Vertex :: struct
 {
   position: [3]f32,
   _:        [1]f32,
+  normal:   [3]f32,
+  _:        [1]f32,
   color:    [4]f32,
-  tint:     [4]f32,
   uv:       [2]f32,
   _:        [2]f32,
+}
+
+Model :: struct
+{
+  vertices: []Vertex,
+  indices:  []u16,
 }
 
 @(private="file")
 g: struct
 {
+  perm_arena:        mem.Arena,
   instance:          vk.Instance,
   debug_messenger:   vk.DebugUtilsMessengerEXT,
   window:            ^platform.Window,
@@ -93,7 +98,11 @@ g: struct
   burst_cmd_pool:    vk.CommandPool,
   burst_cmd:         vk.CommandBuffer,
   burst_fence:       vk.Fence,
-  pipelines:         [enum{Main, Post}]Pipeline,
+  pipelines:         [enum{Main, Post}]struct
+  {
+    handle:          vk.Pipeline, 
+    layout:          vk.PipelineLayout,
+  },
   textures:          [enum{Smile, Screen}]Image,
   sampler:           vk.Sampler,
   viewport:          vk.Viewport,
@@ -116,10 +125,13 @@ g: struct
   vertex_buf:        Buffer,
   indices:           [36]u8,
   index_buf:         Buffer,
+  model:             Model,
 }
 
 vk_init :: proc(window: ^platform.Window)
 {
+  _ = mem.arena_init_growing(&g.perm_arena)
+
   g.window = window
   
   vk_init_instance()
@@ -216,8 +228,16 @@ vk_init :: proc(window: ^platform.Window)
 
   // - Vertex and index buffer ---
   {
-    vertices_size: vk.DeviceSize = len(g.vertices) * size_of(Vertex)
-    indices_size: vk.DeviceSize = len(g.indices) * size_of(u8)
+    model, model_load_err := load_model("res/models/cornell_box.glb", &g.perm_arena)
+    if model_load_err != nil
+    {
+      fmt.panicf("[FATAL][render_vk]: Failed to load model:", model_load_err)
+    }
+
+    g.model = model
+    
+    vertices_size := vk.DeviceSize(len(g.model.vertices) * size_of(Vertex))
+    indices_size := vk.DeviceSize(len(g.model.indices) * size_of(u16))
 
     staging_buf := vk_create_buffer(vertices_size + indices_size, {.TRANSFER_SRC}, {.HOST_VISIBLE})
     defer vk_destroy_buffer(&staging_buf)
@@ -231,81 +251,23 @@ vk_init :: proc(window: ^platform.Window)
       buffer = g.vertex_buf.handle,
     })
 
-    g.vertices = {
-      // Front
-      {position={-0.5, -0.5, -0.5}, tint={1,1,1,1}, color={0,0,0,0}, uv={0,1}},
-      {position={ 0.5, -0.5, -0.5}, tint={1,1,1,1}, color={0,0,0,0}, uv={1,1}},
-      {position={ 0.5,  0.5, -0.5}, tint={1,1,1,1}, color={0,0,0,0}, uv={1,0}},
-      {position={-0.5,  0.5, -0.5}, tint={1,1,1,1}, color={0,0,0,0}, uv={0,0}},
-
-      // Back
-      {position={ 0.5, -0.5,  0.5}, tint={1,1,1,1}, color={0,0,0,0}, uv={0,1}},
-      {position={-0.5, -0.5,  0.5}, tint={1,1,1,1}, color={0,0,0,0}, uv={1,1}},
-      {position={-0.5,  0.5,  0.5}, tint={1,1,1,1}, color={0,0,0,0}, uv={1,0}},
-      {position={ 0.5,  0.5,  0.5}, tint={1,1,1,1}, color={0,0,0,0}, uv={0,0}},
-
-      // Left
-      {position={-0.5, -0.5,  0.5}, tint={1,1,1,1}, color={0,0,0,0}, uv={0,1}},
-      {position={-0.5, -0.5, -0.5}, tint={1,1,1,1}, color={0,0,0,0}, uv={1,1}},
-      {position={-0.5,  0.5, -0.5}, tint={1,1,1,1}, color={0,0,0,0}, uv={1,0}},
-      {position={-0.5,  0.5,  0.5}, tint={1,1,1,1}, color={0,0,0,0}, uv={0,0}},
-
-      // Right
-      {position={ 0.5, -0.5, -0.5}, tint={1,1,1,1}, color={0,0,0,0}, uv={0,1}},
-      {position={ 0.5, -0.5,  0.5}, tint={1,1,1,1}, color={0,0,0,0}, uv={1,1}},
-      {position={ 0.5,  0.5,  0.5}, tint={1,1,1,1}, color={0,0,0,0}, uv={1,0}},
-      {position={ 0.5,  0.5, -0.5}, tint={1,1,1,1}, color={0,0,0,0}, uv={0,0}},
-
-      // Top
-      {position={-0.5, -0.5,  0.5}, tint={1,1,1,1}, color={0,0,0,0}, uv={0,1}},
-      {position={ 0.5, -0.5,  0.5}, tint={1,1,1,1}, color={0,0,0,0}, uv={1,1}},
-      {position={ 0.5, -0.5, -0.5}, tint={1,1,1,1}, color={0,0,0,0}, uv={1,0}},
-      {position={-0.5, -0.5, -0.5}, tint={1,1,1,1}, color={0,0,0,0}, uv={0,0}},
-
-      // Bottom
-      {position={-0.5,  0.5, -0.5}, tint={1,1,1,1}, color={0,0,0,0}, uv={0,1}},
-      {position={ 0.5,  0.5, -0.5}, tint={1,1,1,1}, color={0,0,0,0}, uv={1,1}},
-      {position={ 0.5,  0.5,  0.5}, tint={1,1,1,1}, color={0,0,0,0}, uv={1,0}},
-      {position={-0.5,  0.5,  0.5}, tint={1,1,1,1}, color={0,0,0,0}, uv={0,0}},
-    }
-
-    mem.copy(staging_buf.info.pMappedData, raw_data(g.vertices[:]), vertices_size)
+    mem.copy(staging_buf.info.pMappedData, raw_data(model.vertices[:]), vertices_size)
 
     g.index_buf = vk_create_buffer(indices_size, {.INDEX_BUFFER, .TRANSFER_DST}, {.DEVICE_LOCAL})
 
-    g.indices = {
-      // Front
-       0, 1, 2,  2, 3, 0,
-
-      // Back
-       4, 5, 6,  6, 7, 4,
-
-      // Left
-       8,  9, 10,  10, 11, 8,
-
-      // Right
-      12, 13, 14,  14, 15, 12,
-
-      // Bottom
-      16, 17, 18,  18, 19, 16,
-
-      // Top
-      20, 21, 22,  22, 23, 20,
-    }
-
     indices_offset_addr := rawptr(uintptr(staging_buf.info.pMappedData) + uintptr(vertices_size))
-    mem.copy(indices_offset_addr, raw_data(g.indices[:]), indices_size)
+    mem.copy(indices_offset_addr, raw_data(g.model.indices[:]), indices_size)
 
     vk_copy_to_buffers(&staging_buf, {&g.vertex_buf, &g.index_buf}, {vertices_size, indices_size})
   }
 
   // - Texture ---
   {
-    // img, err := qoi.load_from_file("res/textures/smile.qoi")
-    img, err := png.load_from_file("res/textures/joseph_smith.png")
-    if err != nil
+    // img, img_load_err := qoi.load_from_file("res/textures/smile.qoi", allocator=mem.allocator(&g.perm_arena))
+    img, img_load_err := png.load_from_file("res/textures/joseph_smith.png", allocator=mem.allocator(&g.perm_arena))
+    if img_load_err != nil
     {
-      fmt.panicf("[FATAL][render_vk]: Failed to load image", err)
+      fmt.panicf("[FATAL][render_vk]: Failed to load image", img_load_err)
     }
 
     g.textures[.Smile] = vk_create_texture(img.pixels.buf[:], 
@@ -314,10 +276,10 @@ vk_init :: proc(window: ^platform.Window)
                                            .R8G8B8A8_SRGB,
                                            .SHADER_READ_ONLY_OPTIMAL)
 
-    img, err = qoi.load_from_file("res/textures/screen.qoi")
-    if err != nil
+    img, img_load_err = qoi.load_from_file("res/textures/screen.qoi", allocator=mem.allocator(&g.perm_arena))
+    if img_load_err != nil
     {
-      fmt.panicf("[FATAL][render_vk]: Failed to load image!", err)
+      fmt.panicf("[FATAL][render_vk]: Failed to load image!", img_load_err)
     }
 
     g.textures[.Screen] = vk_create_image(g.swapchain.extent.width, g.swapchain.extent.height, 
@@ -738,7 +700,7 @@ vk_render :: proc(gm:^ Game)
   // - BEGIN DRAW PASS 1 ---
 
   vk.CmdBindPipeline(frame.cmd, .GRAPHICS, g.pipelines[.Main].handle)
-  vk.CmdBindIndexBuffer(frame.cmd, g.index_buf.handle, 0, .UINT8)
+  vk.CmdBindIndexBuffer(frame.cmd, g.index_buf.handle, 0, .UINT16)
   vk.CmdBindDescriptorSets(frame.cmd, .GRAPHICS, g.pipelines[.Main].layout, 0, 1, &g.desc_sets[g.frame_idx], 0, nil)
 
   vk.CmdSetViewport(frame.cmd, 0, 1, &g.viewport)
@@ -746,12 +708,12 @@ vk_render :: proc(gm:^ Game)
 
   g.main_constants.vertex_addr = g.vertex_buf.address
   g.main_constants.transform = gm.projection
-  // g.main_constants.transform[1] = -g.main_constants.transform[1]
 
   vk.CmdPushConstants(frame.cmd, g.pipelines[.Main].layout, {.VERTEX}, 0, 
                       size_of(g.main_constants), &g.main_constants)
 
-  vk.CmdDrawIndexed(frame.cmd, len(g.indices), 1, 0, 0, 0)
+  vk.CmdDrawIndexed(frame.cmd, u32(len(g.model.indices)), 1, 0, 0, 0)
+  // vk.CmdDraw(frame.cmd, u32(len(g.model.vertices)), 1, 0, 0)
 
   // - END DRAW PASS 1 ---
 
@@ -1058,7 +1020,6 @@ vk_create_device :: proc() -> Device
   next = &vk.PhysicalDeviceVulkan14Features{
     sType = .PHYSICAL_DEVICE_VULKAN_1_4_FEATURES,
     pNext = next,
-    indexTypeUint8 = true,
   }
 
   queue_priority: f32 = 1.0
@@ -1491,6 +1452,99 @@ vk_destroy_image :: proc(texture: ^Image)
   vma.DestroyImage(g.gpu_allocator, texture.handle, texture.allocation)
 }
 
+load_model :: proc(path: string, arena: ^mem.Arena) -> (model: Model, result: cgltf.result)
+{
+  scratch := mem.temp_begin(mem.get_scratch(arena))
+  defer mem.temp_end(scratch)
+
+  path_cstr := strings.clone_to_cstring(path, mem.allocator(arena))
+
+  data := cgltf.parse_file({}, path_cstr) or_return
+  defer cgltf.free(data)
+
+  cgltf.load_buffers({file=data.file}, data, path_cstr) or_return
+
+  vertices: [dynamic]Vertex
+  vertices.allocator = mem.allocator(arena)
+  vertex_idx: int
+
+  indices: [dynamic]u16
+  indices.allocator = mem.allocator(arena)
+  index_idx: int
+
+  for &mesh, mesh_idx in data.meshes
+  {
+    for &prim, prim_idx in mesh.primitives
+    {
+      prim_vertex_count := int(prim.attributes[0].data.count)
+
+      resize(&vertices, len(vertices) + prim_vertex_count)
+
+      for &attr, attr_idx in prim.attributes
+      {
+        // fmt.println(mesh_idx, prim_idx, attr.type, attr.data.count, prim.indices.count)
+        #partial switch attr.type
+        {
+        case .position:
+          for i in 0..<prim_vertex_count
+          {
+            ok := cgltf.accessor_read_float(attr.data, uint(i), &vertices[vertex_idx + i].position[0], 3)
+            if !ok do return {}, .invalid_options
+          }
+        
+        case .normal:
+          for i in 0..<prim_vertex_count
+          {
+            ok := cgltf.accessor_read_float(attr.data, uint(i), &vertices[vertex_idx + i].normal[0], 3)
+            if !ok do return {}, .invalid_options
+          }
+
+        case .color:
+          for i in 0..<prim_vertex_count
+          {
+            ok := cgltf.accessor_read_float(attr.data, uint(i), &vertices[vertex_idx + i].color[0], 4)
+            if !ok do return {}, .invalid_options
+          }
+
+        case .texcoord:
+          for i in 0..<prim_vertex_count
+          {
+            ok := cgltf.accessor_read_float(attr.data, uint(i), &vertices[vertex_idx + i].uv[0], 2)
+            if !ok do return {}, .invalid_options
+          }
+        }
+      }
+
+      for i in 0..<prim_vertex_count
+      {
+        vertices[vertex_idx + i].color = prim.material.pbr_metallic_roughness.base_color_factor
+      }
+
+      if prim.indices != nil
+      {
+        prim_index_count := int(prim.indices.count)
+
+        resize(&indices, len(indices) + prim_index_count)
+
+        for i in 0..<int(prim.indices.count)
+        {
+          index := cgltf.accessor_read_index(prim.indices, uint(i))
+          indices[index_idx + i] = u16(vertex_idx) + u16(index)
+        }
+
+        index_idx += prim_index_count
+      }
+
+      vertex_idx += prim_vertex_count
+    }
+  }
+
+  model.vertices = vertices[:]
+  model.indices = indices[:]
+
+  return model, .success
+}
+
 vk_check :: proc(result: vk.Result, location := #caller_location)
 {
   if result == .TIMEOUT || result == .SUBOPTIMAL_KHR
@@ -1502,4 +1556,34 @@ vk_check :: proc(result: vk.Result, location := #caller_location)
     fmt.println("\033[31m[FATAL][render_vk]:\033[0m", result, "at", location)
     os.exit(1)
   }
+}
+
+rgba_from_hsva :: proc(hsva: [4]f32) -> (rgba: [4]f32)
+{
+  h, s, v, a := hsva[0], hsva[1], hsva[2], hsva[3]
+
+  if s == 0 do return {v, v, v, a}
+
+  h6 := h * 6
+  if h6 >= 6 do h6 = 0
+
+  sector := cast(int) h6
+  f := h6 - cast(f32) sector
+
+  p := v * (1 - s)
+  q := v * (1 - s * f)
+  t := v * (1 - s * (1 - f))
+
+  r, g, b: f32
+  switch sector
+  {
+  case 0: r, g, b = v, t, p
+  case 1: r, g, b = q, v, p
+  case 2: r, g, b = p, v, t
+  case 3: r, g, b = p, q, v
+  case 4: r, g, b = t, p, v
+  case 5: r, g, b = v, p, q
+  }
+
+  return {r, g, b, a}
 }

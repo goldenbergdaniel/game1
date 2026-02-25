@@ -6,7 +6,7 @@ import "core:math"
 import "../game/basic/vmath"
 import "../game/platform"
 
-CAMERA_FOV           :: 70
+CAMERA_FOV           :: 80
 CAMERA_ZOOM_MULT     :: 4
 CAMERA_MOV_SPEED     :: 0.05
 CAMERA_SENSITIVITY_H :: 0.5
@@ -14,13 +14,15 @@ CAMERA_SENSITIVITY_V :: 0.5
 
 Game :: struct
 {
-  prev_keys:       [platform.Key_Kind]bool,
-  prev_mouse_btns: [platform.Mouse_Btn_Kind]bool,
-  prev_cursor_pos: v2f,
-  projection:      m4x4f,
-  movement_mode:   enum{Free_Fly, Grounded},
-  camera:          Camera,
-  player:          Entity,
+  prev_keys:         [platform.Key_Kind]bool,
+  prev_mouse_btns:   [platform.Mouse_Btn_Kind]bool,
+  prev_cursor_pos:   v2f,
+  projection:        m4x4f,
+  t:                 f32,
+  movement_mode:     enum{Free_Fly, Grounded},
+  camera:            Camera,
+  player:            Entity,
+  double_jump_timer: Timer,
 }
 
 Camera :: struct
@@ -43,14 +45,21 @@ Entity :: struct
   scale: v3f,
 }
 
+Timer :: struct
+{
+  stop_time: f32,
+  ticking:   bool,
+}
+
 @(private="file")
 _current_game: ^Game
 
 cube: Entity
 window_focused: bool
 
-get_current_game :: #force_inline proc() -> ^Game
+get_current_game :: #force_inline proc(location := #caller_location) -> ^Game
 {
+  assert(_current_game != nil, loc=location)
   return _current_game
 }
 
@@ -61,18 +70,19 @@ set_current_game :: #force_inline proc(gm: ^Game)
 
 start :: proc(using gm: ^Game)
 {
-  camera.pos = {0, 2, 0}
+  // camera.pos = {0, 2, 0}
+  camera.pos = {0, 0, 0}
   camera.yaw = -90
   camera.fov = CAMERA_FOV
 
   cube.pos = {0, -1, -2}
-  cube.rot = {0, 90, 0}
-  cube.scale = {100, 0.1, 100}
+  cube.rot = {-90, 0, 0}
+  cube.scale = {1, 1, 1}
 
-  movement_mode = .Grounded
+  movement_mode = .Free_Fly
 }
 
-update :: proc(using gm: ^Game, t, dt: f32)
+update :: proc(using gm: ^Game, dt: f32)
 {
   set_current_game(gm)
 
@@ -88,9 +98,9 @@ update :: proc(using gm: ^Game, t, dt: f32)
   }
   else if key_just_down(.Escape)
   {
+    window_focused = false
     platform.window_set_relative_cursor(&user.window, false)
     platform.consume_key(.Escape)
-    window_focused = false
   }
 
   if window_focused
@@ -150,7 +160,7 @@ update :: proc(using gm: ^Game, t, dt: f32)
   speed_mul: f32 = 1.0
   if key_down(.Left_Ctrl)
   {
-    speed_mul = 3.0
+    speed_mul = 2.0
   }
   else if key_down(.Left_Alt)
   {
@@ -213,6 +223,7 @@ update :: proc(using gm: ^Game, t, dt: f32)
     if key_down(.W) && !key_down(.S)
     {
       dir := gm.camera.front
+      dir.y = 0
       dir = vmath.normalize(dir)
 
       gm.camera.pos += dir * CAMERA_MOV_SPEED * speed_mul
@@ -221,6 +232,7 @@ update :: proc(using gm: ^Game, t, dt: f32)
     if key_down(.S) && !key_down(.W)
     {
       dir := gm.camera.front
+      dir.y = 0
       dir = vmath.normalize(dir)
 
       gm.camera.pos -= dir * CAMERA_MOV_SPEED * speed_mul
@@ -229,14 +241,18 @@ update :: proc(using gm: ^Game, t, dt: f32)
     if key_down(.D) && !key_down(.A)
     {
       dir := gm.camera.right
+      dir.y = 0
       dir = vmath.normalize(dir)
+      
       gm.camera.pos += dir * CAMERA_MOV_SPEED * speed_mul
     }
 
     if key_down(.A) && !key_down(.D)
     {
       dir := gm.camera.right
+      dir.y = 0
       dir = vmath.normalize(dir)
+
       gm.camera.pos -= dir * CAMERA_MOV_SPEED * speed_mul
     }
 
@@ -260,7 +276,7 @@ update :: proc(using gm: ^Game, t, dt: f32)
     camera.fov = CAMERA_FOV
   }
 
-  // cube.rot.y += dt/2
+  // cube.rot.z += dt/2
 
   // print_camera(gm.camera)
 
@@ -275,7 +291,7 @@ update :: proc(using gm: ^Game, t, dt: f32)
   gm.projection *= vmath.scale_4x4f(cube.scale)
   gm.projection *= vmath.rotation_4x4f(cube.rot.x/math.DEG_PER_RAD, {1, 0, 0})
   gm.projection *= vmath.rotation_4x4f(cube.rot.y/math.DEG_PER_RAD, {0, 1, 0})
-  gm.projection *= vmath.rotation_y_4x4f(cube.rot.y/math.DEG_PER_RAD)
+  gm.projection *= vmath.rotation_4x4f(cube.rot.z/math.DEG_PER_RAD, {0, 0, 1})
 
   gm.prev_keys = platform.global_input.keys
   gm.prev_mouse_btns = platform.global_input.mouse_btns
@@ -293,6 +309,19 @@ print_camera :: proc(camera: Camera)
   fmt.printf("f:   <%f, %f, %f>\n", camera.front.x, camera.front.y, camera.front.z)
   fmt.printf("r:   <%f, %f, %f>\n", camera.right.x, camera.right.y, camera.right.z)
   fmt.printf("u:   <%f, %f, %f>\n", camera.up.x, camera.up.y, camera.up.z)
+}
+
+// Timer ///////////////////////////////////////////////////////////////////////////////////
+
+timer_start :: proc(timer: ^Timer, duration: f32)
+{
+  timer.stop_time = get_current_game().t + duration
+  timer.ticking = true
+}
+
+timer_timeout :: proc(timer: ^Timer) -> bool
+{
+  return timer.ticking && timer.stop_time <= get_current_game().t
 }
 
 // Input ///////////////////////////////////////////////////////////////////////////////////

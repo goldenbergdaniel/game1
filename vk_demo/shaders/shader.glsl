@@ -12,8 +12,8 @@ readonly uniform Uniform_Buffer
 struct Vertex
 {
 	vec3 position;
+  vec3 normal;
 	vec4 color;
-	vec4 tint;
   vec2 uv;
 };
 
@@ -30,27 +30,25 @@ uniform Push_Constants
   Vertex_Buffer vertex_buf;
 } constants;
 
-layout(location=0) out vec4 v_color;
-layout(location=1) out vec4 v_tint;
+layout(location=0) out vec3 v_normal;
+layout(location=1) out vec4 v_color;
 layout(location=2) out vec2 v_uv;
 
 void main()
 {
   Vertex vertex = constants.vertex_buf.vertices[gl_VertexIndex];
 
-  vec4 pos = constants.transform * vec4(vertex.position, 1);
-
-  gl_Position = pos;
+  gl_Position = constants.transform * vec4(vertex.position, 1);
+  v_normal = vertex.normal;
   v_color = vertex.color;
-  v_tint = vertex.tint;
   v_uv = vertex.uv;
 }
 
 #endif
 #ifdef FS /////////////////////////////////////////////////////////////////////
 
-layout(location=0) in vec4 v_color;
-layout(location=1) in vec4 v_tint;
+layout(location=0) in vec3 v_normal;
+layout(location=1) in vec4 v_color;
 layout(location=2) in vec2 v_uv;
 
 layout(set=0, binding=1) uniform sampler2D u_texture;
@@ -59,15 +57,18 @@ layout(location=0) out vec4 f_color;
 
 void main()
 {
-  if (v_color.a != 0)
-  {
-    f_color = v_color * uniforms.light;
-  }
-  else
-  {
-    vec4 texel = texture(u_texture, v_uv);
-    f_color = texel * v_tint * uniforms.light;
-  }
+  vec4 texel = texture(u_texture, v_uv);
+
+  // if (v_color.a != 0)
+  // {
+  //   f_color = vec4(texel.rgb + v_color.rgb, texel.a) * uniforms.light;
+  // }
+  // else
+  // {
+  //   f_color = vec4(texel.rgb * v_color.rgb, texel.a) * uniforms.light;
+  // }
+
+  f_color = v_color;
 }
 
 #endif
