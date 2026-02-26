@@ -305,7 +305,7 @@ print_camera :: proc(camera: Camera)
 {
   fmt.printf("pos: <%f, %f, %f>\n", camera.pos.x, camera.pos.y, camera.pos.z)
   fmt.printf("ypr: <%f, %f, %f>\n", camera.yaw, camera.pitch, camera.roll)
-  fmt.printf("fov: <%f, %f>\n", camera.fov)
+  fmt.printf("fov: %f\n", camera.fov)
   fmt.printf("f:   <%f, %f, %f>\n", camera.front.x, camera.front.y, camera.front.z)
   fmt.printf("r:   <%f, %f, %f>\n", camera.right.x, camera.right.y, camera.right.z)
   fmt.printf("u:   <%f, %f, %f>\n", camera.up.x, camera.up.y, camera.up.z)
