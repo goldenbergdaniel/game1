@@ -4,7 +4,7 @@
 layout(set=0, binding=0) 
 readonly uniform Uniform_Buffer
 {
-  vec4 light;
+  vec4 light_color;
 } uniforms;
 
 #ifdef VS /////////////////////////////////////////////////////////////////////
@@ -55,20 +55,24 @@ layout(set=0, binding=1) uniform sampler2D u_texture;
 
 layout(location=0) out vec4 f_color;
 
+const float ambient = 0.1;
+const vec3 light_dir = {-0.5, -0.5, -0.5};
+
 void main()
 {
-  vec4 texel = texture(u_texture, v_uv);
+  // vec4 texel = texture(u_texture, v_uv);
 
   // if (v_color.a != 0)
   // {
-  //   f_color = vec4(texel.rgb + v_color.rgb, texel.a) * uniforms.light;
+  //   f_color = vec4(texel.rgb + v_color.rgb, texel.a) * uniforms.light_color;
   // }
   // else
   // {
-  //   f_color = vec4(texel.rgb * v_color.rgb, texel.a) * uniforms.light;
+  //   f_color = vec4(texel.rgb * v_color.rgb, texel.a) * uniforms.light_color;
   // }
 
-  f_color = v_color;
+  float diffuse = 0.15 * dot(v_normal, light_dir);
+  f_color = v_color * (ambient + diffuse);
 }
 
 #endif

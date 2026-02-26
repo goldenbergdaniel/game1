@@ -75,9 +75,9 @@ start :: proc(using gm: ^Game)
   camera.yaw = -90
   camera.fov = CAMERA_FOV
 
-  cube.pos = {0, -1, -2}
+  cube.pos = {0, -1, -3}
   cube.rot = {-90, 0, 0}
-  cube.scale = {1, 1, 1}
+  cube.scale = {1.0, 1.0, 1.0}
 
   movement_mode = .Free_Fly
 }

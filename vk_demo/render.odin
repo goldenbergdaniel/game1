@@ -119,7 +119,7 @@ g: struct
   },
   uniforms:          struct
   {
-    light:           [4]f32,
+    light_color:     [4]f32,
   },
   vertices:          [24]Vertex,
   vertex_buf:        Buffer,
@@ -228,7 +228,7 @@ vk_init :: proc(window: ^platform.Window)
 
   // - Vertex and index buffer ---
   {
-    model, model_load_err := load_model("res/models/cornell_box.glb", &g.perm_arena)
+    model, model_load_err := load_model("res/models/utah_teapot_decimated.glb", &g.perm_arena)
     if model_load_err != nil
     {
       fmt.panicf("[FATAL][render_vk]: Failed to load model:", model_load_err)
@@ -642,7 +642,7 @@ vk_render :: proc(gm:^ Game)
 {
   frame := &g.frames[g.frame_idx]
 
-  g.uniforms.light = 1.0
+  g.uniforms.light_color = 1.0
 
   vk_check(vk.WaitForFences(g.device.handle, 1, &frame.fence, true, max(u64)))
   vk_check(vk.ResetFences(g.device.handle, 1, &frame.fence))
