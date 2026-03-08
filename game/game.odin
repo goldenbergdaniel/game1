@@ -1,3 +1,4 @@
+#+feature using-stmt
 package game
 
 import "core:math"
@@ -116,7 +117,7 @@ game_free :: proc(gm: ^Game)
   tt.destroy_tree(&gm.transform_tree)
 }
 
-copy_game :: proc(dst, src: ^Game)
+game_copy :: proc(dst, src: ^Game)
 {
   dst_tree := dst.transform_tree
   dst^ = src^
@@ -136,7 +137,7 @@ game_start :: proc(gm: ^Game)
   set_active_region(gm, region)
 
   player := spawn_player()
-  tt.set_global_pos(player, region_pos_to_world_pos(WORLD_WIDTH/2, region))
+  tt.set_global_pos(player, region_pos_to_world_pos(VIEWPORT_WIDTH/2, region))
 
   gm.special_entities[.Player] = player
 
@@ -147,7 +148,7 @@ game_start :: proc(gm: ^Game)
   }
 
   play_sound(.Minecraft, volume=global.audio.music_volume)
-  // play_sound(.Forest_Ambience, volume=0.25)
+  play_sound(.Forest_Ambience, volume=0.25)
 
   set_current_game(nil)
 }
@@ -394,9 +395,9 @@ game_update :: proc(gm: ^Game, dt: f32)
 
     bounds: [2]Range(f32)
     bounds.x.min = REGION_SPAN * gm.active_region.x
-    bounds.x.max = REGION_SPAN * (gm.active_region.x + 1) - WORLD_WIDTH
+    bounds.x.max = REGION_SPAN * (gm.active_region.x + 1) - VIEWPORT_WIDTH
     bounds.y.min = REGION_SPAN * gm.active_region.y
-    bounds.y.max = REGION_SPAN * (gm.active_region.y + 1) - WORLD_HEIGHT
+    bounds.y.max = REGION_SPAN * (gm.active_region.y + 1) - VIEWPORT_HEIGHT
     camera_follow_point(tt.global_pos(player), bounds)
   }
 
@@ -798,34 +799,6 @@ game_update :: proc(gm: ^Game, dt: f32)
   set_current_game(nil)
 }
 
-render_scratch :: proc()
-{
-  render.begin_pass({
-    shader = &res.shaders[.Sprite],
-    camera = vmath.translation_3x3f({0, 0}),
-    projection = vmath.orthographic_3x3f(0, WORLD_WIDTH, 0, WORLD_HEIGHT),
-    viewport = user.viewport,
-    clear_color = {0, 0, 0, 1},
-  })
-
-  @(static)
-  vertices := [3]render.Vertex{
-    {{WORLD_WIDTH/2-50, WORLD_HEIGHT-50}, {1, 0, 0, 1}, {0, 1, 0, 0}, {0, 1}, 0},
-    {{WORLD_WIDTH/2,    50},              {1, 0, 0, 1}, {1, 0, 0, 0}, {0, 1}, 0},
-    {{WORLD_WIDTH/2+50, WORLD_HEIGHT-50}, {1, 0, 0, 1}, {0, 1, 0, 0}, {0, 1}, 0},
-  }
-
-  render.push_triangle(vertices)
-
-  draw_text("\"The light shines in the darkness,\nand the darkness has not overcome it.\"\nJohn 1:5", 
-             pos={100, 100}, 
-             size=0.5, 
-             line_height=1,
-             color={1, 1, 1, 0})
-
-  render.end_pass()
-}
-
 game_render :: proc(gm: ^Game)
 {
   set_current_game(gm)
@@ -833,7 +806,7 @@ game_render :: proc(gm: ^Game)
   render.begin_pass({
     shader = &res.shaders[.Sprite],
     camera = vmath.transform_3x3f(-gm.camera.pos, gm.camera.rot, gm.camera.scl),
-    projection = vmath.orthographic_3x3f(0, WORLD_WIDTH, 0, WORLD_HEIGHT),
+    projection = vmath.orthographic(0, VIEWPORT_WIDTH, 0, VIEWPORT_HEIGHT),
     viewport = user.viewport,
     clear_color = {1, 1, 1, 1},
     // light_color = {1.0, 0.8, 0.8, 1.0},
@@ -932,7 +905,7 @@ game_render :: proc(gm: ^Game)
 
 interpolate_games :: proc(curr_gm, prev_gm, res_gm: ^Game, alpha: f32)
 {
-  copy_game(res_gm, curr_gm)
+  game_copy(res_gm, curr_gm)
 
   if !curr_gm.interpolate do return
 
@@ -1150,7 +1123,7 @@ update_debug_gui :: proc(gm: ^Game, dt: f32)
 camera_follow_point :: proc(point: v2f32, bounds: [2]Range(f32))
 {
   gm := get_current_game()
-  point := point - {WORLD_WIDTH, WORLD_HEIGHT}/2
+  point := point - {VIEWPORT_WIDTH, VIEWPORT_HEIGHT}/2
   gm.camera.pos.x = clamp(point.x, bounds.x.min, bounds.x.max)
   gm.camera.pos.y = clamp(point.y, bounds.y.min, bounds.y.max)
 }
@@ -1160,8 +1133,8 @@ screen_to_world_space :: proc(pos: v2f32) -> (result: v2f32)
   gm := get_current_game()
 
   result = {
-    (pos.x - user.viewport.x) * (WORLD_WIDTH / user.viewport.z),
-    (pos.y - user.viewport.y) * (WORLD_HEIGHT / user.viewport.w),
+    (pos.x - user.viewport.x) * (VIEWPORT_WIDTH / user.viewport.z),
+    (pos.y - user.viewport.y) * (VIEWPORT_HEIGHT / user.viewport.w),
   }
 
   return result + gm.camera.pos
@@ -1525,7 +1498,7 @@ spawn_player :: proc() -> ^Entity
   }
 
   entity_set_state(player, .Idle)
-  spawn_shadow(player, .Shadow_S, {0, 7})
+  spawn_shadow(player, .Shadow_1, {0, 7})
 
   // - Weapon ---
   {
@@ -1592,11 +1565,11 @@ spawn_creature :: proc(kind: Creature_Kind, pos: v2f32, deferred := false) -> ^E
 
   case .Deer:
     entity_set_state(creature, .Wander)
-    spawn_shadow(creature, .Shadow_L, {-2, 7})
+    spawn_shadow(creature, .Shadow_3, {-2, 7})
 
   case .Rabbit:
     entity_set_state(creature, .Idle)
-    spawn_shadow(creature, .Shadow_M, {-2, 7})
+    spawn_shadow(creature, .Shadow_2, {-2, 7})
   }
 
   if deferred
@@ -1700,7 +1673,7 @@ spawn_corpse :: proc(owner: ^Entity, deferred := false) -> ^Entity
     blood_pool.props += {.Interpolate}
     blood_pool.tint = {1, 1, 1, 1}
     blood_pool.z_index = -1
-    blood_pool.animation.data[.Idle] = .Blood_Pool_0
+    blood_pool.animation.data[.Idle] = .Blood_Pool_1
     blood_pool.animation.data[.Expand] = creature_desc.blood_pool
 
     entity_play_animation(blood_pool, .Expand, looping=false)
@@ -2333,7 +2306,7 @@ point_in_region_bounds :: proc(point: v2f32, region: Region_Coord) -> bool
 set_active_region :: proc(gm: ^Game, coord: Region_Coord)
 {
   gm.active_region = coord
-  gm.camera.pos = {WORLD_WIDTH * coord.x, WORLD_HEIGHT * coord.y}
+  gm.camera.pos = {VIEWPORT_WIDTH * coord.x, VIEWPORT_HEIGHT * coord.y}
 }
 
 generate_world_region :: proc(gm: ^Game)
@@ -2352,25 +2325,25 @@ generate_world_region :: proc(gm: ^Game)
       case 0..=4:
         if noise_value > 0.95
         {
-          sprite = .Tile_Grass_2
+          sprite = .Tile_Grass_3
         }
         else if noise_value > 0.9
         {
-          sprite = .Tile_Grass_1
+          sprite = .Tile_Grass_2
         }
         else
         {
-          sprite = .Tile_Grass_0
+          sprite = .Tile_Grass_1
         }
 
       case 5..=9:
         if noise_value > 0.9
         {
-          sprite = .Tile_Stone_1
+          sprite = .Tile_Stone_2
         }
         else
         {
-          sprite = .Tile_Stone_0
+          sprite = .Tile_Stone_1
         }
       }
 

@@ -1,7 +1,13 @@
 #+feature dynamic-literals
 package game
 
-import "core:image/qoi"
+import "base:runtime"
+import "core:fmt"
+import "core:image"
+import "core:image/tga"
+import "core:os"
+import "core:slice"
+import "core:strings"
 import "basic/mem"
 import "platform"
 import "render"
@@ -18,6 +24,7 @@ Resources :: struct
   shaders:      [Shader_Name]render.Shader,
   textures:     [Texture_Name]render.Texture,
   sprites:      [Sprite_Name]Sprite,
+  gen_sprites:  [Sprite_Name]Sprite,
   sounds:       [Sound_Name]Sound,
   animations:   [Animation_Name]Animation_Desc,
   particles:    [Particle_Name]Particle_Desc,
@@ -45,21 +52,21 @@ Sprite_Name :: enum
   Square,
   UI_Square,
   Circle,
-  Shadow_S,
-  Shadow_M,
-  Shadow_L,
-  Player_Idle_0,
+  Shadow_1,
+  Shadow_2,
+  Shadow_3,
   Player_Idle_1,
-  Player_Walk_0,
+  Player_Idle_2,
   Player_Walk_1,
   Player_Walk_2,
   Player_Walk_3,
   Player_Walk_4,
-  Player_Sneak_0,
+  Player_Walk_5,
   Player_Sneak_1,
   Player_Sneak_2,
   Player_Sneak_3,
   Player_Sneak_4,
+  Player_Sneak_5,
   Rifle,
   Shotgun,
   Muzzle_Flash,
@@ -68,36 +75,36 @@ Sprite_Name :: enum
   Blood_Particle,
   Item_Venison,
   Item_Rabbit_Foot,
-  Deer_Idle_0,
   Deer_Idle_1,
   Deer_Idle_2,
   Deer_Idle_3,
-  Deer_Walk_0,
+  Deer_Idle_4,
   Deer_Walk_1,
   Deer_Walk_2,
   Deer_Walk_3,
+  Deer_Walk_4,
   Deer_Corpse,
-  Rabbit_Idle_0,
   Rabbit_Idle_1,
   Rabbit_Idle_2,
   Rabbit_Idle_3,
-  Rabbit_Walk_0,
+  Rabbit_Idle_4,
   Rabbit_Walk_1,
   Rabbit_Walk_2,
   Rabbit_Walk_3,
+  Rabbit_Walk_4,
   Rabbit_Corpse,
-  Blood_Pool_0,
   Blood_Pool_1,
   Blood_Pool_2,
   Blood_Pool_3,
   Blood_Pool_4,
   Blood_Pool_5,
+  Blood_Pool_6,
   Tile_Dirt,
-  Tile_Grass_0,
   Tile_Grass_1,
   Tile_Grass_2,
-  Tile_Stone_0,
+  Tile_Grass_3,
   Tile_Stone_1,
+  Tile_Stone_2,
   Tile_Wall,
 }
 
@@ -272,95 +279,80 @@ init_resources :: proc(arena: ^mem.Arena)
 
   // - Sprites ---
   {
-    img: ^qoi.Image
-    err: qoi.Error
+    res.sprites[.Nil             ].pivot = {7.5, 7.5}
+    res.sprites[.Rect            ].pivot = {0.0, 0.0}
+    res.sprites[.Square          ].pivot = {7.5, 7.5}
+    res.sprites[.UI_Square       ].pivot = {0.0, 0.0}
+    res.sprites[.Circle          ].pivot = {8.5, 8.5}
+    res.sprites[.Shadow_1        ].pivot = {3.5, 1.5}
+    res.sprites[.Shadow_2        ].pivot = {3.5, 1.5}
+    res.sprites[.Shadow_3        ].pivot = {3.5, 1.5}
+    res.sprites[.Player_Idle_1   ].pivot = {2.5, 7.5}
+    res.sprites[.Player_Idle_2   ].pivot = {2.5, 7.5}
+    res.sprites[.Player_Walk_1   ].pivot = {2.5, 7.5}
+    res.sprites[.Player_Walk_2   ].pivot = {2.5, 7.5}
+    res.sprites[.Player_Walk_3   ].pivot = {2.5, 7.5}
+    res.sprites[.Player_Walk_4   ].pivot = {2.5, 7.5}
+    res.sprites[.Player_Walk_5   ].pivot = {2.5, 7.5}
+    res.sprites[.Player_Sneak_1  ].pivot = {2.5, 6.5}
+    res.sprites[.Player_Sneak_2  ].pivot = {2.5, 6.5}
+    res.sprites[.Player_Sneak_3  ].pivot = {2.5, 6.5}
+    res.sprites[.Player_Sneak_4  ].pivot = {2.5, 6.5}
+    res.sprites[.Player_Sneak_5  ].pivot = {2.5, 6.5}
+    res.sprites[.Rifle           ].pivot = {2.5, 2.5}
+    res.sprites[.Shotgun         ].pivot = {2.5, 2.5}
+    res.sprites[.Muzzle_Flash    ].pivot = {8.5, 8.5}
+    res.sprites[.Bullet          ].pivot = {8.5, 8.5}
+    res.sprites[.Smoke_Particle  ].pivot = {8.5, 8.5}
+    res.sprites[.Blood_Particle  ].pivot = {8.5, 8.5}
+    res.sprites[.Item_Venison    ].pivot = {7.5, 9.0}
+    res.sprites[.Item_Rabbit_Foot].pivot = {7.5, 9.0}
+    res.sprites[.Deer_Idle_1     ].pivot = {7.5, 8.5}
+    res.sprites[.Deer_Idle_2     ].pivot = {7.5, 8.5}
+    res.sprites[.Deer_Idle_3     ].pivot = {7.5, 8.5}
+    res.sprites[.Deer_Idle_4     ].pivot = {7.5, 8.5}
+    res.sprites[.Deer_Walk_1     ].pivot = {7.5, 8.5}
+    res.sprites[.Deer_Walk_2     ].pivot = {7.5, 8.5}
+    res.sprites[.Deer_Walk_3     ].pivot = {7.5, 8.5}
+    res.sprites[.Deer_Walk_4     ].pivot = {7.5, 8.5}
+    res.sprites[.Deer_Corpse     ].pivot = {15.0, 15.0}
+    res.sprites[.Rabbit_Idle_1   ].pivot = {3.5, 3.5}
+    res.sprites[.Rabbit_Idle_2   ].pivot = {3.5, 3.5}
+    res.sprites[.Rabbit_Idle_3   ].pivot = {3.5, 3.5}
+    res.sprites[.Rabbit_Idle_4   ].pivot = {3.5, 3.5}
+    res.sprites[.Rabbit_Walk_1   ].pivot = {7.5, 8.5}
+    res.sprites[.Rabbit_Walk_2   ].pivot = {7.5, 8.5}
+    res.sprites[.Rabbit_Walk_3   ].pivot = {7.5, 8.5}
+    res.sprites[.Rabbit_Walk_4   ].pivot = {7.5, 8.5}
+    res.sprites[.Rabbit_Corpse   ].pivot = {8.5, 15.0}
+    res.sprites[.Blood_Pool_1    ].pivot = {8.0, 10.0}
+    res.sprites[.Blood_Pool_2    ].pivot = {8.0, 10.0}
+    res.sprites[.Blood_Pool_3    ].pivot = {8.0, 10.0}
+    res.sprites[.Blood_Pool_4    ].pivot = {8.0, 10.0}
+    res.sprites[.Blood_Pool_5    ].pivot = {8.0, 10.0}
+    res.sprites[.Blood_Pool_6    ].pivot = {8.0, 10.0}
+    res.sprites[.Tile_Dirt       ].pivot = {4.0, 4.0}
+    res.sprites[.Tile_Grass_1    ].pivot = {4.0, 4.0}
+    res.sprites[.Tile_Grass_2    ].pivot = {4.0, 4.0}
+    res.sprites[.Tile_Grass_3    ].pivot = {4.0, 4.0}
+    res.sprites[.Tile_Stone_1    ].pivot = {4.0, 4.0}
+    res.sprites[.Tile_Stone_2    ].pivot = {4.0, 4.0}
+    res.sprites[.Tile_Wall       ].pivot = {4.0, 4.0}
 
-    img, err = qoi.load_from_file("res/textures/sprite_map.qoi")
+    build_sprite_atlas("res/textures/", "res/gen/sprite_atlas.tga")
+    
+    for &sprite in res.sprites
+    {
+      sprite.pivot /= sprite.grid
+    }
+
+    img, err := tga.load("res/gen/sprite_atlas.tga")
     if err != nil
     {
       panicf("Failed to open texture file!", err)
     }
 
     res.textures[.Sprite_Atlas] = render.create_texture(img.pixels.buf[:], img.width, img.height)
-
-    CELL_SIZE :: 16
-
-    res.sprites = {
-      .Nil              = {coord={0, 0},  grid={1, 1}, pivot={7.5, 7.5}},
-      .Rect             = {coord={1, 0},  grid={1, 1}, pivot={0, 0}},
-      .Square           = {coord={1, 0},  grid={1, 1}, pivot={7.5, 7.5}},
-      .UI_Square        = {coord={1, 0},  grid={1, 1}, pivot={0.0, 0.0}},
-      .Circle           = {coord={2, 0},  grid={1, 1}, pivot={8.5, 8.5}},
-
-      .Shadow_S         = {coord={3, 0},  grid={1, 1}, pivot={7.5, 14.5}},
-      .Shadow_M         = {coord={4, 0},  grid={1, 1}, pivot={7.5, 14.5}},
-      .Shadow_L         = {coord={5, 0},  grid={1, 1}, pivot={7.5, 14.5}},
-
-      .Player_Idle_0    = {coord={0, 1},  grid={1, 1}, pivot={7.5, 8.5}},
-      .Player_Idle_1    = {coord={1, 1},  grid={1, 1}, pivot={7.5, 8.5}},
-      .Player_Walk_0    = {coord={2, 1},  grid={1, 1}, pivot={7.5, 8.5}},
-      .Player_Walk_1    = {coord={3, 1},  grid={1, 1}, pivot={7.5, 8.5}},
-      .Player_Walk_2    = {coord={4, 1},  grid={1, 1}, pivot={7.5, 8.5}},
-      .Player_Walk_3    = {coord={5, 1},  grid={1, 1}, pivot={7.5, 8.5}},
-      .Player_Walk_4    = {coord={6, 1},  grid={1, 1}, pivot={7.5, 8.5}},
-      .Player_Sneak_0   = {coord={7, 1},  grid={1, 1}, pivot={7.5, 8.5}},
-      .Player_Sneak_1   = {coord={8, 1},  grid={1, 1}, pivot={7.5, 8.5}},
-      .Player_Sneak_2   = {coord={9, 1},  grid={1, 1}, pivot={7.5, 8.5}},
-      .Player_Sneak_3   = {coord={10, 1}, grid={1, 1}, pivot={7.5, 8.5}},
-      .Player_Sneak_4   = {coord={11, 1}, grid={1, 1}, pivot={7.5, 8.5}},
-
-      .Rifle            = {coord={0, 2},  grid={1, 1}, pivot={4.5, 8.5}},
-      .Shotgun          = {coord={1, 2},  grid={1, 1}, pivot={4.5, 8.5}},
-      .Muzzle_Flash     = {coord={0, 3},  grid={1, 1}, pivot={8.5, 8.5}},
-      .Bullet           = {coord={1, 3},  grid={1, 1}, pivot={8.5, 8.5}},
-      .Smoke_Particle   = {coord={2, 3},  grid={1, 1}, pivot={8.5, 8.5}},
-      .Blood_Particle   = {coord={3, 3},  grid={1, 1}, pivot={8.5, 8.5}},
-
-      .Item_Venison     = {coord={4, 3},  grid={1, 1}, pivot={7.5, 9.0}},
-      .Item_Rabbit_Foot = {coord={5, 3},  grid={1, 1}, pivot={7.5, 9.0}},
-
-      .Deer_Idle_0      = {coord={0, 4},  grid={1, 1}, pivot={7.5, 8.5}},
-      .Deer_Idle_1      = {coord={1, 4},  grid={1, 1}, pivot={7.5, 8.5}},
-      .Deer_Idle_2      = {coord={2, 4},  grid={1, 1}, pivot={7.5, 8.5}},
-      .Deer_Idle_3      = {coord={3, 4},  grid={1, 1}, pivot={7.5, 8.5}},
-      .Deer_Walk_0      = {coord={4, 4},  grid={1, 1}, pivot={7.5, 8.5}},
-      .Deer_Walk_1      = {coord={5, 4},  grid={1, 1}, pivot={7.5, 8.5}},
-      .Deer_Walk_2      = {coord={6, 4},  grid={1, 1}, pivot={7.5, 8.5}},
-      .Deer_Walk_3      = {coord={7, 4},  grid={1, 1}, pivot={7.5, 8.5}},
-      .Deer_Corpse      = {coord={8, 4},  grid={2, 1}, pivot={15.0, 15.0}},
-
-      .Rabbit_Idle_0    = {coord={0, 5},  grid={1, 1}, pivot={9.5, 9.5}},
-      .Rabbit_Idle_1    = {coord={1, 5},  grid={1, 1}, pivot={9.5, 9.5}},
-      .Rabbit_Idle_2    = {coord={2, 5},  grid={1, 1}, pivot={9.5, 9.5}},
-      .Rabbit_Idle_3    = {coord={3, 5},  grid={1, 1}, pivot={9.5, 9.5}},
-      .Rabbit_Walk_0    = {coord={4, 5},  grid={1, 1}, pivot={7.5, 8.5}},
-      .Rabbit_Walk_1    = {coord={5, 5},  grid={1, 1}, pivot={7.5, 8.5}},
-      .Rabbit_Walk_2    = {coord={6, 5},  grid={1, 1}, pivot={7.5, 8.5}},
-      .Rabbit_Walk_3    = {coord={7, 5},  grid={1, 1}, pivot={7.5, 8.5}},
-      .Rabbit_Corpse    = {coord={8, 5},  grid={1, 1}, pivot={8.5, 15.0}},
-      
-      .Blood_Pool_0     = {coord={0, 6},  grid={1, 1}, pivot={8.0, 10.0}},
-      .Blood_Pool_1     = {coord={1, 6},  grid={1, 1}, pivot={8.0, 10.0}},
-      .Blood_Pool_2     = {coord={2, 6},  grid={1, 1}, pivot={8.0, 10.0}},
-      .Blood_Pool_3     = {coord={3, 6},  grid={1, 1}, pivot={8.0, 10.0}},
-      .Blood_Pool_4     = {coord={4, 6},  grid={1, 1}, pivot={8.0, 10.0}},
-      .Blood_Pool_5     = {coord={5, 6},  grid={1, 1}, pivot={8.0, 10.0}},
-
-      .Tile_Dirt        = {coord={0, 7},  grid={1, 1}, pivot={8.0, 8.0}},
-      .Tile_Grass_0     = {coord={1, 7},  grid={1, 1}, pivot={8.0, 8.0}},
-      .Tile_Grass_1     = {coord={2, 7},  grid={1, 1}, pivot={8.0, 8.0}},
-      .Tile_Grass_2     = {coord={3, 7},  grid={1, 1}, pivot={8.0, 8.0}},
-      .Tile_Stone_0     = {coord={4, 7},  grid={1, 1}, pivot={8.0, 8.0}},
-      .Tile_Stone_1     = {coord={5, 7},  grid={1, 1}, pivot={8.0, 8.0}},
-      .Tile_Wall        = {coord={6, 7},  grid={1, 1}, pivot={8.0, 8.0}},
-    }
-
-    for &sprite in res.sprites
-    {
-      sprite.coord *= CELL_SIZE
-      sprite.grid *= CELL_SIZE
-      sprite.pivot /= sprite.grid
-    }
   }
 
   // - Sounds ---
@@ -398,11 +390,11 @@ init_resources :: proc(arena: ^mem.Arena)
       .Nil = {},
       .Player_Walk = {
         frames = {
-          {sprite=.Player_Walk_0, duration=0.08},
           {sprite=.Player_Walk_1, duration=0.08},
           {sprite=.Player_Walk_2, duration=0.08},
           {sprite=.Player_Walk_3, duration=0.08},
           {sprite=.Player_Walk_4, duration=0.08},
+          {sprite=.Player_Walk_5, duration=0.08},
         },
       },
       .Player_Sneak_Walk = {
@@ -411,56 +403,56 @@ init_resources :: proc(arena: ^mem.Arena)
           {sprite=.Player_Sneak_2, duration=0.08},
           {sprite=.Player_Sneak_3, duration=0.08},
           {sprite=.Player_Sneak_4, duration=0.08},
-          {sprite=.Player_Sneak_0, duration=0.08},
+          {sprite=.Player_Sneak_5, duration=0.08},
         },
       },
       .Deer_Idle = {
         frames = {
-          {sprite=.Deer_Idle_0, duration=0.3}, 
-          {sprite=.Deer_Idle_1, duration=0.3},
+          {sprite=.Deer_Idle_1, duration=0.3}, 
           {sprite=.Deer_Idle_2, duration=0.3},
           {sprite=.Deer_Idle_3, duration=0.3},
+          {sprite=.Deer_Idle_4, duration=0.3},
         },
       },
       .Deer_Walk = {
         frames = {
-          {sprite=.Deer_Walk_0, duration=0.15}, 
-          {sprite=.Deer_Walk_1, duration=0.15},
+          {sprite=.Deer_Walk_1, duration=0.15}, 
           {sprite=.Deer_Walk_2, duration=0.15},
           {sprite=.Deer_Walk_3, duration=0.15},
+          {sprite=.Deer_Walk_4, duration=0.15},
         },
       },
       .Blood_Pool_Expand_M = {
         frames = {
-          {sprite=.Blood_Pool_0, duration=0.25},
           {sprite=.Blood_Pool_1, duration=0.25},
           {sprite=.Blood_Pool_2, duration=0.25},
+          {sprite=.Blood_Pool_3, duration=0.25},
         },
       },
       .Blood_Pool_Expand_L = {
         frames = {
-          {sprite=.Blood_Pool_0, duration=0.15},
           {sprite=.Blood_Pool_1, duration=0.15},
           {sprite=.Blood_Pool_2, duration=0.15},
           {sprite=.Blood_Pool_3, duration=0.15},
           {sprite=.Blood_Pool_4, duration=0.15},
           {sprite=.Blood_Pool_5, duration=0.15},
+          {sprite=.Blood_Pool_6, duration=0.15},
         },
       },
       .Rabbit_Idle = {
         frames = {
-          {sprite=.Rabbit_Idle_0, duration=0.3}, 
-          {sprite=.Rabbit_Idle_1, duration=0.3},
+          {sprite=.Rabbit_Idle_1, duration=0.3}, 
           {sprite=.Rabbit_Idle_2, duration=0.3},
           {sprite=.Rabbit_Idle_3, duration=0.3},
+          {sprite=.Rabbit_Idle_4, duration=0.3},
         },
       },
       .Rabbit_Walk = {
         frames = {
-          {sprite=.Rabbit_Walk_0, duration=0.15}, 
-          {sprite=.Rabbit_Walk_1, duration=0.15},
+          {sprite=.Rabbit_Walk_1, duration=0.15}, 
           {sprite=.Rabbit_Walk_2, duration=0.15},
           {sprite=.Rabbit_Walk_3, duration=0.15},
+          {sprite=.Rabbit_Walk_4, duration=0.15},
         },
       },
     }
@@ -502,9 +494,9 @@ init_resources :: proc(arena: ^mem.Arena)
   {
     res.player = {
       animations = #partial {
-        .Idle = .Player_Idle_0,
+        .Idle = .Player_Idle_1,
         .Walk = .Player_Walk,
-        .Sneak_Idle = .Player_Sneak_0,
+        .Sneak_Idle = .Player_Sneak_1,
         .Sneak_Walk = .Player_Sneak_Walk,
       },
       speed = 50,
@@ -566,8 +558,8 @@ init_resources :: proc(arena: ^mem.Arena)
         holster_off = {-2, -5},
         holster_rot = rad_from_deg(f32(90.0)),
         shot_pos = {11.0, 0.0},
-        shot_time = 0.35,
-        reload_time = 3.0,
+        shot_time = 1.0,
+        reload_time = 5.0,
         damage = 7,
         speed = 512.0,
         capacity = 5,
@@ -621,4 +613,165 @@ init_resources :: proc(arena: ^mem.Arena)
       assert(sum == 1.0)
     }
   }
+}
+
+build_sprite_atlas :: proc(textures_path, atlas_path: string)
+{
+  MAX_ATLAS_WIDTH :: 128
+  PADDING         :: 1
+
+  walker: os.Walker
+  defer os.walker_destroy(&walker)
+
+  atlas_width, atlas_height: int
+  max_sprite_height: int
+  num_rows := 1
+
+  // - First pass ---
+
+  os.walker_init(&walker, textures_path)
+  for fi in os.walker_walk(&walker)
+  {
+    if fi.name[len(fi.name)-4:] != ".tga" do continue
+
+    sprite_name_str: string
+    for i in 0..<len(fi.name)-3
+    {
+      if fi.name[i:i+4] == ".tga"
+      {
+        sprite_name_str = fi.name[:i]
+        break
+      }
+    }
+
+    sprite_name := sprite_name_from_string(sprite_name_str)
+    if sprite_name == nil && sprite_name_str != "nil" do continue
+
+    sprite_img, err := tga.load(fi.fullpath)
+    defer tga.destroy(sprite_img)
+    if err != nil
+    {
+      fmt.printf("[ERROR][metagen]: Failed to open texture '%s'\n", fi.name)
+      os.exit(1)
+    }
+
+    if atlas_width + sprite_img.width + PADDING > MAX_ATLAS_WIDTH
+    {
+      atlas_width = 0
+      num_rows += 1
+    }
+
+    atlas_width += sprite_img.width + 1
+    max_sprite_height = max(max_sprite_height, sprite_img.height)
+  }
+
+  max_sprite_height += PADDING
+  
+  atlas_width = MAX_ATLAS_WIDTH
+  atlas_height = max_sprite_height * num_rows
+
+  atlas_pixels := make([]image.RGBA_Pixel, atlas_width * atlas_height, context.allocator)
+  atlas_pos: [enum{Abs, Rel}][2]int
+
+  // for fi in sprite_fis do println(fi.name)
+
+  // - Second pass ---
+
+  os.walker_init(&walker, textures_path)
+  for fi in os.walker_walk(&walker)
+  {
+    if fi.name[len(fi.name)-4:] != ".tga" do continue
+
+    sprite_name_str: string
+    for i in 0..<len(fi.name)-3
+    {
+      if fi.name[i:i+4] == ".tga"
+      {
+        sprite_name_str = fi.name[:i]
+        break
+      }
+    }
+
+    sprite_name := sprite_name_from_string(sprite_name_str)
+    if sprite_name == nil do continue
+
+    sprite_img, err := tga.load(fi.fullpath)
+    defer tga.destroy(sprite_img)
+    if err != nil
+    {
+      fmt.println("[ERROR][metagen]: Failed to open texture '%s'", fi.name)
+      os.exit(1)
+    }
+
+    sprite_pos: int
+
+    if atlas_pos[.Abs].x + sprite_img.width + PADDING > MAX_ATLAS_WIDTH
+    {
+      atlas_pos[.Abs].x = 0
+      atlas_pos[.Abs].y += max_sprite_height
+    }
+
+    for r in 0..<sprite_img.height
+    {
+      for c in 0..<sprite_img.width
+      {
+        pos := atlas_pos[.Abs] + atlas_pos[.Rel]
+        atlas_pixels[pos.x + pos.y * atlas_width] = image.RGBA_Pixel{
+          sprite_img.pixels.buf[sprite_pos+0],
+          sprite_img.pixels.buf[sprite_pos+1],
+          sprite_img.pixels.buf[sprite_pos+2],
+          sprite_img.pixels.buf[sprite_pos+3],
+        }
+
+        sprite_pos += 4
+        atlas_pos[.Rel].x += 1
+      }
+
+      atlas_pos[.Rel].x = 0
+      atlas_pos[.Rel].y += 1
+    }
+
+    res.sprites[sprite_name].coord = array_cast(atlas_pos[.Abs], f32)
+    res.sprites[sprite_name].grid = array_cast([2]int{sprite_img.width, sprite_img.height}, f32)
+    fmt.println(sprite_name, res.sprites[sprite_name].coord, res.sprites[sprite_name].grid)
+    
+    atlas_pos[.Rel].y = 0
+    atlas_pos[.Abs].x += sprite_img.width + PADDING
+  }
+
+  atlas, ok := image.pixels_to_image(atlas_pixels[:], atlas_width, atlas_height)
+  if ok
+  {
+    err := tga.save_to_file(atlas_path, &atlas)
+    if err != nil
+    {
+      fmt.eprintln("[ERROR][metagen]: Failed to save atlas to file.", err)
+    }
+  }
+  else
+  {
+    fmt.eprintln("[ERROR][metagen]: Failed to make image from pixels.")
+  }
+}
+
+sprite_name_from_string :: proc(str: string) -> Sprite_Name
+{
+  scratch := mem.temp_begin(mem.get_scratch())
+  defer mem.temp_end(scratch)
+
+  context.allocator = mem.allocator(scratch.arena)
+
+  type_info := type_info_of(Sprite_Name)
+  named_info := type_info.variant.(runtime.Type_Info_Named)
+  enum_info := named_info.base.variant.(runtime.Type_Info_Enum)
+
+  for field, field_idx in enum_info.names
+  {
+    if strings.to_lower(field) == strings.to_lower(str)
+    {
+      return Sprite_Name(enum_info.values[field_idx])
+    }
+  }
+
+  return .Nil
 }

@@ -56,6 +56,7 @@ zero :: #force_inline proc "contextless" (data: rawptr, #any_int len: int) -> ra
 allocator :: proc
 {
 	allocator_arena,
+	allocator_arena_temp,
 	allocator_heap,	
 }
 
@@ -64,6 +65,14 @@ allocator_arena :: #force_inline proc "contextless" (arena: ^Arena) -> Allocator
 	return Allocator{
 		procedure = virtual.arena_allocator_proc,
 		data = arena,
+	}
+}
+
+allocator_arena_temp :: #force_inline proc "contextless" (temp: Arena_Temp) -> Allocator
+{
+	return Allocator{
+		procedure = virtual.arena_allocator_proc,
+		data = temp.arena,
 	}
 }
 
@@ -97,7 +106,7 @@ arena_clear				 :: virtual.arena_free_all
 temp_begin :: virtual.arena_temp_begin
 temp_end	 :: virtual.arena_temp_end
 
-scratch :: proc(conflict: ^Arena = nil) -> ^Arena
+get_scratch :: proc(conflict: ^Arena = nil) -> ^Arena
 {
 	result := &global_scratches[0]
 

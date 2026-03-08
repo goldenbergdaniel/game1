@@ -71,7 +71,7 @@ tree_resolve_layout :: proc(tree: ^Tree)
 {
   if tree.root == nil do return
 
-  scratch := mem.temp_begin(mem.scratch())
+  scratch := mem.temp_begin(mem.get_scratch())
   defer mem.temp_end(scratch)
 
   // - Standalone sizes ---
@@ -177,7 +177,7 @@ tree_resolve_interaction :: proc(tree: ^Tree)
 
 tree_print_bfs :: proc(tree: ^Tree)
 {
-  scratch := mem.temp_begin(mem.scratch())
+  scratch := mem.temp_begin(mem.get_scratch())
   defer mem.temp_end(scratch)
 
   boxes: [dynamic]^Box
@@ -198,7 +198,7 @@ tree_print_bfs :: proc(tree: ^Tree)
 
 tree_print_dfs :: proc(tree: ^Tree, way: enum{Preorder, Postorder})
 {
-  scratch := mem.temp_begin(mem.scratch())
+  scratch := mem.temp_begin(mem.get_scratch())
   defer mem.temp_end(scratch)
 
   switch way
@@ -513,7 +513,7 @@ box_remove_child_at :: proc(box: ^Box, idx: int) -> (child: ^Box)
 @(private)
 box_generate_id :: proc(box: ^Box)
 {
-  temp := mem.temp_begin(mem.scratch())
+  temp := mem.temp_begin(mem.get_scratch())
   defer mem.temp_end(temp)
 
   iter := make_iterator_preorder(box, temp)
@@ -568,7 +568,7 @@ box_fetch_retained_data :: proc(box: ^Box)
 
 begin_tree :: proc(
   tree:     ^Tree,
-  using st: struct
+  st: struct
   {
     background_color: [4]f32,
     window_size:      [2]f32,
@@ -578,19 +578,19 @@ begin_tree :: proc(
 ){
   tree_clear(tree)
   
-  tree.cursor_pos = cursor_pos
-  tree.input_down[.Curr] = input_down
+  tree.cursor_pos = st.cursor_pos
+  tree.input_down[.Curr] = st.input_down
   tree.root.name = "root"
   tree.curr = tree.root
   global_tree = tree
 
-  layout_size(.Pixels, window_size)
-  layout_color(background_color)
+  layout_size(.Pixels, st.window_size)
+  layout_color(st.background_color)
 }
 
 end_tree :: proc()
 {
-  temp := mem.temp_begin(mem.scratch())
+  temp := mem.temp_begin(mem.get_scratch())
   defer mem.temp_end(temp)
 
   tree_resolve_layout(global_tree)

@@ -1,17 +1,16 @@
 package game
 
 import "core:fmt"
+import "core:math"
 import "core:time"
 import "basic"
 import "basic/mem"
 import "platform"
 import "render"
 
-WORLD_SCALE :: #config(WORLD_SCALE, 1)
-
-WORLD_WIDTH  :: 320.0 / WORLD_SCALE
-WORLD_HEIGHT :: 180.0 / WORLD_SCALE
-WORLD_STEP   :: 1.0/40
+VIEWPORT_WIDTH  :: 240.0
+VIEWPORT_HEIGHT :: 135.0
+TIME_STEP       :: 1.0 / 40
 
 User :: struct
 {
@@ -26,7 +25,6 @@ Screen :: enum
 {
   Main_Menu, 
   Game, 
-  Scratch,
 }
 
 user: User
@@ -56,15 +54,18 @@ main :: proc()
     width = 1280,
     height = 720,
     props = {.Vsync, .Resizeable},
+    renderer = .OpenGL,
   }
 
   user.window = platform.create_window(window_desc, &user.perm_arena)
   defer platform.destroy_window(&user.window)
 
-  user.screen = .Main_Menu
+  user.screen = .Game
 
   render.init_renderer(&user.window)
   init_resources(&user.perm_arena)
+
+  platform.window_init_imgui(&user.window)
 
   init_audio()
   init_global()
@@ -81,7 +82,7 @@ main :: proc()
 
     // - Global keybinds ---
     {
-      if platform.key_down(.Escape) && !platform.key_down(.Left_Ctrl)
+      if platform.key_down(.Q) && !prev_keys[.Q] && platform.key_down(.Left_Ctrl)
       {
         user.window.should_close = true
       }
@@ -104,14 +105,14 @@ main :: proc()
 
     window_size := platform.window_get_size(&user.window)
     ratio := window_size.x / window_size.y
-    if ratio >= WORLD_WIDTH / WORLD_HEIGHT
+    if ratio >= VIEWPORT_WIDTH / VIEWPORT_HEIGHT
     {
-      img_width := window_size.x / (ratio * (WORLD_HEIGHT / WORLD_WIDTH))
+      img_width := window_size.x / (ratio * (VIEWPORT_HEIGHT / VIEWPORT_WIDTH))
       user.viewport = {(window_size.x - img_width) / 2, 0, img_width, window_size.y}
     }
     else
     {
-      img_height := window_size.y * (ratio / (WORLD_WIDTH / WORLD_HEIGHT))
+      img_height := window_size.y * (ratio / (VIEWPORT_WIDTH / VIEWPORT_HEIGHT))
       user.viewport = {0, (window_size.y - img_height) / 2, window_size.x, img_height}
     }
 
@@ -124,14 +125,15 @@ main :: proc()
     if user.screen == .Game
     {
       accumulator += frame_time
+      num_ticks := int(math.floor(accumulator / TIME_STEP))
+      accumulator -= f64(num_ticks) * TIME_STEP
 
-      for accumulator >= WORLD_STEP
+      for tick_idx in 0..<num_ticks
       {
-        copy_game(&prev_game, &curr_game)
-        game_update(&curr_game, WORLD_STEP * curr_game.t_mult)
+        game_copy(&prev_game, &curr_game)
+        game_update(&curr_game, TIME_STEP * curr_game.t_mult)
          
-        curr_game.t += WORLD_STEP * curr_game.t_mult
-        accumulator -= WORLD_STEP
+        curr_game.t += TIME_STEP * curr_game.t_mult
       }
     }
     else if user.screen == .Main_Menu
@@ -146,16 +148,12 @@ main :: proc()
     switch user.screen
     {
     case .Main_Menu:
-      // render_scratch()
       render_gui_test()
       
     case .Game:
-      alpha := accumulator / WORLD_STEP
+      alpha := accumulator / TIME_STEP
       interpolate_games(&curr_game, &prev_game, &res_game, f32(alpha))
       game_render(&res_game)
-
-    case .Scratch:
-      render_scratch()
     }
 
     render_end_tick = time.tick_now()
@@ -163,7 +161,7 @@ main :: proc()
     if user.show_dbgui
     {
       platform.imgui_begin()
-      update_debug_gui(&curr_game, WORLD_STEP * curr_game.t_mult)
+      update_debug_gui(&curr_game, TIME_STEP * curr_game.t_mult)
       platform.imgui_end()
     }
 

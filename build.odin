@@ -1,7 +1,7 @@
 package build
 
 import "core:fmt"
-import "core:os/os2"
+import "core:os"
 
 PACKAGE :: "game"
 
@@ -12,20 +12,19 @@ main :: proc()
 
   // - Mode ---
   mode := "run"
-  if len(os2.args) > 1
+  if len(os.args) > 1
   {
-    mode = os2.args[1]
+    mode = os.args[1]
   }
-
-  // - Metagen ---
-  // fmt.println("[metagen]")
-  // metagen.generate_collider_map()
+  
+  // fmt.printf("[target:%s]\n", target)
+  // fmt.printf("[mode:%s]\n", mode)
 
   // - Game ---
-  game_process_desc: os2.Process_Desc
+  game_process_desc: os.Process_Desc
   if mode == "run" || mode == "debug"
   {
-    game_process_desc = os2.Process_Desc{
+    game_process_desc = os.Process_Desc{
       command = {
         "odin", 
         "run", 
@@ -34,16 +33,16 @@ main :: proc()
         "-collection:ext=ext", 
         "-debug" if mode == "debug" else "",
         "-keep-executable" if mode == "debug" else "",
-        "-extra-linker-flags:\"-fuse-ld=mold\"",
+        "-linker:mold",
         // "-sanitize:address",
       },
-      stdout = os2.stdout,
-      stderr = os2.stderr,
+      stdout = os.stdout,
+      stderr = os.stderr,
     }
   }
   else if mode == "release"
   {
-    game_process_desc = os2.Process_Desc{
+    game_process_desc = os.Process_Desc{
       command = {
         "odin", 
         "build", 
@@ -52,40 +51,38 @@ main :: proc()
         "-collection:ext=ext", 
         "-vet-style",
         "-o:speed",
-        "-extra-linker-flags:\"-fuse-ld=mold\"",
+        "-linker:mold",
       },
-      stdout = os2.stdout,
-      stderr = os2.stderr,
+      stdout = os.stdout,
+      stderr = os.stderr,
     }
   }
   else
   {
     fmt.eprintf("Failed to build. Mode '%s' is invalid.\n", mode)
-    os2.exit(1)
+    os.exit(1)
   }
 
-  fmt.printf("[target:%s]\n", target)
-  fmt.printf("[mode:%s]\n", mode)
   fmt.printf("[%s]\n", PACKAGE)
 
-  process, start_err := os2.process_start(game_process_desc)
+  process, start_err := os.process_start(game_process_desc)
   if start_err != nil do fmt.panicf("Error: %s\n", start_err)
-  _, _ = os2.process_wait(process)
+  _, _ = os.process_wait(process)
 
   // - Strip ---
   if mode == "release"
   {
-    process_desc := os2.Process_Desc{
+    process_desc := os.Process_Desc{
       command = {
         "strip",
         "game.bin",
-        "--strip-all" 
+        "--strip-all",
       },
-      stdout = os2.stdout,
-      stderr = os2.stderr,
+      stdout = os.stdout,
+      stderr = os.stderr,
     }
 
-    process, start_err := os2.process_start(process_desc)
-    _, _ = os2.process_wait(process)
+    process, start_err := os.process_start(process_desc)
+    _, _ = os.process_wait(process)
   }
 }

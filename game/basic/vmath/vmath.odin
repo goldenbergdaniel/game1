@@ -1,8 +1,10 @@
+#+feature using-stmt
 package vmath
 
 import "base:intrinsics"
 import "base:builtin"
 import "core:math"
+import "core:math/linalg"
 
 DEPTH :: "vulkan"
 
@@ -60,12 +62,22 @@ concat_1f32_2f32_1f32 :: #force_inline proc(a: f32, b: v2f32, c: f32) -> v4f32
   return {a, b[0], b[1], c}
 }
 
+dot :: proc
+{
+  dot_2f,
+  dot_3f,
+}
+
 @(require_results)
-dot :: #force_inline proc(
-  a, b: [$N]$T,
-) -> T where intrinsics.type_is_numeric(T)
+dot_2f :: #force_inline proc(a, b: [2]$T) -> T where intrinsics.type_is_numeric(T)
 {
   return (a.x * b.x) + (a.y * b.y)
+}
+
+@(require_results)
+dot_3f :: #force_inline proc(a, b: [3]$T) -> T where intrinsics.type_is_numeric(T)
+{
+  return (a.x * b.x) + (a.y * b.y) + (a.z * b.z)
 }
 
 cross :: proc
@@ -84,9 +96,9 @@ cross_2f :: #force_inline proc(a, b: v2f32) -> f32
 cross_3f :: #force_inline proc(a, b: v3f32) -> v3f32
 {
   return {
-    (a.y * b.z) - (a.z * b.y), 
-   -(a.x * b.z) + (a.z * b.x), 
-    (a.x * b.y) - (a.y * b.x),
+     (a.y * b.z) - (a.z * b.y), 
+    -(a.x * b.z) + (a.z * b.x), 
+     (a.x * b.y) - (a.y * b.x),
   }
 }
 
@@ -137,20 +149,20 @@ abs_3f32 :: proc(v: v3f32) -> v3f32
   return {builtin.abs(v.x), builtin.abs(v.y), builtin.abs(v.z)}
 }
 
-magnitude :: proc
+length :: proc
 {
-  magnitude_2f32,
-  magnitude_3f32,
+  length_2f32,
+  length_3f32,
 }
 
 @(require_results)
-magnitude_2f32 :: #force_inline proc(v: v2f32) -> f32
+length_2f32 :: #force_inline proc(v: v2f32) -> f32
 {
   return math.sqrt(math.pow(v.x, 2) + math.pow(v.y, 2))
 }
 
 @(require_results)
-magnitude_3f32 :: #force_inline proc(v: v3f32) -> f32
+length_3f32 :: #force_inline proc(v: v3f32) -> f32
 {
   return math.sqrt(math.pow(v.x, 2) + math.pow(v.y, 2) + math.pow(v.z, 2))
 }
@@ -240,13 +252,15 @@ normalize :: proc
 @(require_results)
 normalize_2f32 :: #force_inline proc(v: v2f32) -> v2f32
 {
-  return v / magnitude_2f32(v)
+  mag := length_2f32(v)
+  return 0 if mag == 0 else v / mag
 }
 
 @(require_results)
 normalize_3f32 :: #force_inline proc(v: v3f32) -> v3f32
 {
-  return v / magnitude_3f32(v)
+  mag := length_3f32(v)
+  return 0 if mag == 0 else v / mag
 }
 
 @(require_results)
@@ -300,57 +314,47 @@ vectorize :: proc(mat: ^[$R][$C]$T, math_proc: proc(T) -> T)
 // Matrix ///////////////////////////////////////////////////////////////////////////
 
 
-m2f32 :: matrix[2,2]f32
-m3f32 :: matrix[3,3]f32
-m4f32 :: matrix[4,4]f32
+m2x2f32 :: matrix[2,2]f32
+m3x3f32 :: matrix[3,3]f32
+m4x4f32 :: matrix[4,4]f32
+
+IDENTITY_2X2F :: m2x2f32{
+  1, 0,
+  0, 1,
+}
+
+IDENTITY_3X3F :: m3x3f32{
+  1, 0, 0,
+  0, 1, 0,
+  0, 0, 1,
+}
+
+IDENTITY_4X4F :: m4x4f32{
+  1, 0, 0, 0,
+  0, 1, 0, 0,
+  0, 0, 1, 0,
+  0, 0, 0, 1,
+}
+
+translation :: proc
+{
+  translation_3x3f,
+  translation_4x4f,
+}
 
 @(require_results)
-ident_2x2f :: #force_inline proc(val: f32) -> m2f32
+translation_3x3f :: proc(v: v2f32) -> m3x3f32
 {
   return {
-    val, 0,
-    0, val,
+    1, 0, v.x,
+    0, 1, v.y,
+    0, 0, 1,
   }
 }
 
 @(require_results)
-ident_3x3f :: #force_inline proc(val: f32) -> m3f32
+translation_4x4f :: proc(v: v3f32) -> m4x4f32
 {
-  return {
-    val, 0, 0,
-    0, val, 0,
-    0, 0, val,
-  }
-}
-
-@(require_results)
-ident_4x4f :: #force_inline proc(val: f32) -> m4f32
-{
-  return {
-    val, 0, 0, 0,
-    0, val, 0, 0,
-    0, 0, val, 0,
-    0, 0, 0, val,
-  }
-}
-
-@(require_results)
-translation_3x3f :: proc(v: v2f32) -> m3f32
-{
-  result: m3f32 = ident_3x3f(1)
-  result[0,2] = v.x
-  result[1,2] = v.y
-  return result
-}
-
-@(require_results)
-translation_4x4f :: proc(v: v3f32) -> m4f32
-{
-  // result: m4f32 = ident_4x4f(1)
-  // result[0,3] = v.x
-  // result[1,3] = v.y
-  // result[2,3] = v.z
-  // return result
   return {
     1, 0, 0, v.x,
     0, 1, 0, v.y,
@@ -359,19 +363,25 @@ translation_4x4f :: proc(v: v3f32) -> m4f32
   }
 }
 
-@(require_results)
-scale_2x2f :: proc(v: v2f32) -> m2f32
+scale :: proc
 {
-  result: m2f32
+  scale_3x3f,
+  scale_4x4f,
+}
+
+@(require_results)
+scale_2x2f :: proc(v: v2f32) -> m3x3f32
+{
+  result: m3x3f32
   result[0,0] = v.x
   result[1,1] = v.y
   return result
 }
 
 @(require_results)
-scale_3x3f :: proc(v: v2f32) -> m3f32
+scale_3x3f :: proc(v: v2f32) -> m3x3f32
 {
-  result: m3f32
+  result: m3x3f32
   result[0,0] = v.x
   result[1,1] = v.y
   result[2,2] = 1
@@ -379,9 +389,9 @@ scale_3x3f :: proc(v: v2f32) -> m3f32
 }
 
 @(require_results)
-scale_4x4f :: proc(v: v3f32) -> m4f32
+scale_4x4f :: proc(v: v3f32) -> m4x4f32
 {
-  result: m4f32
+  result: m4x4f32
   result[0,0] = v.x
   result[1,1] = v.y
   result[2,2] = v.z
@@ -390,27 +400,27 @@ scale_4x4f :: proc(v: v3f32) -> m4f32
 }
 
 @(require_results)
-shear_2x2f :: proc(v: v2f32) -> m2f32
+shear_2x2f :: proc(v: v2f32) -> m2x2f32
 {
-  result: m2f32
+  result: m2x2f32 = IDENTITY_2X2F
   result[0,1] = v.x
   result[1,0] = v.y
   return result
 }
 
 @(require_results)
-shear_3x3f :: proc(v: v2f32) -> m3f32
+shear_3x3f :: proc(v: v2f32) -> m3x3f32
 {
-  result: m3f32 = ident_3x3f(1)
+  result: m3x3f32 = IDENTITY_3X3F
   result[0,1] = v.x
   result[1,0] = v.y
   return result
 }
 
 @(require_results)
-rotation_2x2f :: proc(rads: f32) -> m2f32
+rotation_2x2f :: proc(rads: f32) -> m2x2f32
 {
-  result: m2f32
+  result: m2x2f32
   result[0,0] = math.cos(rads)
   result[0,1] = -math.sin(rads)
   result[1,0] = math.sin(rads)
@@ -418,10 +428,16 @@ rotation_2x2f :: proc(rads: f32) -> m2f32
   return result
 }
 
-@(require_results)
-rotation_3x3f :: proc(rads: f32) -> m3f32
+rotation :: proc
 {
-  result: m3f32
+  rotation_3x3f,
+  rotation_4x4f,
+}
+
+@(require_results)
+rotation_3x3f :: proc(rads: f32) -> m3x3f32
+{
+  result: m3x3f32
   result[0,0] = math.cos(rads)
   result[0,1] = -math.sin(rads)
   result[1,0] = math.sin(rads)
@@ -430,8 +446,38 @@ rotation_3x3f :: proc(rads: f32) -> m3f32
   return result
 }
 
+// NOTE: Taken from core:linalg
 @(require_results)
-rotation_x_4x4f :: proc(rads: f32) -> m4f32
+rotation_4x4f :: proc(rads: f32, v: v3f32) -> (m: m4x4f32)
+{
+	c := math.cos(rads)
+	s := math.sin(rads)
+
+	u := normalize(v)
+	t := u * (1-c)
+
+	m = IDENTITY_4X4F
+
+	m[0][0] = c + t[0]*u[0]
+	m[0][1] = 0 + t[0]*u[1] + s*u[2]
+	m[0][2] = 0 + t[0]*u[2] - s*u[1]
+	m[0][3] = 0
+
+	m[1][0] = 0 + t[1]*u[0] - s*u[2]
+	m[1][1] = c + t[1]*u[1]
+	m[1][2] = 0 + t[1]*u[2] + s*u[0]
+	m[1][3] = 0
+
+	m[2][0] = 0 + t[2]*u[0] + s*u[1]
+	m[2][1] = 0 + t[2]*u[1] - s*u[0]
+	m[2][2] = c + t[2]*u[2]
+	m[2][3] = 0
+
+  return
+}
+
+@(require_results)
+rotation_x_4x4f :: proc(rads: f32) -> m4x4f32
 {
   using math
 
@@ -444,7 +490,7 @@ rotation_x_4x4f :: proc(rads: f32) -> m4f32
 }
 
 @(require_results)
-rotation_y_4x4f :: proc(rads: f32) -> m4f32
+rotation_y_4x4f :: proc(rads: f32) -> m4x4f32
 {
   using math
 
@@ -457,7 +503,7 @@ rotation_y_4x4f :: proc(rads: f32) -> m4f32
 }
 
 @(require_results)
-rotation_z_4x4f :: proc(rads: f32) -> m4f32
+rotation_z_4x4f :: proc(rads: f32) -> m4x4f32
 {
   using math
 
@@ -470,7 +516,7 @@ rotation_z_4x4f :: proc(rads: f32) -> m4f32
 }
 
 @(require_results)
-transform_3x3f :: proc(pos: v2f32, rot: f32, scl: v2f32) -> m3f32
+transform_3x3f :: proc(pos: v2f32, rot: f32, scl: v2f32) -> m3x3f32
 {
   result := translation_3x3f(pos)
   result *= rotation_3x3f(rot)
@@ -479,9 +525,9 @@ transform_3x3f :: proc(pos: v2f32, rot: f32, scl: v2f32) -> m3f32
 }
 
 @(require_results)
-orthographic_3x3f :: proc(left, right, top, bot: f32) -> m3f32
+orthographic :: proc(left, right, top, bot: f32) -> m3x3f32
 {
-  result: m3f32
+  result: m3x3f32
   result[0,0] = 2.0 / (right - left)
   result[1,1] = 2.0 / (top - bot)
   result[0,2] = -(right + left) / (right - left)
@@ -490,33 +536,56 @@ orthographic_3x3f :: proc(left, right, top, bot: f32) -> m3f32
   return result
 }
 
-// NOTE: z = [0, 1]
 @(require_results)
-orthographic_4x4f :: proc "contextless" (left, right, top, bot, near, far: f32) -> m4f32 #no_bounds_check
-{
-  result: m4f32
-  result[0,0] = +2.0 / (right - left)
-  result[1,1] = +2.0 / (top - bot)
-  result[2,2] = -2.0 / (far - near) when DEPTH == "opengl" else -1.0 / (far - near)
-  result[0,3] = -(right + left) / (right - left)
-  result[1,3] = -(top + bot) / (top - bot)
-  result[2,3] = -(far + near) / (far - near) when DEPTH == "opengl" else -near/(far-near)
-  result[3,3] = 1.0
-  // result[2] = -result[2]
-  return result
-}
-
-perspective_4x4f :: proc "contextless" (fov, aspect, near, far: f32) -> m4f32 #no_bounds_check
+perspective :: proc(fov, aspect, near, far: f32) -> m4x4f32
 {
   tan_half_fov := math.tan(0.5 * fov)
 
-  result: m4f32
+  result: m4x4f32
 	result[0,0] = +1 / (aspect * tan_half_fov)
 	result[1,1] = +1 / tan_half_fov
-	result[2,2] = +(far + near) / (far - near) when DEPTH == "opengl" else far / (far-near)
-	result[2,3] = -2*far*near / (far - near) when DEPTH == "opengl" else (far * near) / (far - near)
-	result[3,2] = 1
-  // result[3,3] = 1 
+	result[2,2] = +(far + near) / (far - near)
+	result[2,3] = -2*far*near / (far - near)
+	result[3,2] = +1
+  
+  result[1] = -result[1]
   result[2] = -result[2]
+
 	return result
+}
+
+lookat :: proc
+{
+  lookat_target,
+  lookat_fru,
+}
+
+@(require_results)
+lookat_target :: proc(eye, target, up: v3f32) -> m4x4f32
+{
+  assert(length(target - eye) != 0.0)
+
+	f := normalize(target - eye)
+	s := normalize(cross(f, up))
+	u := cross(s, f)
+
+	return {
+		+s.x, +s.y, +s.z, -dot(s, eye),
+		+u.x, +u.y, +u.z, -dot(u, eye),
+		-f.x, -f.y, -f.z, -dot(f, eye),
+		   0,    0,    0,            1,
+	}
+}
+
+@(require_results)
+lookat_fru :: proc(eye, f, r, u: v3f32) -> m4x4f32
+{
+  u := -u
+
+	return {
+		+r.x, +r.y, +r.z, -dot(r, eye),
+		-u.x, -u.y, -u.z, +dot(u, eye),
+		-f.x, -f.y, -f.z, +dot(f, eye),
+		   0,    0,    0,            1,
+	}
 }

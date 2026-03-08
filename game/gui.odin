@@ -71,17 +71,16 @@ render_gui_test :: proc()
 {
   window_size := platform.window_get_size(&user.window)
 
-  scratch := mem.temp_begin(mem.scratch())
+  scratch := mem.temp_begin(mem.get_scratch())
   defer mem.temp_end(scratch)
   
   render.begin_pass({
     shader = &res.shaders[.Sprite],
     camera = vmath.translation_3x3f({0, 0}),
-    projection = vmath.orthographic_3x3f(0, window_size.x, 0, window_size.y),
+    projection = vmath.orthographic(0, window_size.x, 0, window_size.y),
     viewport = {0, 0, window_size.x, window_size.y},
     clear_color = {0, 0, 0, 1},
   })
-
 
   iter := ui.make_iterator_preorder(global.gui_tree.root, scratch)
   for box in ui.iterate_preorder(&iter)

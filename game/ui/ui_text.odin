@@ -4,7 +4,7 @@ import "core:fmt"
 import "core:image"
 import "core:image/netpbm"
 import "core:slice"
-import "core:os/os2"
+import "core:os"
 import ft "ext:freetype"
 import "../basic/mem"
 
@@ -41,7 +41,7 @@ load_font :: proc
 
 load_font_from_path :: proc(path: string, size: int, arena: ^mem.Arena) -> (Font, ft.Error)
 {
-  data, err := os2.read_entire_file(path, mem.allocator(arena))
+  data, err := os.read_entire_file(path, mem.allocator(arena))
   if err != nil
   {
     return {}, .Invalid_Argument
@@ -65,7 +65,7 @@ load_font_from_bytes :: proc(bytes: []byte, size: int, arena: ^mem.Arena) -> (fo
   dpi := global.dpi != 0 ? cast(u32) global.dpi : 96
   ft.set_char_size(face, 0, cast(ft.F26Dot6) (size * 64), dpi, dpi) or_return
 
-  scratch := mem.temp_begin(mem.scratch())
+  scratch := mem.temp_begin(mem.get_scratch())
   defer mem.temp_end(scratch)
 
   glyphs: [dynamic]Glyph
@@ -86,7 +86,7 @@ load_font_from_bytes :: proc(bytes: []byte, size: int, arena: ^mem.Arena) -> (fo
         advance = {f32(face.glyph.advance.x >> 6), f32(face.glyph.advance.y >> 6)},
         bearing = {f32(face.glyph.bitmap_left), f32(face.glyph.bitmap_top)},
       }
-      
+
       size := glyph.width * glyph.height
       glyph.data = slice.clone(face.glyph.bitmap.buffer[:size], mem.allocator(scratch.arena))
 
@@ -94,7 +94,7 @@ load_font_from_bytes :: proc(bytes: []byte, size: int, arena: ^mem.Arena) -> (fo
     }
   }
 
-  // - Fill glyph table---
+  // - Fill glyph table ---
   for i := 0; i < len(glyphs) && i < len(global.glyph_table); i += 1
   {
     global.glyph_table[glyphs[i].char] = glyphs[i]
@@ -158,10 +158,10 @@ load_font_from_bytes :: proc(bytes: []byte, size: int, arena: ^mem.Arena) -> (fo
     }
 
     atlas, _ := image.pixels_to_image(transmute([][1]byte) atlas_bmp, atlas_width, atlas_height)
-    err := netpbm.save_to_file("atlas.pbm", &atlas)
+    err := netpbm.save_to_file("res/gen/font_atlas.pbm", &atlas)
     if err != nil
     {
-      fmt.eprintln("Error [ui]: Failed to save atlas to file.", err)
+      fmt.eprintln("[ERROR][ui]: Failed to save atlas to file.", err)
     }
 
     font = Font{

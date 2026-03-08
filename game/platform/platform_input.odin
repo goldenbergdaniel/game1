@@ -227,8 +227,8 @@ sdl_translate_event :: proc(sdl_event: ^sdl.Event) -> Event
 		}
 
   case .MOUSE_WHEEL:
-    global_input.mouse_scroll.x = sdl_event.wheel.x
-    global_input.mouse_scroll.y = sdl_event.wheel.y
+    global_input.mouse_scroll.x += sdl_event.wheel.x
+    global_input.mouse_scroll.y += sdl_event.wheel.y
 	}
 
 	return result

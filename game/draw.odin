@@ -1,6 +1,5 @@
 package game
 
-import "basic/mem"
 import "basic/vmath"
 import "render"
 import "ui"

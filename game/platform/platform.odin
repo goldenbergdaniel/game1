@@ -3,7 +3,7 @@ package platform
 import "core:fmt"
 import "core:math"
 import "core:strings"
-import os "core:os/os2"
+import "core:os"
 import "ext:sdl"
 import imgui "ext:dear_imgui"
 import imgui_sdl "ext:dear_imgui/imgui_impl_sdl3"
@@ -68,7 +68,7 @@ create_window :: proc(desc: Window_Desc, arena: ^mem.Arena) -> Window
 	result: Window
 	result.desc = desc
 
-	scratch := mem.temp_begin(mem.scratch())
+	scratch := mem.temp_begin(mem.get_scratch())
 	defer mem.temp_end(scratch)
 
 	when ODIN_OS == .Linux
@@ -275,6 +275,11 @@ get_cursor_position :: proc() -> [2]f32
 get_mouse_scroll :: proc() -> [2]f32
 {
 	return global_input.mouse_scroll
+}
+
+reset_mouse_scroll :: proc()
+{
+	global_input.mouse_scroll = 0	
 }
 
 @(require_results)

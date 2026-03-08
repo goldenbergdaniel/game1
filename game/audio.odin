@@ -245,7 +245,7 @@ ma_sound_init :: proc(ma_sound: ^ma.sound, path: string) -> bool
 {
   if !audio.initialized do return false
 
-  scratch := mem.temp_begin(mem.scratch())
+  scratch := mem.temp_begin(mem.get_scratch())
   defer mem.temp_end(scratch)
 
   path_cstr := strings.clone_to_cstring(path, mem.allocator(scratch.arena))
