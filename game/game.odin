@@ -143,12 +143,17 @@ game_start :: proc(gm: ^Game)
 
   for _ in 0..<1
   {
-    spawn_creature(.Deer, region_pos_to_world_pos({200, 200}, region))
+    spawn_creature(.Deer, region_pos_to_world_pos({170, 180}, region))
     spawn_creature(.Rabbit, region_pos_to_world_pos({200, 200}, region))
+    spawn_creature(.Squirrel, region_pos_to_world_pos({230, 190}, region))
   }
 
-  play_sound(.Minecraft, volume=global.audio.music_volume)
+  // play_sound(.Minecraft, volume=global.audio.music_volume)
   play_sound(.Forest_Ambience, volume=0.25)
+
+  spawn_grass(region_pos_to_world_pos({100, 100}, region))
+
+  global.debug.silence_noise = true
 
   set_current_game(nil)
 }
@@ -409,8 +414,12 @@ game_update :: proc(gm: ^Game, dt: f32)
     // - Rotate equipped weapon ---
     if player.equipped.weapon_kind != .Nil
     {
-      diff := cursor_pos - tt.global_pos(player)
+      pivot := tt.global_pos(player)
+      pivot.y += res.weapons[.Rifle].hold_off.y + res.weapons[.Rifle].shot_pos.y
+
+      diff := vmath.normalize(cursor_pos - pivot)
       angle := math.atan2(diff.y, diff.x)
+
       if .Flip_H in player.props
       {
         if angle < 0
@@ -464,13 +473,13 @@ game_update :: proc(gm: ^Game, dt: f32)
       // - Position effects ---
       if .Flip_V in weapon.props
       {
-        tt.local(weapon.shot_point).pos = weapon_desc.shot_pos + {0, 2}
-        tt.local(muzzle_flash).pos = weapon_desc.shot_pos + {2, 2}
+        tt.local(weapon.shot_point).pos = weapon_desc.shot_pos + {0, 3}
+        tt.local(muzzle_flash).pos = weapon_desc.shot_pos + {0, 3}
       }
       else
       {
         tt.local(weapon.shot_point).pos = weapon_desc.shot_pos
-        tt.local(muzzle_flash).pos = weapon_desc.shot_pos + + {2, 0}
+        tt.local(muzzle_flash).pos = weapon_desc.shot_pos
       }
 
       if timer_timeout(&player.equipped.muzzle_timer)
@@ -595,7 +604,7 @@ game_update :: proc(gm: ^Game, dt: f32)
       if gm.weapon.holstered
       {
         holster_off := res.weapons[gm.weapon.kind].holster_off
-        holster_off *= entity_flip_dir(player)
+        holster_off *= entity_flip_vec(player)
         holster_off.y += 1 if .Sneaking in player.props else 0
 
         tt.local(weapon).pos = holster_off
@@ -613,7 +622,7 @@ game_update :: proc(gm: ^Game, dt: f32)
       else
       {
         hold_off := res.weapons[gm.weapon.kind].hold_off
-        hold_off *= entity_flip_dir(player)
+        hold_off *= entity_flip_vec(player)
         hold_off.y += 1 if .Sneaking in player.props else 0
         tt.local(weapon).pos = hold_off
       }
@@ -854,7 +863,7 @@ game_render :: proc(gm: ^Game)
     }
   })
 
-  // slice.sort_by(en_targets[:en_count], proc(i, j: ^Entity) -> bool {
+  // slice.sort_by(en_targets[:en_targets_cnt], proc(i, j: ^Entity) -> bool {
   //   if i.z_layer == j.z_layer
   //   {
   //     return tt.global_pos(i).y < tt.global_pos(j).y
@@ -1208,7 +1217,7 @@ Entity :: struct
   col_layer:         Collision_Layer,
   resolve_collision: proc(this, other: ^Entity),
   z_index:           i16,
-  z_layer:           enum{Nil, Decoration, Enemy, Player, Projectile},
+  z_layer:           enum{Base, Enemy, Player, Projectile},
   attack_timer:      Timer,
   death_timer:       Timer,
   flash_color_timer: Timer,
@@ -1317,12 +1326,7 @@ Creature_Kind :: enum
   Nil,
   Deer,
   Rabbit,
-}
-
-Decoration_Kind :: enum
-{
-  Nil,
-  Corpse,
+  Squirrel,
 }
 
 Weapon_Kind :: enum
@@ -1342,6 +1346,7 @@ Item_Kind :: enum
   Nil,
   Venison,
   Rabbit_Foot,
+  Squirrel_Tail,
 }
 
 @(rodata)
@@ -1481,249 +1486,6 @@ entity_child_at :: proc(en: ^Entity, idx: int) -> (res: ^Entity, ok: bool)
   return entity_from_ref(en.children[idx])
 }
 
-spawn_player :: proc() -> ^Entity
-{
-  gm := get_current_game()
-  player := alloc_entity(gm)
-  desc := &res.player
-
-  player.tint = {1, 1, 1, 1}
-  player.z_layer = .Player
-  player.props += {.Is_Player, .Interpolate}
-  player.movement_speed = res.player.speed
-  player.animation.data = desc.animations
-  player.col_layer = .Player
-  player.collider = Circle{
-    radius = 6,
-  }
-
-  entity_set_state(player, .Idle)
-  spawn_shadow(player, .Shadow_1, {0, 7})
-
-  // - Weapon ---
-  {
-    weapon := alloc_entity(gm)
-    weapon.flags.update = true
-    weapon.flags.render = false
-    weapon.props += {.Interpolate}
-    weapon.tint = {1, 1, 1, 1}
-    weapon.z_layer = .Player
-    weapon.z_index = 1
-    weapon.shot_point = tt.alloc_transform(&gm.transform_tree, weapon)
-    weapon.animation.data[.Idle] = .Rifle
-
-    tt.set_parent(weapon, player)
-
-    // - Muzzle flash ---
-    {
-      muzzle_flash := alloc_entity(gm)
-      muzzle_flash.flags.update = true
-      muzzle_flash.flags.render = true
-      muzzle_flash.props += {.Interpolate}
-      muzzle_flash.tint = {1, 1, 1, 1}
-      muzzle_flash.z_layer = .Player
-      muzzle_flash.z_index = 2
-      muzzle_flash.flags.render = false
-      muzzle_flash.animation.data[.Idle] = .Muzzle_Flash
-
-      tt.set_parent(muzzle_flash, weapon)
-      entity_attach_child(weapon, muzzle_flash)
-    }
-
-    entity_attach_child(player, weapon)
-  }
-
-  entity_equip_weapon(player, .Rifle)
-
-  player.flags.render = true
-  player.flags.update = true
-
-  return player
-}
-
-spawn_creature :: proc(kind: Creature_Kind, pos: v2f32, deferred := false) -> ^Entity
-{
-  gm := get_current_game()
-  creature := alloc_entity(gm)
-  desc := &res.creatures[kind]
-
-  creature.creature_kind = kind
-  creature.props += {.Interpolate, .Flee_Noise}
-  creature.tint = {1, 1, 1, 1}
-  creature.z_layer = .Enemy
-  creature.col_layer = .Enemy
-  creature.resolve_collision = entity_resolve_collision_creature
-  creature.health = desc.health
-  creature.animation.data = desc.animations
-  creature.collider = res.creatures[kind].collider
-
-  tt.local(creature).pos = pos
-
-  switch kind
-  {
-  case .Nil:
-
-  case .Deer:
-    entity_set_state(creature, .Wander)
-    spawn_shadow(creature, .Shadow_3, {-2, 7})
-
-  case .Rabbit:
-    entity_set_state(creature, .Idle)
-    spawn_shadow(creature, .Shadow_2, {-2, 7})
-  }
-
-  if deferred
-  {
-    defer_entity_spawn(creature)
-  }
-  else
-  {
-    creature.flags.update = true
-    creature.flags.render = true
-  }
-
-  return creature
-}
-
-spawn_projectile :: proc(kind: Projectile_Kind, pos: v2f32, deferred := false) -> ^Entity
-{
-  gm := get_current_game()
-  projectile := alloc_entity(gm)
-
-  projectile.projectile_kind = kind
-  projectile.props += {.Interpolate, .Kill_After_Time}
-  projectile.z_layer = .Projectile
-  projectile.tint = {1, 1, 1, 1}
-  projectile.animation.data[.Idle] = .Bullet
-  projectile.col_layer = .Player_Projectile
-  projectile.resolve_collision = entity_resolve_collision_projectile
-  projectile.collider = Circle{
-    radius = 3,
-  }
-
-  tt.local(projectile).pos = pos
-
-  if deferred
-  {
-    defer_entity_spawn(projectile)
-  }
-  else
-  {
-    projectile.flags.render = true
-    projectile.flags.update = true
-  }
-
-  return projectile
-}
-
-spawn_item :: proc(kind: Item_Kind, pos: v2f32, deferred := false) -> ^Entity
-{
-  gm := get_current_game()
-  item := alloc_entity(gm)
-  desc := &res.items[kind]
-
-  item.item_kind = kind
-  item.props += {.Interpolate}
-  item.z_layer = .Decoration
-  item.col_layer = .Item
-  item.tint = {1, 1, 1, 1}
-  item.animation.data = desc.animations
-  item.resolve_collision = entity_resolve_collision_item
-  item.collider = Circle{
-    radius = 4,
-  }
-
-  tt.local(item).pos = pos
-
-  entity_set_state(item, .Bob)
-
-  if deferred
-  {
-    defer_entity_spawn(item)
-  }
-  else
-  {
-    item.flags.render = true
-    item.flags.update = true
-  }
-
-  return item
-}
-
-spawn_corpse :: proc(owner: ^Entity, deferred := false) -> ^Entity
-{
-  assert(owner.creature_kind != .Nil)
-
-  gm := get_current_game()
-  corpse := alloc_entity(gm)
-  creature_desc := &res.creatures[owner.creature_kind]
-
-  corpse.props += {.Interpolate}
-  corpse.props += owner.props & {.Flip_H}
-  corpse.tint = {1, 1, 1, 1}
-  corpse.animation.data[.Idle] = creature_desc.corpse
-
-  tt.local(corpse).pos = tt.global_pos(owner) + {0, 5}
-
-  // - Blood pool ---
-  {
-    blood_pool := alloc_entity(gm)
-    blood_pool.flags.update = true
-    blood_pool.flags.render = true
-    blood_pool.props += {.Interpolate}
-    blood_pool.tint = {1, 1, 1, 1}
-    blood_pool.z_index = -1
-    blood_pool.animation.data[.Idle] = .Blood_Pool_1
-    blood_pool.animation.data[.Expand] = creature_desc.blood_pool
-
-    entity_play_animation(blood_pool, .Expand, looping=false)
-
-    entity_attach_child(corpse, blood_pool)
-    tt.attach_child(corpse, blood_pool)
-  }
-
-  if deferred
-  {
-    defer_entity_spawn(corpse)
-  }
-  else
-  {
-    corpse.flags.update = true
-    corpse.flags.render = true
-  }
-
-  return corpse
-}
-
-spawn_shadow :: proc(owner: ^Entity, sprite: Sprite_Or_Animation, pos: v2f32, deferred := false) -> ^Entity
-{
-  gm := get_current_game()
-
-  shadow := alloc_entity(gm)
-  shadow.props += {.Interpolate}
-  shadow.tint = {1, 1, 1, 1}
-  shadow.color = {0.2, 0.2, 0.2, 0}
-  shadow.tint.a = 0.5
-  shadow.animation.data[.Idle] = sprite
-  shadow.z_index = -999
-  tt.local(shadow).pos = pos
-
-  tt.set_parent(shadow, owner)
-  entity_attach_child(owner, shadow)
-
-  if deferred
-  {
-    defer_entity_spawn(shadow)
-  }
-  else
-  {
-    shadow.flags.update = true
-    shadow.flags.render = true
-  }
-
-  return shadow
-}
-
 entity_play_animation :: proc(
   en:      ^Entity,
   anim:    Animation_State,
@@ -1801,17 +1563,7 @@ entity_animation_at_end :: proc(en: ^Entity) -> bool
          (en.animation.reverse && en.animation.frame_idx == 0)
 }
 
-// entity_rotate_to_target :: proc(en: ^Entity, target: v2f32)
-// {
-//   diff := target - tt.global_pos(en)
-//   tt.local(en).rot = math.atan2(diff.y, diff.x)
-//   if tt.global_rot(en) < 0
-//   {
-//     tt.local(en).rot += math.TAU
-//   }
-// }
-
-entity_flip_dir :: proc(en: ^Entity) -> v2f32
+entity_flip_vec :: proc(en: ^Entity) -> v2f32
 {
   return {
     (.Flip_H in en.props) ? -1 : 1,
@@ -1851,7 +1603,7 @@ entity_xform :: proc(en: ^Entity) -> m3f32
   {
     pivot := res.sprites[en.sprite].pivot
     dim := tt.local(en).scl * {16, 16}
-    local_pos := vmath.rotation_2x2f(tt.local(en).rot) * (-dim * pivot)
+    local_pos := vmath.rotation_2x2f(tt.local(en).rot) * (-dim * pivot.xy)
     return local_pos + tt.local(en).pos
   }
 
@@ -1960,7 +1712,7 @@ entity_holster_weapon :: proc(en: ^Entity, holster: bool)
     if holster
     {
       en.equipped.weapon_kind = .Nil
-      weapon.z_layer = .Decoration
+      weapon.z_layer = .Base
     }
     else
     {

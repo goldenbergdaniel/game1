@@ -11,8 +11,8 @@ import "ui"
 Sprite :: struct
 {
   coord: v2f32,
-  grid:  v2f32,
-  pivot: v2f32,
+  size:  v2f32,
+  pivot: v3f32,
 }
 
 draw_sprite :: proc(
@@ -24,12 +24,13 @@ draw_sprite :: proc(
   color:  v4f32 = {0, 0, 0, 0},
 ){
   sprite_data := &res.sprites[sprite]
-  dim := scl * sprite_data.grid
+  dim := scl * sprite_data.size
+  offset := dim * sprite_data.pivot.xy
 
-  xform := vmath.translation_3x3f(pos - dim * sprite_data.pivot)
-  xform *= vmath.translation_3x3f(dim * sprite_data.pivot)
+  xform := vmath.translation_3x3f(pos - offset)
+  xform *= vmath.translation_3x3f(offset)
   xform *= vmath.rotation_3x3f(rot)
-  xform *= vmath.translation_3x3f(-dim * sprite_data.pivot)
+  xform *= vmath.translation_3x3f(-offset)
   xform *= vmath.scale_3x3f(dim)
 
   p1 := xform * v3f32{0, 0, 1}
@@ -39,7 +40,7 @@ draw_sprite :: proc(
 
   tl, tr, br, bl := render.uv_from_texture(&res.textures[.Sprite_Atlas], 
                                            sprite_data.coord, 
-                                           sprite_data.grid)
+                                           sprite_data.size)
 
   render.push_vertex({p1.xy, tint, color, tl, 0})
   render.push_vertex({p2.xy, tint, color, tr, 0})

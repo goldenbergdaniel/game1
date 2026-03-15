@@ -31,7 +31,7 @@ update_gui_test :: proc()
     ui.spacer({.Percent, 1.0}, {.Percent, 0.35})
 
     N : f32 : 3.0
-    for i in 0..<int(N) do if ui.P(ui_sprite("Box", .Rect, idx=i))
+    for i in 0..<int(N) do if ui.P(ui_sprite("Box", .UI_Square, idx=i))
     {
       ui.layout_width(.Percent, 1)
       ui.layout_height(.Percent, 0.1)
@@ -88,7 +88,7 @@ render_gui_test :: proc()
     sprite := cast(Sprite_Name) box.sprite
     if sprite == nil
     {
-      sprite = .Rect
+      sprite = .UI_Square
     }
 
     draw_sprite(sprite=sprite,
