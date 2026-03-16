@@ -49,13 +49,16 @@ Shader_Name :: enum
 Sprite_Name :: enum
 {
   Nil,
+
   Rect,
   Square,
   UI_Square,
   Circle,
+  
   Shadow_1,
   Shadow_2,
   Shadow_3,
+
   Player_Idle_1,
   Player_Idle_2,
   Player_Walk_1,
@@ -68,15 +71,18 @@ Sprite_Name :: enum
   Player_Sneak_3,
   Player_Sneak_4,
   Player_Sneak_5,
+
   Rifle,
   Shotgun,
   Muzzle_Flash,
   Bullet,
   Smoke_Particle,
   Blood_Particle,
+
   Item_Venison,
   Item_Rabbit_Foot,
   Item_Squirrel_Tail,
+
   Deer_Idle_1,
   Deer_Idle_2,
   Deer_Idle_3,
@@ -86,6 +92,7 @@ Sprite_Name :: enum
   Deer_Walk_3,
   Deer_Walk_4,
   Deer_Corpse,
+  
   Rabbit_Idle_1,
   Rabbit_Idle_2,
   Rabbit_Idle_3,
@@ -95,6 +102,7 @@ Sprite_Name :: enum
   Rabbit_Walk_3,
   Rabbit_Walk_4,
   Rabbit_Corpse,
+
   Squirrel_Idle_1,
   Squirrel_Idle_2,
   Squirrel_Idle_3,
@@ -104,13 +112,22 @@ Sprite_Name :: enum
   Squirrel_Walk_3,
   Squirrel_Walk_4,
   Squirrel_Corpse,
+
   Blood_Pool_1,
   Blood_Pool_2,
   Blood_Pool_3,
   Blood_Pool_4,
   Blood_Pool_5,
   Blood_Pool_6,
+
   Grass,
+  Chamomile,
+  Sunflower,
+  Lavender,
+  Brown_Mushroom,
+  Red_Mushroom,
+  Stump,
+
   Tile_Dirt,
   Tile_Grass_1,
   Tile_Grass_2,
@@ -759,13 +776,13 @@ build_sprite_atlas :: proc(textures_path, atlas_path: string)
     }
 
     sprite_name := sprite_name_from_string(sprite_name_str)
-    if sprite_name == nil do continue
+    if sprite_name == nil && sprite_name_str != "nil" do continue
 
     sprite_img, err := tga.load(fi.fullpath)
     defer tga.destroy(sprite_img)
     if err != nil
     {
-      fmt.println("[ERROR][metagen]: Failed to open texture '%s'", fi.name)
+      fmt.println("[ERROR][game]: Failed to open texture '%s'", fi.name)
       os.exit(1)
     }
 
@@ -810,12 +827,12 @@ build_sprite_atlas :: proc(textures_path, atlas_path: string)
     err := tga.save_to_file(atlas_path, &atlas)
     if err != nil
     {
-      fmt.eprintln("[ERROR][metagen]: Failed to save atlas to file.", err)
+      fmt.eprintln("[ERROR][game]: Failed to save sprite atlas to file.", err)
     }
   }
   else
   {
-    fmt.eprintln("[ERROR][metagen]: Failed to make image from pixels.")
+    fmt.eprintln("[ERROR][game]: Failed to make sprite atlas image from pixels.")
   }
 }
 

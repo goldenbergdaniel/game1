@@ -1,5 +1,8 @@
 package game
 
+import "core:math"
+import "basic/rand"
+import "basic/vmath"
 import tt "transform_tree"
 
 /*
@@ -214,7 +217,7 @@ spawn_corpse :: proc(owner: ^Entity, deferred := false) -> ^Entity
   return corpse
 }
 
-spawn_shadow :: proc(owner: ^Entity, sprite: Sprite_Or_Animation, pos: v2f32, deferred := false) -> ^Entity
+spawn_shadow :: proc(owner: ^Entity, sprite: Sprite_Name, offet: v2f32, deferred := false) -> ^Entity
 {
   gm := get_current_game()
 
@@ -226,7 +229,7 @@ spawn_shadow :: proc(owner: ^Entity, sprite: Sprite_Or_Animation, pos: v2f32, de
   shadow.tint.a = 0.5
   shadow.animation.data[.Idle] = sprite
   shadow.z_index = -999
-  tt.local(shadow).pos = pos
+  tt.local(shadow).pos = offet
 
   tt.set_parent(shadow, owner)
   entity_attach_child(owner, shadow)
@@ -234,15 +237,67 @@ spawn_shadow :: proc(owner: ^Entity, sprite: Sprite_Or_Animation, pos: v2f32, de
   return shadow
 }
 
-spawn_grass :: proc(pos: v2f32, deferred := false) -> ^Entity
+spawn_decoration :: proc(sprite: Sprite_Name, pos: v2f32, deferred := false) -> ^Entity
 {
   gm := get_current_game()
-  
-  grass := alloc_entity(gm)
-  setup(grass, deferred)
 
-  grass.sprite = .Grass
-  tt.local(grass).pos = pos
+  deco := alloc_entity(gm)
+  setup(deco, deferred)
 
-  return grass 
+  deco.sprite = sprite
+  tt.local(deco).pos = pos
+
+  return deco 
+}
+
+spawn_grass_clump :: proc(count, radius: i32)
+{
+  grasses := [?]Sprite_Name{.Grass}
+
+  bounds := [2]Range(i32){
+    {32 + radius, REGION_SPAN - 32 - radius}, 
+    {32 + radius, REGION_SPAN - 32 - radius},
+  }
+  origin := rand.range_2i32(bounds)
+
+  for _ in 0..<count
+  { 
+    offset := rand.range_2i32({{-radius, radius}, {-radius, radius}})
+    pos := region_pos_from_world_pos(array_cast(origin + offset, f32))
+    spawn_decoration(rand.choice_slice(grasses[:]), pos)
+  }
+}
+
+spawn_flower_clump :: proc(count, radius: i32)
+{
+  flowers := [?]Sprite_Name{.Chamomile, .Sunflower}
+
+  bounds := [2]Range(i32){
+    {REGION_GAP + radius, REGION_SPAN - REGION_GAP - radius}, 
+    {REGION_GAP + radius, REGION_SPAN - REGION_GAP - radius},
+  }
+  origin := rand.range_2i32(bounds)
+
+  for _ in 0..<count
+  { 
+    offset := rand.range_2i32({{-radius, radius}, {-radius, radius}})
+    pos := region_pos_from_world_pos(array_cast(origin + offset, f32))
+    spawn_decoration(rand.choice_slice(flowers[:]), pos)
+  }
+}
+
+spawn_lavender_clump :: proc(count, radius: i32)
+{
+  bounds := [2]Range(i32){
+    {REGION_GAP + radius, REGION_SPAN - REGION_GAP - radius}, 
+    {REGION_GAP + radius, REGION_SPAN - REGION_GAP - radius},
+  }
+  origin := rand.range_2i32(bounds)
+
+  for _ in 0..<count
+  { 
+    offset := rand.range_2i32({{-radius, radius}, {-radius, radius}})
+    pos := region_pos_from_world_pos(array_cast(origin + offset, f32))
+    spawn_decoration(.Lavender, pos)
+  }
 }

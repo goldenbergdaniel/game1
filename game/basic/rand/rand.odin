@@ -1,43 +1,42 @@
 package rand0
 
 import "core:math/rand"
-
-import ".."
+import basic ".."
 
 Range :: basic.Range
 
 set_seed :: rand.reset
-num_i31  :: rand.int31
-num_i63  :: rand.int63
+num_i32  :: rand.int31
+num_i64  :: rand.int63
 
 boolean :: proc() -> bool
 {
   return cast(bool) rand.int31_max(2)
 }
 
-range_i31 :: proc(range: Range(i32)) -> i32
+range_i32 :: proc(range: Range(i32)) -> i32
 {
-  return rand.int31_max(range.max - range.min) + range.min
+  return rand.int31_max(range.max - range.min + 1) + range.min
 }
 
-range_i63 :: proc(range: Range(i64)) -> i64
+range_i64 :: proc(range: Range(i64)) -> i64
 {
-  return rand.int63_max(range.max - range.min) + range.min
+  return rand.int63_max(range.max - range.min + 1) + range.min
 }
 
-range_2i31 :: proc(range: [2]Range(i32)) -> [2]i32
+range_2i32 :: proc(range: [2]Range(i32)) -> [2]i32
 {
   return {
-    rand.int31_max(range.x.max - range.x.min) + range.x.min,
-    rand.int31_max(range.y.max - range.y.min) + range.y.min,
+    rand.int31_max(range.x.max - range.x.min + 1) + range.x.min,
+    rand.int31_max(range.y.max - range.y.min + 1) + range.y.min,
   }
 }
 
-range_2i63 :: proc(range: [2]Range(i64)) -> [2]i64
+range_2i64 :: proc(range: [2]Range(i64)) -> [2]i64
 {
   return {
-    rand.int63_max(range.x.max - range.x.min) + range.x.min,
-    rand.int63_max(range.y.max - range.y.min) + range.y.min,
+    rand.int63_max(range.x.max - range.x.min + 1) + range.x.min,
+    rand.int63_max(range.y.max - range.y.min + 1) + range.y.min,
   }
 }
 

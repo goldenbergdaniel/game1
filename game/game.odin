@@ -77,7 +77,7 @@ Game :: struct
   particles:          [MAX_PARTICLES]Particle,
   particles_pos:      int,
   special_entities:   [enum{Player}]^Entity,
-  regions:            [9][REGION_SPAN_TILES*REGION_SPAN_TILES]Tile,
+  regions:            [1][REGION_SPAN_TILES*REGION_SPAN_TILES]Tile,
   active_region:      Region_Coord,
   weapon:             struct
   {
@@ -89,6 +89,7 @@ Game :: struct
   {
     items:            [Item_Kind]int,
   },
+  light_color:        v4f32,
 }
 
 @(private="file")
@@ -132,6 +133,9 @@ game_start :: proc(gm: ^Game)
   gm.t_mult = 1
   gm.camera.scl = {1, 1}
 
+  // gm.light_color = {1.0, 1.0, 1.0, 1.0}
+  gm.light_color = {1.0, 0.8, 0.8, 1.0}
+
   region: Region_Coord
   generate_world_region(gm)
   set_active_region(gm, region)
@@ -151,7 +155,25 @@ game_start :: proc(gm: ^Game)
   // play_sound(.Minecraft, volume=global.audio.music_volume)
   play_sound(.Forest_Ambience, volume=0.25)
 
-  spawn_grass(region_pos_to_world_pos({100, 100}, region))
+  for _ in 0..<8
+  {
+    spawn_grass_clump(16, 32)
+  }
+
+  for _ in 0..<4
+  {
+    spawn_lavender_clump(8, 16)
+  }
+
+  for _ in 0..<64
+  {
+    pos := region_pos_to_world_pos(rand.range_2f32({{32, REGION_SPAN-32}, {32, REGION_SPAN-32}}), region)
+    choice := cast(Sprite_Name) rand.range_i32({i32(Sprite_Name.Chamomile), i32(Sprite_Name.Red_Mushroom)})
+    spawn_decoration(choice, pos)
+  }
+
+  spawn_decoration(.Stump, {300, 100})
+  spawn_decoration(.Stump, {100, 300})
 
   global.debug.silence_noise = true
 
@@ -818,7 +840,7 @@ game_render :: proc(gm: ^Game)
     projection = vmath.orthographic(0, VIEWPORT_WIDTH, 0, VIEWPORT_HEIGHT),
     viewport = user.viewport,
     clear_color = {1, 1, 1, 1},
-    // light_color = {1.0, 0.8, 0.8, 1.0},
+    light_color = gm.light_color,
   })
 
   draw_text("Hello, world!", {100, 100}, 32)
@@ -1770,7 +1792,7 @@ creature_state_wander :: proc(en: ^Entity, using ctx: ^Entity_State_Context)
     point: [2]f32
     for
     {
-      point = array_cast(rand.range_2i31(creature_desc.wander_range), f32)
+      point = array_cast(rand.range_2i32(creature_desc.wander_range), f32)
       point.x *= -1 if rand.boolean() else 1
       point.y *= -1 if rand.boolean() else 1
       point += en_pos
@@ -1824,7 +1846,7 @@ creature_state_flee :: proc(en: ^Entity, using ctx: ^Entity_State_Context)
     point: [2]f32
     for
     {
-      point = array_cast(rand.range_2i31(creature_desc.flee_range), f32)
+      point = array_cast(rand.range_2i32(creature_desc.flee_range), f32)
       point.x *= -1 if rand.boolean() else 1
       point.y *= -1 if rand.boolean() else 1
       point += en_pos
@@ -1986,7 +2008,7 @@ debug_circle :: proc(
 TILE_SIZE         :: 8
 REGION_GAP_TILES  :: 2
 REGION_GAP        :: REGION_GAP_TILES * TILE_SIZE
-REGION_SPAN_TILES :: 64 + REGION_GAP_TILES * 2
+REGION_SPAN_TILES :: 96 + REGION_GAP_TILES * 2
 REGION_SPAN       :: REGION_SPAN_TILES * TILE_SIZE
 
 Tile :: struct
@@ -2069,7 +2091,7 @@ generate_world_region :: proc(gm: ^Game)
     {
       coord: [2]f64 = array_cast(tile_coord_from_idx(tile_idx), f64)
       noise_scale: f64 = 0.05
-      noise_value: f32 = math.abs(noise.noise_2d(rand.num_i63(), coord * noise_scale))
+      noise_value: f32 = math.abs(noise.noise_2d(rand.num_i64(), coord * noise_scale))
 
       sprite: Sprite_Name
       switch region_idx
@@ -2108,216 +2130,12 @@ generate_world_region :: proc(gm: ^Game)
         }
       }
 
-      rot := cast(f16) rand.range_i31({0, 4}) * math.PI/2.0
+      rot := cast(f16) rand.range_i32({0, 4}) * math.PI/2.0
       
       gm.regions[region_idx][tile_idx] = Tile{
         sprite = sprite,
         rot = rot,
       }
     }
-  }
-}
-
-
-// Particle //////////////////////////////////////////////////////////////////////////////
-
-
-MAX_PARTICLES :: 4 << 10
-
-Particle :: struct
-{
-  gen:           u16,
-  props:         bit_set[Particle_Prop],
-  kind:          Particle_Name,
-  sprite:        Sprite_Name,
-  emmision_kind: Particle_Emmision_Kind,
-  kill_timer:    Timer,
-  tint:          v4f32,
-  color:         v4f32,
-  pos:           v2f32,
-  scl:           v2f32,
-  vel:           v2f32,
-  acc:           v2f32,
-  dir:           f32,
-  rot:           f32,
-  rot_dt:        f32,
-}
-
-Particle_Prop :: enum
-{
-  Active,
-  Render,
-  Interpolate,
-  Rotate_Over_Time,
-  Scale_Over_Time,
-  Persist,
-}
-
-Particle_Emmision_Kind :: enum
-{
-  Static,
-  Burst,
-}
-
-spawn_particles :: proc(kind: Particle_Name, pos: v2f32)
-{
-  push_particle :: proc(gm: ^Game) -> ^Particle
-  {
-    idx := gm.particles_pos % MAX_PARTICLES
-    result := &gm.particles[idx]
-    gm.particles_pos += 1
-
-    old_gen := result.gen
-    result^ = {}
-    result.gen = old_gen + 1
-    result.props = {.Active, .Render, .Interpolate}
-    result.tint = {1, 1, 1, 1}
-    result.color = {0, 0, 0, 1}
-
-    return result
-  }
-
-  gm := get_current_game()
-  desc := &res.particles[kind]
-
-  for i in 0..<desc.count
-  {
-    par := push_particle(gm)
-    par.kind = kind
-    par.props += desc.props
-    par.sprite = desc.sprite
-    par.pos = pos
-    par.scl = desc.scl + rand.range_f32({-desc.scl_var, desc.scl_var})
-    par.rot = desc.rot
-    par.rot_dt = desc.rot_dt
-    par.vel = desc.vel
-    par.acc = desc.vel_dt
-    par.color = rand.choice_slice(desc.colors[:])
-
-    lifetime := desc.lifetime + rand.range_f32({-desc.lifetime_var, desc.lifetime_var})
-    timer_start(&par.kill_timer, lifetime)
-
-    switch desc.emmision_kind
-    {
-    case .Static:
-
-    case .Burst:
-      par.dir = rand.range_f32({0, 2*math.PI})
-      par.vel.x *= math.cos(par.dir)
-      par.vel.y *= math.sin(par.dir)
-    }
-  }
-}
-
-particle_update :: proc(par: ^Particle, dt: f32)
-{
-  par.vel += par.acc * dt
-  par.pos += par.vel * dt
-
-  if .Rotate_Over_Time in par.props
-  {
-    par.rot += dt * 2
-  }
-
-  if .Scale_Over_Time in par.props
-  {
-    par.scl += res.particles[par.kind].scl_dt * dt
-    par.scl.x = max(par.scl.x, 0)
-    par.scl.y = max(par.scl.y, 0)
-  }
-
-  if timer_timeout(&par.kill_timer)
-  {
-    par.props -= {.Active}
-  }
-
-  if par.props & {.Active, .Persist} == nil
-  {
-    par.props -= {.Render}
-  }
-}
-
-
-// Timer /////////////////////////////////////////////////////////////////////////////////
-
-
-Timer :: struct
-{
-  end_time: f32,
-  ticking:  bool,
-}
-
-timer_start :: proc(timer: ^Timer, duration: f32)
-{
-  timer.end_time = get_current_game().t + duration
-  timer.ticking = true
-}
-
-timer_timeout :: proc(timer: ^Timer) -> bool
-{
-  return timer.ticking && get_current_game().t >= timer.end_time
-}
-
-timer_remaining :: proc(timer: ^Timer) -> f32
-{
-  return timer.end_time - get_current_game().t
-}
-
-
-// Input ///////////////////////////////////////////////////////////////////////////////////
-
-
-key_down :: platform.key_down
-key_up   :: platform.key_up
-
-@(require_results)
-key_just_down :: proc(key: platform.Key_Kind) -> bool
-{
-  return key_down(key) && !get_current_game().prev_keys[key]
-}
-
-@(require_results)
-key_just_up :: proc(key: platform.Key_Kind) -> bool
-{
-  return key_up(key) && get_current_game().prev_keys[key]
-}
-
-mouse_btn_down :: platform.mouse_btn_down
-mouse_btn_up   :: platform.mouse_btn_up
-
-@(require_results)
-mouse_btn_just_down :: proc(btn: platform.Mouse_Btn_Kind) -> bool
-{
-  return mouse_btn_down(btn) && !get_current_game().prev_mouse_btns[btn]
-}
-
-@(require_results)
-mouse_btn_just_up :: proc(btn: platform.Mouse_Btn_Kind) -> bool
-{
-  return mouse_btn_up(btn) && get_current_game().prev_mouse_btns[btn]
-}
-
-input_down :: platform.input_down
-input_up   :: platform.input_up
-
-@(require_results)
-input_just_down :: proc(input: platform.Input_Source) -> bool
-{
-  switch v in input
-  {
-  case platform.Key_Kind:       return key_just_down(v)
-  case platform.Mouse_Btn_Kind: return mouse_btn_down(v)
-  case:                         return false
-  }
-}
-
-@(require_results)
-input_just_up :: proc(input: platform.Input_Source) -> bool
-{
-  switch v in input
-  {
-  case platform.Key_Kind:       return key_just_up(v)
-  case platform.Mouse_Btn_Kind: return mouse_btn_just_up(v)
-  case:                         return false
   }
 }

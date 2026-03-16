@@ -4,9 +4,6 @@ package vmath
 import "base:intrinsics"
 import "base:builtin"
 import "core:math"
-import "core:math/linalg"
-
-DEPTH :: "vulkan"
 
 
 // Vector ///////////////////////////////////////////////////////////////////////////
@@ -264,17 +261,13 @@ normalize_3f32 :: #force_inline proc(v: v3f32) -> v3f32
 }
 
 @(require_results)
-lerp :: #force_inline proc(
-  curr, target, rate: $T,
-) -> T where intrinsics.type_is_numeric(T)
+lerp :: #force_inline proc(curr, target, rate: $T) -> T
 {
   return curr + ((target - curr) * rate)
 }
 
 @(require_results)
-lerp_angle :: #force_inline proc(
-  current, target, t: $T,
-) -> T where intrinsics.type_is_float(T)
+lerp_angle :: proc(current, target, t: $T) -> T where intrinsics.type_is_float(T)
 {
   result: T
 
@@ -299,15 +292,15 @@ lerp_angle :: #force_inline proc(
   return result;
 }
 
-vectorize :: proc(mat: ^[$R][$C]$T, math_proc: proc(T) -> T)
+@(require_results)
+round :: proc(v: [$N]$T) -> (result: [N]T)
 {
-  for &dim in mat
+  #unroll(N) for i in 0..<N
   {
-    for &elem in dim
-    {
-      elem = math_proc(elem)
-    }
+    result[i] = math.round(v[i])
   }
+
+  return
 }
 
 
