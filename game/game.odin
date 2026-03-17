@@ -77,8 +77,8 @@ Game :: struct
   particles:          [MAX_PARTICLES]Particle,
   particles_pos:      int,
   special_entities:   [enum{Player}]^Entity,
-  regions:            [1][REGION_SPAN_TILES*REGION_SPAN_TILES]Tile,
-  active_region:      Region_Coord,
+  tiles:              [MAX_ZONE_TILES*MAX_ZONE_TILES]Tile,
+  active_zone:        Zone_Name,
   weapon:             struct
   {
     kind:             Weapon_Kind,
@@ -93,16 +93,16 @@ Game :: struct
 }
 
 @(private="file")
-_current_game: ^Game
+_active_game: ^Game
 
-get_current_game :: #force_inline proc() -> ^Game
+get_active_game :: #force_inline proc() -> ^Game
 {
-  return _current_game
+  return _active_game
 }
 
-set_current_game :: #force_inline proc(gm: ^Game)
+set_active_game :: #force_inline proc(gm: ^Game)
 {
-  _current_game = gm
+  _active_game = gm
   tt.global_tree = &gm.transform_tree
 }
 
@@ -128,61 +128,38 @@ game_copy :: proc(dst, src: ^Game)
 
 game_start :: proc(gm: ^Game)
 {
-  set_current_game(gm)
+  set_active_game(gm)
 
   gm.t_mult = 1
   gm.camera.scl = {1, 1}
-
   // gm.light_color = {1.0, 1.0, 1.0, 1.0}
   gm.light_color = {1.0, 0.8, 0.8, 1.0}
 
-  region: Region_Coord
-  generate_world_region(gm)
-  set_active_region(gm, region)
-
   player := spawn_player()
-  tt.set_global_pos(player, region_pos_to_world_pos(VIEWPORT_WIDTH/2, region))
 
-  gm.special_entities[.Player] = player
+  set_active_zone(.Shop, true)
 
   for _ in 0..<1
   {
-    spawn_creature(.Deer, region_pos_to_world_pos({170, 180}, region))
-    spawn_creature(.Rabbit, region_pos_to_world_pos({200, 200}, region))
-    spawn_creature(.Squirrel, region_pos_to_world_pos({230, 190}, region))
+    spawn_creature(.Deer, {170, 180})
+    spawn_creature(.Rabbit, {200, 200})
+    spawn_creature(.Squirrel, {230, 190})
   }
 
   // play_sound(.Minecraft, volume=global.audio.music_volume)
   play_sound(.Forest_Ambience, volume=0.25)
-
-  for _ in 0..<8
-  {
-    spawn_grass_clump(16, 32)
-  }
-
-  for _ in 0..<4
-  {
-    spawn_lavender_clump(8, 16)
-  }
-
-  for _ in 0..<64
-  {
-    pos := region_pos_to_world_pos(rand.range_2f32({{32, REGION_SPAN-32}, {32, REGION_SPAN-32}}), region)
-    choice := cast(Sprite_Name) rand.range_i32({i32(Sprite_Name.Chamomile), i32(Sprite_Name.Red_Mushroom)})
-    spawn_decoration(choice, pos)
-  }
 
   spawn_decoration(.Stump, {300, 100})
   spawn_decoration(.Stump, {100, 300})
 
   global.debug.silence_noise = true
 
-  set_current_game(nil)
+  set_active_game(nil)
 }
 
 game_update :: proc(gm: ^Game, dt: f32)
 {
-  set_current_game(gm)
+  set_active_game(gm)
 
   player := gm.special_entities[.Player]
   cursor_pos := screen_to_world_space(platform.get_cursor_position())
@@ -222,7 +199,7 @@ game_update :: proc(gm: ^Game, dt: f32)
     }
   }
 
-  if !point_in_region_bounds(cursor_pos, gm.active_region)
+  if !point_in_zone_bounds(cursor_pos, gm.active_zone)
   {
     debug_circle(cursor_pos, 4, {1, 0, 0, 0})
   }
@@ -258,9 +235,13 @@ game_update :: proc(gm: ^Game, dt: f32)
       {
         gm.t_mult = 2
       }
+      else if key_just_down(.S_6)
+      {
+        gm.t_mult = 3
+      }
       else if key_just_down(.P)
       {
-        generate_world_region(gm)
+        set_active_zone(.Wilderness if gm.active_zone == .Shop else .Shop)
       }
     }
     else
@@ -289,37 +270,37 @@ game_update :: proc(gm: ^Game, dt: f32)
     }
   }
 
-  // - Move region ---
-  {
-    region_pos := region_pos_to_world_pos({0, 0})
-    relative_player_pos := tt.global_pos(player) - region_pos
+  // // - Move region ---
+  // {
+  //   region_pos := region_pos_to_world_pos({0, 0})
+  //   relative_player_pos := tt.global_pos(player) - region_pos
 
-    if gm.active_region.x < 2 && relative_player_pos.x > REGION_SPAN
-    {
-      // - Move right ---
-      gm.active_region.x += 1
-      gm.interpolate = false
-    }
-    else if gm.active_region.x > 0 && relative_player_pos.x < -0
-    {
-      // - Move left ---
-      gm.active_region.x -= 1
-      gm.interpolate = false
-    }
+  //   if gm.active_zone.x < 2 && relative_player_pos.x > REGION_SPAN
+  //   {
+  //     // - Move right ---
+  //     gm.active_zone.x += 1
+  //     gm.interpolate = false
+  //   }
+  //   else if gm.active_zone.x > 0 && relative_player_pos.x < -0
+  //   {
+  //     // - Move left ---
+  //     gm.active_zone.x -= 1
+  //     gm.interpolate = false
+  //   }
 
-    if gm.active_region.y < 2 && relative_player_pos.y > REGION_SPAN
-    {
-      // - Move down ---
-      gm.active_region.y += 1
-      gm.interpolate = false
-    }
-    else if gm.active_region.y > 0 && relative_player_pos.y < -0
-    {
-      // - Move up ---
-      gm.active_region.y -= 1
-      gm.interpolate = false
-    }
-  }
+  //   if gm.active_zone.y < 2 && relative_player_pos.y > REGION_SPAN
+  //   {
+  //     // - Move down ---
+  //     gm.active_zone.y += 1
+  //     gm.interpolate = false
+  //   }
+  //   else if gm.active_zone.y > 0 && relative_player_pos.y < -0
+  //   {
+  //     // - Move up ---
+  //     gm.active_zone.y -= 1
+  //     gm.interpolate = false
+  //   }
+  // }
 
   // - Entity movement (:move, :movement) ---
   {
@@ -421,10 +402,10 @@ game_update :: proc(gm: ^Game, dt: f32)
     set_audio_listener_pos(tt.global_pos(player))
 
     bounds: [2]Range(f32)
-    bounds.x.min = REGION_SPAN * gm.active_region.x
-    bounds.x.max = REGION_SPAN * (gm.active_region.x + 1) - VIEWPORT_WIDTH
-    bounds.y.min = REGION_SPAN * gm.active_region.y
-    bounds.y.max = REGION_SPAN * (gm.active_region.y + 1) - VIEWPORT_HEIGHT
+    bounds.x.min = -ZONE_MARGIN_SIZE
+    bounds.x.max = f32(res.zones[gm.active_zone].width) + ZONE_MARGIN_SIZE
+    bounds.y.min = -ZONE_MARGIN_SIZE
+    bounds.y.max = f32(res.zones[gm.active_zone].height) + ZONE_MARGIN_SIZE
     camera_follow_point(tt.global_pos(player), bounds)
   }
 
@@ -827,35 +808,31 @@ game_update :: proc(gm: ^Game, dt: f32)
   free_finished_sounds()
   free_all(mem.allocator(&global.frame_arena))
 
-  set_current_game(nil)
+  set_active_game(nil)
 }
 
 game_render :: proc(gm: ^Game)
 {
-  set_current_game(gm)
+  set_active_game(gm)
 
   render.begin_pass({
     shader = &res.shaders[.Sprite],
     camera = vmath.transform_3x3f(-gm.camera.pos, gm.camera.rot, gm.camera.scl),
     projection = vmath.orthographic(0, VIEWPORT_WIDTH, 0, VIEWPORT_HEIGHT),
     viewport = user.viewport,
-    clear_color = {1, 1, 1, 1},
+    clear_color = {0, 0, 0, 1},
     light_color = gm.light_color,
   })
 
-  draw_text("Hello, world!", {100, 100}, 32)
-
   // - Draw region ---
-  region_coord := gm.active_region
-  region_idx := region_idx_from_coord(gm.active_region)
-  for tile_idx in 0..<len(gm.regions[0])
+  for tile_idx in 0..<len(gm.tiles)
   {
-    tile := &gm.regions[region_idx][tile_idx]
+    tile := &gm.tiles[tile_idx]
     if tile.sprite != .Nil
     {
       pos := array_cast(tile_coord_from_idx(tile_idx), f32)
       pos *= TILE_SIZE
-      pos += ({REGION_SPAN, REGION_SPAN}) * v2f32(region_coord)
+      // pos += ({REGION_SPAN, REGION_SPAN}) * v2f32(region_coord)
       pos += {TILE_SIZE/2.0, TILE_SIZE/2.0}
 
       draw_sprite(tile.sprite, pos, scl={1.01, 1.01}, rot=f32(tile.rot))
@@ -931,7 +908,7 @@ game_render :: proc(gm: ^Game)
 
   render.end_pass()
 
-  set_current_game(nil)
+  set_active_game(nil)
 }
 
 interpolate_games :: proc(curr_gm, prev_gm, res_gm: ^Game, alpha: f32)
@@ -1023,7 +1000,7 @@ interpolate_games :: proc(curr_gm, prev_gm, res_gm: ^Game, alpha: f32)
 
 update_debug_gui :: proc(gm: ^Game, dt: f32)
 {
-  set_current_game(gm)
+  set_active_game(gm)
 
   if true
   {
@@ -1032,7 +1009,6 @@ update_debug_gui :: proc(gm: ^Game, dt: f32)
     cursor_pos := platform.get_cursor_position()
     player := gm.special_entities[.Player]
     player_pos := tt.global_pos(player)
-    player_pos_local := region_pos_from_world_pos(player_pos)
 
     imgui.Text("Time elapsed: %.f s", gm.t)
     imgui.Text("Time delta: %.4f s", dt)
@@ -1048,10 +1024,10 @@ update_debug_gui :: proc(gm: ^Game, dt: f32)
     imgui.Spacing()
 
     world_pos := screen_to_world_space(cursor_pos)
+    imgui.Text("Cursor (Screen): (%.f, %.f)", cursor_pos.x, cursor_pos.y)
     imgui.Text("Cursor (World): (%.f, %.f)", world_pos.x, world_pos.y)
-    imgui.Text("Region: (%.f, %.f)", gm.active_region.x, gm.active_region.y)
-    imgui.Text("Coordinates (World): (%.f, %.f)", player_pos.x, player_pos.y)
-    imgui.Text("Coordinates (Region): (%.f, %.f)", player_pos_local.x, player_pos_local.y)
+    imgui.Text("Zone: %s", res.zones[gm.active_zone].name)
+    imgui.Text("Coordinates: (%.f, %.f)", player_pos.x, player_pos.y)
 
     imgui.Spacing()
     diff := time.tick_diff(update_start_tick, update_end_tick)
@@ -1148,20 +1124,26 @@ update_debug_gui :: proc(gm: ^Game, dt: f32)
     imgui.End()
   }
 
-  set_current_game(nil)
+  set_active_game(nil)
 }
 
 camera_follow_point :: proc(point: v2f32, bounds: [2]Range(f32))
 {
-  gm := get_current_game()
-  point := point - {VIEWPORT_WIDTH, VIEWPORT_HEIGHT}/2
-  gm.camera.pos.x = clamp(point.x, bounds.x.min, bounds.x.max)
-  gm.camera.pos.y = clamp(point.y, bounds.y.min, bounds.y.max)
+  gm := get_active_game()
+
+  point := point
+  point -= v2f32{VIEWPORT_WIDTH, VIEWPORT_HEIGHT}/2
+
+  bounds := bounds
+  bounds.x.max -= VIEWPORT_WIDTH
+  bounds.y.max -= VIEWPORT_HEIGHT
+
+  gm.camera.pos = range_clamp(point, bounds)
 }
 
 screen_to_world_space :: proc(pos: v2f32) -> (result: v2f32)
 {
-  gm := get_current_game()
+  gm := get_active_game()
 
   result = {
     (pos.x - user.viewport.x) * (VIEWPORT_WIDTH / user.viewport.z),
@@ -1205,23 +1187,66 @@ noise_at__test :: proc(pos: v2f32, val: f32, pos2: v2f32) -> (value: f32)
   return
 }
 
+// TODO(dg): Should be deferred until the start of the next frame.
+set_active_zone :: proc(zone: Zone_Name, regen := false)
+{
+  gm := get_active_game()
+  player := gm.special_entities[.Player]
+
+  if player != nil
+  {
+    tt.set_global_pos(player, {30, 30})
+  }
+  
+  // TODO(dg): Only touch active entities?
+  for &en in gm.entities
+  {
+    switch en.flags.zone_change_op
+    {
+    case .Reset:
+      free_entity(gm, &en)
+    case .Persist:
+      panic("[FATAL][game]: Zone change operation 'Persist' not yet implemented!")
+    case .Move:
+      // do nothing?
+    } 
+  }
+
+  // generate zone
+  if gm.active_zone != zone || regen
+  {
+    switch zone
+    {
+    case .Wilderness:
+      generate_wilderness()
+    case .Shop:
+      generate_shop()
+    }
+
+    printf("[INFO][game]: Switched zone to '%s'.\n", zone)
+  }
+
+  gm.active_zone = zone
+}
+
 
 // Entity ////////////////////////////////////////////////////////////////////////////////
 
 
-MAX_ENTITIES  :: 4 << 10
+MAX_ENTITIES  :: 10000
 
 Entity :: struct
 {
   ref:               Entity_Ref,
   gen:               u32,
   parent:            Entity_Ref,
-  children:          [2]Entity_Ref,
+  children:          [4]Entity_Ref,
   flags:             bit_field u8
   {
     update:          bool | 1,
     render:          bool | 1,
     interpolate:     bool | 1,
+    zone_change_op:  enum{Reset, Persist, Move} | 3,
   },
   props:             bit_set[Entity_Prop],
   creature_kind:     Creature_Kind,
@@ -1242,10 +1267,10 @@ Entity :: struct
   z_layer:           enum{Base, Enemy, Player, Projectile},
   attack_timer:      Timer,
   death_timer:       Timer,
-  flash_color_timer: Timer,
-  flash_color:       v4f32,
   hurt_grace_timer:  Timer,
   flee_timer:        Timer,
+  flash_color_timer: Timer,
+  flash_color:       v4f32,
   state:             Entity_State,
   state_data:        Entity_State_Data,
   update_state:      proc(this: ^Entity, ctx: ^Entity_State_Context),
@@ -1256,9 +1281,9 @@ Entity :: struct
     next_state:      Animation_State,
     speed:           f32,
     duration:        f32,
+    frame_idx:       u16,
     reverse:         bool,
     looping:         bool,
-    frame_idx:       u16,
   },
   distort:           [2]struct
   {
@@ -1406,7 +1431,7 @@ entity_is_same :: #force_inline proc(en_a, en_b: $E/Entity) -> bool
 
 entity_from_ref :: proc(ref: Entity_Ref) -> (^Entity, bool) #optional_ok
 {
-  gm := get_current_game()
+  gm := get_active_game()
   en := &gm.entities[ref.idx]
 
   if ref.idx != 0 && ref.gen == en.gen
@@ -1561,7 +1586,7 @@ entity_resolve_collision_projectile :: proc(this, other: ^Entity)
 
 entity_resolve_collision_item :: proc(this, other: ^Entity)
 {
-  gm := get_current_game()
+  gm := get_active_game()
   gm.player_inventory.items[this.item_kind] += 1
   kill_entity(this)
 }
@@ -1705,7 +1730,7 @@ entity_equip_weapon :: proc(en: ^Entity, kind: Weapon_Kind)
 
   weapon.flags.render = kind != .Nil
 
-  gm := get_current_game()
+  gm := get_active_game()
   gm.weapon.kind = kind
 
   if kind != .Nil
@@ -1723,7 +1748,7 @@ entity_holster_weapon :: proc(en: ^Entity, holster: bool)
 {
   if !entity_is_valid(en) do return
 
-  gm := get_current_game()
+  gm := get_active_game()
   gm.weapon.holstered = holster
 
   weapon, ok := entity_child_at(en, 1)
@@ -1742,6 +1767,17 @@ entity_holster_weapon :: proc(en: ^Entity, holster: bool)
       weapon.z_layer = .Player
     }
   }
+}
+
+entity_set_zone_change_op :: proc(en: ^Entity, op: type_of(Entity{}.flags.zone_change_op))
+{
+  en.flags.zone_change_op = op
+
+  for child in en.children
+  {
+    child := entity_from_ref(child) or_continue
+    child.flags.zone_change_op = op
+  } 
 }
 
 entity_set_state :: proc(en: ^Entity, st: Entity_State, reset := false)
@@ -1782,6 +1818,7 @@ creature_state_wander :: proc(en: ^Entity, using ctx: ^Entity_State_Context)
 {
   assert(ctx != nil)
 
+  gm := get_active_game()
   creature_desc := &res.creatures[en.creature_kind]
   wander := &en.state_data.wander
   en_pos := tt.global_pos(en)
@@ -1797,7 +1834,7 @@ creature_state_wander :: proc(en: ^Entity, using ctx: ^Entity_State_Context)
       point.y *= -1 if rand.boolean() else 1
       point += en_pos
 
-      if point_in_region_bounds(point, region_from_world_pos(en_pos)) do break
+      if point_in_zone_bounds(point, gm.active_zone) do break
     }
 
     wander.point = point
@@ -1834,6 +1871,7 @@ creature_state_flee :: proc(en: ^Entity, using ctx: ^Entity_State_Context)
 {
   assert(ctx != nil)
 
+  gm := get_active_game()
   creature_desc := &res.creatures[en.creature_kind]
   flee := &en.state_data.flee
   en_pos := tt.global_pos(en)
@@ -1851,7 +1889,7 @@ creature_state_flee :: proc(en: ^Entity, using ctx: ^Entity_State_Context)
       point.y *= -1 if rand.boolean() else 1
       point += en_pos
 
-      if point_in_region_bounds(point, region_from_world_pos(en_pos)) do break
+      if point_in_zone_bounds(point, gm.active_zone) do break
     }
 
     flee.point = point
@@ -1923,6 +1961,189 @@ roll_loot_table :: proc(loot_table: Loot_Table_Name) -> Item_Kind
 }
 
 
+// Zone ///////////////////////////////////////////////////////////////////////////////////
+
+
+TILE_SIZE        :: 8
+ZONE_MARGIN_SIZE :: TILE_SIZE * 2
+MAX_ZONE_TILES   :: 64
+
+Zone_Name :: enum
+{
+  Wilderness,
+  Shop,
+}
+
+Zone_Desc :: struct
+{
+  name:   string,
+  width:  int,
+  height: int,
+}
+
+Tile :: struct
+{
+  sprite: Sprite_Name,
+  rot:    f16,
+}
+
+Tile_Coord :: distinct [2]f32
+
+tile_idx_from_coord :: proc(coord: Tile_Coord) -> int
+{
+  gm := get_active_game()
+  zone := res.zones[gm.active_zone]
+  return int(coord.x + (coord.y * f32(zone.width / TILE_SIZE)))
+}
+
+tile_coord_from_idx :: proc(idx: int) -> Tile_Coord
+{
+  gm := get_active_game()
+  zone := res.zones[gm.active_zone]
+  return {f32(idx % (zone.width / TILE_SIZE)), f32(idx / (zone.width / TILE_SIZE))}
+}
+
+// region_idx_from_coord :: proc(coord: Region_Coord) -> int
+// {
+//   return int(coord.x + coord.y * 3)
+// }
+
+// region_coord_from_idx :: proc(idx: int) -> Region_Coord
+// {
+//   return {f32(idx % 3), f32(idx / 3)}
+// }
+
+// region_from_world_pos :: proc(pos: v2f32) -> Region_Coord
+// {
+//   return {
+//     f32(pos.x / REGION_SPAN),
+//     f32(pos.y / REGION_SPAN),
+//   }
+// }
+
+// region_pos_from_world_pos :: proc(pos: v2f32) -> v2f32
+// {
+//   gm := get_current_game()
+//   region_pos := region_pos_to_world_pos({0, 0})
+//   return {
+//     region_pos.x != 0 ? f32(int(pos.x) % int(region_pos.x)) : pos.x,
+//     region_pos.y != 0 ? f32(int(pos.y) % int(region_pos.y)) : pos.y,
+//   }
+// }
+
+// region_pos_to_world_pos :: proc(pos: v2f32, region := Region_Coord{-1, -1}) -> v2f32
+// {
+//   // gm := get_current_game()
+//   zone := get_active_zone()
+
+//   region := region
+//   if region == {-1, -1}
+//   {
+//     region = gm.active_zone
+//   }
+
+//   return pos + {f32(zone.size), f32(zone.size)} * v2f32(region)
+// }
+
+point_in_zone_bounds :: proc(point: v2f32, region: Zone_Name) -> bool
+{
+  gm := get_active_game()
+  zone := res.zones[gm.active_zone]
+
+  bounds := [2]Range(f32) {
+    {0, f32(zone.width)},
+    {0, f32(zone.height)},
+  }
+
+  return point_in_bounds(point, bounds)
+}
+
+generate_wilderness :: proc()
+{
+  gm := get_active_game()
+  zone := res.zones[.Wilderness]
+  size := zone.width / TILE_SIZE * zone.height / TILE_SIZE
+
+  mem.zero(&gm.tiles[0], size_of(gm.tiles))
+
+  for tile_idx in 0..<len(gm.tiles[:size])
+  {
+    sprite: Sprite_Name
+
+    roll := rand.range_i32({1, 50})
+    switch roll
+    {
+    case 1:
+      sprite = .Tile_Grass_2
+    case 2:
+      sprite = .Tile_Grass_3
+    case:
+      sprite = .Tile_Grass_1
+    }
+
+    gm.tiles[tile_idx].sprite = sprite
+
+    @(static)
+    rotations := [4]f16{0, math.PI/2, math.PI, 3*math.PI/2}
+    gm.tiles[tile_idx].rot = rotations[rand.range_i32({0, 3})]
+  }
+
+  for _ in 0..<8
+  {
+    spawn_grass_clump(16, 32)
+  }
+
+  for _ in 0..<4
+  {
+    spawn_lavender_clump(8, 16)
+  }
+
+  for _ in 0..<64
+  {
+    zone := res.zones[gm.active_zone]
+
+    bounds := [2]Range(f32){
+      {0, f32(zone.width)}, 
+      {0, f32(zone.height)},
+    }
+
+    pos := rand.range_2f32(bounds)
+    choice := cast(Sprite_Name) rand.range_i32({i32(Sprite_Name.Chamomile), i32(Sprite_Name.Red_Mushroom)})
+
+    spawn_decoration(choice, pos)
+  }
+}
+
+generate_shop :: proc()
+{
+  gm := get_active_game()
+  zone := res.zones[.Shop]
+
+  mem.zero(&gm.tiles[0], size_of(gm.tiles))
+
+  size := zone.width / TILE_SIZE * zone.height / TILE_SIZE
+  for tile_idx in 0..<len(gm.tiles[:size])
+  {
+    sprite: Sprite_Name
+
+    roll := rand.range_i32({1, 25})
+    switch roll
+    {
+    case 1:
+      sprite = .Tile_Stone_2
+    case:
+      sprite = .Tile_Stone_1
+    }
+
+    gm.tiles[tile_idx].sprite = sprite
+
+    @(static)
+    rotations := [4]f16{0, math.PI/2, math.PI, 3*math.PI/2}
+    gm.tiles[tile_idx].rot = rotations[rand.range_i32({0, 3})]
+  }
+}
+
+
 // Debug_Entity //////////////////////////////////////////////////////////////////////////
 
 
@@ -1930,7 +2151,7 @@ Debug_Entity :: distinct Entity
 
 push_debug_entity :: proc() -> ^Debug_Entity
 {
-  gm := get_current_game()
+  gm := get_active_game()
 
   result := &gm.debug_entities[gm.debug_entities_pos]
   result.flags.update = true
@@ -1951,7 +2172,7 @@ push_debug_entity :: proc() -> ^Debug_Entity
 
 pop_debug_entity :: proc(den: ^Debug_Entity)
 {
-  gm := get_current_game()
+  gm := get_active_game()
 
   tt.free_transform(&gm.transform_tree, den.xform)
   den^ = {}
@@ -1999,143 +2220,4 @@ debug_circle :: proc(
   result.sprite = .Circle
 
   return result
-}
-
-
-// Region ///////////////////////////////////////////////////////////////////////////////////
-
-
-TILE_SIZE         :: 8
-REGION_GAP_TILES  :: 2
-REGION_GAP        :: REGION_GAP_TILES * TILE_SIZE
-REGION_SPAN_TILES :: 96 + REGION_GAP_TILES * 2
-REGION_SPAN       :: REGION_SPAN_TILES * TILE_SIZE
-
-Tile :: struct
-{
-  sprite: Sprite_Name,
-  rot:    f16,
-}
-
-Tile_Coord   :: distinct [2]f32
-Region_Coord :: distinct [2]f32
-
-tile_idx_from_coord :: proc(coord: Tile_Coord) -> int
-{
-  return int(coord.x + (coord.y * f32(REGION_SPAN_TILES)))
-}
-
-tile_coord_from_idx :: proc(idx: int) -> Tile_Coord
-{
-  return {f32(idx % REGION_SPAN_TILES), f32(idx / REGION_SPAN_TILES)}
-}
-
-region_idx_from_coord :: proc(coord: Region_Coord) -> int
-{
-  return int(coord.x + coord.y * 3)
-}
-
-region_coord_from_idx :: proc(idx: int) -> Region_Coord
-{
-  return {f32(idx % 3), f32(idx / 3)}
-}
-
-region_from_world_pos :: proc(pos: v2f32) -> Region_Coord
-{
-  return {
-    f32(pos.x / REGION_SPAN),
-    f32(pos.y / REGION_SPAN),
-  }
-}
-
-region_pos_from_world_pos :: proc(pos: v2f32) -> v2f32
-{
-  gm := get_current_game()
-  region_pos := region_pos_to_world_pos({0, 0})
-  return {
-    region_pos.x != 0 ? f32(int(pos.x) % int(region_pos.x)) : pos.x,
-    region_pos.y != 0 ? f32(int(pos.y) % int(region_pos.y)) : pos.y,
-  }
-}
-
-region_pos_to_world_pos :: proc(pos: v2f32, region := Region_Coord{-1, -1}) -> v2f32
-{
-  gm := get_current_game()
-
-  region := region
-  if region == {-1, -1}
-  {
-    region = gm.active_region
-  }
-
-  return pos + {REGION_SPAN, REGION_SPAN} * v2f32(region)
-}
-
-point_in_region_bounds :: proc(point: v2f32, region: Region_Coord) -> bool
-{
-  region_pos := region_pos_from_world_pos(point)
-  return point_in_bounds(region_pos, Range(f32){REGION_GAP, REGION_SPAN-REGION_GAP})
-}
-
-set_active_region :: proc(gm: ^Game, coord: Region_Coord)
-{
-  gm.active_region = coord
-  gm.camera.pos = {VIEWPORT_WIDTH * coord.x, VIEWPORT_HEIGHT * coord.y}
-}
-
-generate_world_region :: proc(gm: ^Game)
-{
-  for region_idx in 0..<len(gm.regions)
-  {
-    for tile_idx in 0..<len(gm.regions[0])
-    {
-      coord: [2]f64 = array_cast(tile_coord_from_idx(tile_idx), f64)
-      noise_scale: f64 = 0.05
-      noise_value: f32 = math.abs(noise.noise_2d(rand.num_i64(), coord * noise_scale))
-
-      sprite: Sprite_Name
-      switch region_idx
-      {
-      case 0..=4:
-        if noise_value > 0.95
-        {
-          sprite = .Tile_Grass_3
-        }
-        else if noise_value > 0.9
-        {
-          sprite = .Tile_Grass_2
-        }
-        else
-        {
-          sprite = .Tile_Grass_1
-        }
-
-      case 5..=9:
-        if noise_value > 0.9
-        {
-          sprite = .Tile_Stone_2
-        }
-        else
-        {
-          sprite = .Tile_Stone_1
-        }
-      }
-
-      if coord.x < REGION_GAP_TILES || REGION_SPAN_TILES - coord.x <= REGION_GAP_TILES ||
-         coord.y < REGION_GAP_TILES || REGION_SPAN_TILES - coord.y <= REGION_GAP_TILES
-      {
-        if !(coord.x == REGION_SPAN_TILES/2 || coord.y == REGION_SPAN_TILES/2)
-        {
-          sprite = .Tile_Dirt
-        }
-      }
-
-      rot := cast(f16) rand.range_i32({0, 4}) * math.PI/2.0
-      
-      gm.regions[region_idx][tile_idx] = Tile{
-        sprite = sprite,
-        rot = rot,
-      }
-    }
-  }
 }

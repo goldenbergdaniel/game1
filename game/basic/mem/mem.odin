@@ -47,9 +47,9 @@ set :: #force_inline proc "contextless" (data: rawptr, value: byte, #any_int len
 	return runtime.memset(data, i32(value), len)
 }
 
-zero :: #force_inline proc "contextless" (data: rawptr, #any_int len: int) -> rawptr
+zero :: #force_inline proc "contextless" (data: rawptr, #any_int size: int) -> rawptr
 {
-	intrinsics.mem_zero(data, len)
+	intrinsics.mem_zero(data, size)
 	return data
 }
 

@@ -293,6 +293,17 @@ lerp_angle :: proc(current, target, t: $T) -> T where intrinsics.type_is_float(T
 }
 
 @(require_results)
+clamp :: proc(v: [$N]$T, min: [N]T, max: [N]T) -> (result: [N]T)
+{
+  #unroll(N) for i in 0..<N
+  {
+    result[i] = builtin.clamp(v[i], min[i], max[i])
+  }
+
+  return
+}
+
+@(require_results)
 round :: proc(v: [$N]$T) -> (result: [N]T)
 {
   #unroll(N) for i in 0..<N

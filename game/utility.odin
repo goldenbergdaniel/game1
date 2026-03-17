@@ -14,18 +14,18 @@ Timer :: struct
 
 timer_start :: proc(timer: ^Timer, duration: f32)
 {
-  timer.end_time = get_current_game().t + duration
+  timer.end_time = get_active_game().t + duration
   timer.ticking = true
 }
 
 timer_timeout :: proc(timer: ^Timer) -> bool
 {
-  return timer.ticking && get_current_game().t >= timer.end_time
+  return timer.ticking && get_active_game().t >= timer.end_time
 }
 
 timer_remaining :: proc(timer: ^Timer) -> f32
 {
-  return timer.end_time - get_current_game().t
+  return timer.end_time - get_active_game().t
 }
 
 
@@ -38,13 +38,13 @@ key_up   :: platform.key_up
 @(require_results)
 key_just_down :: proc(key: platform.Key_Kind) -> bool
 {
-  return key_down(key) && !get_current_game().prev_keys[key]
+  return key_down(key) && !get_active_game().prev_keys[key]
 }
 
 @(require_results)
 key_just_up :: proc(key: platform.Key_Kind) -> bool
 {
-  return key_up(key) && get_current_game().prev_keys[key]
+  return key_up(key) && get_active_game().prev_keys[key]
 }
 
 mouse_btn_down :: platform.mouse_btn_down
@@ -53,13 +53,13 @@ mouse_btn_up   :: platform.mouse_btn_up
 @(require_results)
 mouse_btn_just_down :: proc(btn: platform.Mouse_Btn_Kind) -> bool
 {
-  return mouse_btn_down(btn) && !get_current_game().prev_mouse_btns[btn]
+  return mouse_btn_down(btn) && !get_active_game().prev_mouse_btns[btn]
 }
 
 @(require_results)
 mouse_btn_just_up :: proc(btn: platform.Mouse_Btn_Kind) -> bool
 {
-  return mouse_btn_up(btn) && get_current_game().prev_mouse_btns[btn]
+  return mouse_btn_up(btn) && get_active_game().prev_mouse_btns[btn]
 }
 
 input_down :: platform.input_down

@@ -39,7 +39,7 @@ setup :: proc(en: ^Entity, deferred: bool)
 
 spawn_player :: proc() -> ^Entity
 {
-  gm := get_current_game()
+  gm := get_active_game()
 
   player := alloc_entity(gm)
   setup(player, true)
@@ -90,13 +90,16 @@ spawn_player :: proc() -> ^Entity
   }
 
   entity_equip_weapon(player, .Rifle)
+  entity_set_zone_change_op(player, .Move)
+  
+  gm.special_entities[.Player] = player
 
   return player
 }
 
 spawn_creature :: proc(kind: Creature_Kind, pos: v2f32, deferred := false) -> ^Entity
 {
-  gm := get_current_game()
+  gm := get_active_game()
 
   creature := alloc_entity(gm)
   setup(creature, deferred)
@@ -136,7 +139,7 @@ spawn_creature :: proc(kind: Creature_Kind, pos: v2f32, deferred := false) -> ^E
 
 spawn_projectile :: proc(kind: Projectile_Kind, pos: v2f32, deferred := false) -> ^Entity
 {
-  gm := get_current_game()
+  gm := get_active_game()
 
   projectile := alloc_entity(gm)
   setup(projectile, deferred)
@@ -158,7 +161,7 @@ spawn_projectile :: proc(kind: Projectile_Kind, pos: v2f32, deferred := false) -
 
 spawn_item :: proc(kind: Item_Kind, pos: v2f32, deferred := false) -> ^Entity
 {
-  gm := get_current_game()
+  gm := get_active_game()
   
   item := alloc_entity(gm)
   setup(item, deferred)
@@ -186,7 +189,7 @@ spawn_corpse :: proc(owner: ^Entity, deferred := false) -> ^Entity
 {
   assert(owner.creature_kind != .Nil)
 
-  gm := get_current_game()
+  gm := get_active_game()
   corpse := alloc_entity(gm)
   setup(corpse, deferred)
 
@@ -219,7 +222,7 @@ spawn_corpse :: proc(owner: ^Entity, deferred := false) -> ^Entity
 
 spawn_shadow :: proc(owner: ^Entity, sprite: Sprite_Name, offet: v2f32, deferred := false) -> ^Entity
 {
-  gm := get_current_game()
+  gm := get_active_game()
 
   shadow := alloc_entity(gm)
   setup(shadow, deferred)
@@ -239,7 +242,7 @@ spawn_shadow :: proc(owner: ^Entity, sprite: Sprite_Name, offet: v2f32, deferred
 
 spawn_decoration :: proc(sprite: Sprite_Name, pos: v2f32, deferred := false) -> ^Entity
 {
-  gm := get_current_game()
+  gm := get_active_game()
 
   deco := alloc_entity(gm)
   setup(deco, deferred)
@@ -252,52 +255,66 @@ spawn_decoration :: proc(sprite: Sprite_Name, pos: v2f32, deferred := false) -> 
 
 spawn_grass_clump :: proc(count, radius: i32)
 {
+  @(static)
   grasses := [?]Sprite_Name{.Grass}
 
+  gm := get_active_game()
+  zone := res.zones[gm.active_zone]
+  
+  radius := min(radius, i32(zone.width/2), i32(zone.height/2))
+
   bounds := [2]Range(i32){
-    {32 + radius, REGION_SPAN - 32 - radius}, 
-    {32 + radius, REGION_SPAN - 32 - radius},
+    {radius, i32(zone.width) - radius}, 
+    {radius, i32(zone.height) - radius},
   }
   origin := rand.range_2i32(bounds)
 
   for _ in 0..<count
   { 
     offset := rand.range_2i32({{-radius, radius}, {-radius, radius}})
-    pos := region_pos_from_world_pos(array_cast(origin + offset, f32))
-    spawn_decoration(rand.choice_slice(grasses[:]), pos)
+    spawn_decoration(rand.choice_slice(grasses[:]), array_cast(origin + offset, f32))
   }
 }
 
 spawn_flower_clump :: proc(count, radius: i32)
 {
+  @(static)
   flowers := [?]Sprite_Name{.Chamomile, .Sunflower}
 
+  gm := get_active_game()
+  zone := res.zones[gm.active_zone]
+
+  radius := min(radius, i32(zone.width/2), i32(zone.height/2))
+
   bounds := [2]Range(i32){
-    {REGION_GAP + radius, REGION_SPAN - REGION_GAP - radius}, 
-    {REGION_GAP + radius, REGION_SPAN - REGION_GAP - radius},
+    {radius, i32(zone.width) - radius}, 
+    {radius, i32(zone.height) - radius},
   }
   origin := rand.range_2i32(bounds)
 
   for _ in 0..<count
   { 
     offset := rand.range_2i32({{-radius, radius}, {-radius, radius}})
-    pos := region_pos_from_world_pos(array_cast(origin + offset, f32))
-    spawn_decoration(rand.choice_slice(flowers[:]), pos)
+    spawn_decoration(rand.choice_slice(flowers[:]), array_cast(origin + offset, f32))
   }
 }
 
 spawn_lavender_clump :: proc(count, radius: i32)
 {
+  gm := get_active_game()
+  zone := res.zones[gm.active_zone]
+
+  radius := min(radius, i32(zone.width/2), i32(zone.height/2))
+
   bounds := [2]Range(i32){
-    {REGION_GAP + radius, REGION_SPAN - REGION_GAP - radius}, 
-    {REGION_GAP + radius, REGION_SPAN - REGION_GAP - radius},
+    {radius, i32(zone.width) - radius}, 
+    {radius, i32(zone.height) - radius},
   }
   origin := rand.range_2i32(bounds)
 
   for _ in 0..<count
   { 
     offset := rand.range_2i32({{-radius, radius}, {-radius, radius}})
-    pos := region_pos_from_world_pos(array_cast(origin + offset, f32))
-    spawn_decoration(.Lavender, pos)
+    spawn_decoration(.Lavender, array_cast(origin + offset, f32))
   }
 }

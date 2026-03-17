@@ -58,7 +58,7 @@ spawn_particles :: proc(kind: Particle_Name, pos: v2f32)
     return result
   }
 
-  gm := get_current_game()
+  gm := get_active_game()
   desc := &res.particles[kind]
 
   for i in 0..<desc.count

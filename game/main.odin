@@ -180,6 +180,7 @@ m3f32 :: matrix[3,3]f32
 Range :: basic.Range
 
 range_overlap :: basic.range_overlap
+range_clamp   :: basic.range_clamp
 array_cast    :: basic.array_cast
 approx        :: basic.approx
 rad_from_deg  :: basic.rad_from_deg

@@ -16,23 +16,35 @@ import "ui"
 
 Resources :: struct
 {
-  player:       struct
-  {
-    animations: [Animation_State]Sprite_Or_Animation,
-    speed:      f32,
-  },
   actions:      [Action_Name]platform.Input_Source,
   shaders:      [Shader_Name]render.Shader,
   textures:     [Texture_Name]render.Texture,
   sprites:      [Sprite_Name]Sprite,
-  gen_sprites:  [Sprite_Name]Sprite,
   sounds:       [Sound_Name]Sound,
   animations:   [Animation_Name]Animation_Desc,
+  zones:        [Zone_Name]Zone_Desc,
   particles:    [Particle_Name]Particle_Desc,
   creatures:    [Creature_Kind]Creature_Desc,
   weapons:      [Weapon_Kind]Weapon_Desc,
   items:        [Item_Kind]Item_Desc,
   loot_tables:  [Loot_Table_Name][dynamic]Loot_Table_Entry,
+  player:       struct
+  {
+    animations: [Animation_State]Sprite_Or_Animation,
+    speed:      f32,
+  },
+}
+
+Action_Name :: enum
+{
+  Nil,
+  Up,
+  Down,
+  Right,
+  Left,
+  Sneak,
+  Attack,
+  Holster,
 }
 
 Texture_Name :: enum
@@ -152,18 +164,6 @@ Sound_Group :: enum
   Ambience,
   Music,
   Effect,
-}
-
-Action_Name :: enum
-{
-  Nil,
-  Up,
-  Down,
-  Right,
-  Left,
-  Sneak,
-  Attack,
-  Holster,
 }
 
 Animation_Name :: enum
@@ -422,6 +422,22 @@ init_resources :: proc(arena: ^mem.Arena)
     }
 
     // os2.exit(0)
+  }
+
+  // - Zones ---
+  {
+    res.zones = {
+      .Wilderness = {
+        name = "The Wilderness",
+        width = 64 * TILE_SIZE,
+        height = 64 * TILE_SIZE,
+      },
+      .Shop = {
+        name = "The Shop",
+        width = 32 * TILE_SIZE,
+        height = 32 * TILE_SIZE,
+      },
+    }
   }
 
   // - Animations ---

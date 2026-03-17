@@ -1,11 +1,11 @@
 package basic
 
+import "base:builtin"
 import "base:intrinsics"
 
 PI :: 3.14159265358979323846264338327950288
 
-Range :: struct($T: typeid) 
-  where intrinsics.type_is_numeric(T), !intrinsics.type_is_array(T)
+Range :: struct($T: typeid) where intrinsics.type_is_numeric(T)
 {
   min: T, 
   max: T,
@@ -18,8 +18,18 @@ range_overlap :: proc(a, b: Range($T)) -> bool
 }
 
 @(require_results)
-approx :: #force_inline proc "contextless" (val, tar, tol: $T) -> T
-  where intrinsics.type_is_numeric(T)
+range_clamp :: proc(v: [$N]$T, range: [N]Range(T)) -> (result: [N]T)
+{
+  #unroll(N) for i in 0..<N
+  {
+    result[i] = builtin.clamp(v[i], range[i].min, range[i].max)
+  }
+
+  return
+}
+
+@(require_results)
+approx :: #force_inline proc "contextless" (val, tar, tol: $T) -> T where intrinsics.type_is_numeric(T)
 {
   return tar if abs(val) - abs(tol) <= abs(tar) else val
 }
@@ -38,15 +48,13 @@ array_cast :: #force_inline proc "contextless" (arr: $A/[$N]$T, $E: typeid) -> [
 }
 
 @(require_results)
-rad_from_deg :: #force_inline proc(deg: $T) -> T
-  where intrinsics.type_is_float(T)
+rad_from_deg :: #force_inline proc(deg: $T) -> T where intrinsics.type_is_float(T)
 {
   return deg * PI / 180.0
 }
 
 @(require_results)
-deg_from_rad :: #force_inline proc(rad: $T) -> T
-  where intrinsics.type_is_float(T)
+deg_from_rad :: #force_inline proc(rad: $T) -> T where intrinsics.type_is_float(T)
 {
   return rad * 180.0 / PI
 }
