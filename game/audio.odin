@@ -36,7 +36,7 @@ init_audio :: proc()
   result := ma.engine_init(&config, &audio.engine)
   if result != .SUCCESS
   {
-    println("Failed to init miniaudio engine!", res)
+    println("[ERROR][game_audio] Failed to init miniaudio engine!", res)
     uninit_audio()
     return
   }
@@ -92,7 +92,7 @@ play_sound :: proc(
       result = ma.sound_start(sound)
       if result != .SUCCESS
       {
-        printf("Error: Failed to start sound %s! %s\n", name, result)
+        printf("[ERROR][game_audio]: Failed to start sound %s! %s\n", name, result)
         return false
       }
     }
@@ -110,7 +110,7 @@ play_sound :: proc(
       result = ma.sound_start(sound)
       if result != .SUCCESS
       {
-        printf("Error: Failed to start sound %s! %s\n", name, result)
+        printf("[ERROR][game_audio]: Failed to start sound %s! %s\n", name, result)
         return false
       }
     }
@@ -136,7 +136,7 @@ play_sound :: proc(
     result = ma.sound_start(sound)
     if result != .SUCCESS
     {
-      printf("Error: Failed to start sound %s! %s\n", result)
+      printf("[ERROR][game_audio]: Failed to start sound %s! %s\n", result)
       return false
     }
   }
@@ -178,7 +178,36 @@ pause_sound_group :: proc(group: Sound_Group) -> (ok: bool)
 
   if ma_result != .SUCCESS
   {
-    printf("Error: Failed to pause sound group %s! %s\n", group, ma_result)
+    printf("[ERROR][game_audio]: Error: Failed to pause sound group %s! %s\n", group, ma_result)
+    ok = false
+  }
+
+  return
+}
+
+unpause_sound_group :: proc(group: Sound_Group) -> (ok: bool)
+{
+  if !audio.initialized do return false
+
+  ma_result: ma.result
+
+  switch group
+  {
+  case .Nil, .Effect:
+    ok = false
+    
+  case .Ambience:
+    ma_result = ma.sound_start(&audio.ambience)
+    ok = true
+
+  case .Music:
+    ma_result = ma.sound_start(&audio.music)
+    ok = true
+  }
+
+  if ma_result != .SUCCESS
+  {
+    printf("[ERROR][game_audio]: Error: Failed to unpause sound group %s! %s\n", group, ma_result)
     ok = false
   }
 
@@ -207,7 +236,7 @@ reset_sound_group :: proc(group: Sound_Group) -> (ok: bool)
 
   if result != .SUCCESS
   {
-    printf("Error: Failed to reset sound group %s! %s\n", group, result)
+    printf("[ERROR][game_audio]: Failed to reset sound group '%s'! %s\n", group, result)
     ok = false
   }
 
@@ -252,7 +281,7 @@ ma_sound_init :: proc(ma_sound: ^ma.sound, path: string) -> bool
   ma_res := ma.sound_init_from_file(&audio.engine, path_cstr, 0, nil, nil, ma_sound)
   if ma_res != .SUCCESS
   {
-    printf("Error: Failed to init sound %s! %s\n", path, ma_res)
+    printf("[ERROR][game_audio]: Failed to init sound %s! %s\n", path, ma_res)
     return false
   }
 

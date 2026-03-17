@@ -147,6 +147,8 @@ Sprite_Name :: enum
   Tile_Stone_1,
   Tile_Stone_2,
   Tile_Wall,
+  Tile_Plank_1,
+  Tile_Plank_2,
 }
 
 Sound_Name :: enum
@@ -434,8 +436,8 @@ init_resources :: proc(arena: ^mem.Arena)
       },
       .Shop = {
         name = "The Shop",
-        width = 32 * TILE_SIZE,
-        height = 32 * TILE_SIZE,
+        width = 28 * TILE_SIZE,
+        height = 14 * TILE_SIZE,
       },
     }
   }

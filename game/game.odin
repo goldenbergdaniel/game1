@@ -3,6 +3,7 @@ package game
 
 import "core:math"
 import "core:math/noise"
+import "core:os"
 import "core:slice"
 import "core:time"
 import imgui "ext:dear_imgui"
@@ -137,7 +138,7 @@ game_start :: proc(gm: ^Game)
 
   player := spawn_player()
 
-  set_active_zone(.Shop, true)
+  set_active_zone(.Wilderness, true)
 
   for _ in 0..<1
   {
@@ -147,7 +148,6 @@ game_start :: proc(gm: ^Game)
   }
 
   // play_sound(.Minecraft, volume=global.audio.music_volume)
-  play_sound(.Forest_Ambience, volume=0.25)
 
   spawn_decoration(.Stump, {300, 100})
   spawn_decoration(.Stump, {100, 300})
@@ -444,7 +444,12 @@ game_update :: proc(gm: ^Game, dt: f32)
     if gm.weapon.kind != .Nil
     {
       weapon_desc := &res.weapons[gm.weapon.kind]
-      muzzle_flash, _ := entity_child_at(weapon, 0)
+      muzzle_flash, ok := entity_child_at(weapon, 0)
+      if !ok
+      {
+        println("[FATAL][game]: Failed to get muzzle_flash entity.")
+        os.exit(1)
+      }
 
       if !player.attack_timer.ticking
       {
@@ -1193,27 +1198,32 @@ set_active_zone :: proc(zone: Zone_Name, regen := false)
   gm := get_active_game()
   player := gm.special_entities[.Player]
 
+  curr_zone := gm.active_zone
+  gm.active_zone = zone
+
   if player != nil
   {
     tt.set_global_pos(player, {30, 30})
   }
   
   // TODO(dg): Only touch active entities?
-  for &en in gm.entities
+  for &en in gm.entities do if entity_is_valid(en)
   {
     switch en.flags.zone_change_op
     {
     case .Reset:
       free_entity(gm, &en)
+
     case .Persist:
       panic("[FATAL][game]: Zone change operation 'Persist' not yet implemented!")
+
     case .Move:
-      // do nothing?
+      continue
     } 
   }
 
   // generate zone
-  if gm.active_zone != zone || regen
+  if curr_zone != zone || regen
   {
     switch zone
     {
@@ -1225,8 +1235,6 @@ set_active_zone :: proc(zone: Zone_Name, regen := false)
 
     printf("[INFO][game]: Switched zone to '%s'.\n", zone)
   }
-
-  gm.active_zone = zone
 }
 
 
@@ -1410,16 +1418,16 @@ COLLISION_MATRIX: [Collision_Layer]bit_set[Collision_Layer] = {
 
 entity_is_valid :: proc
 {
-  entity_is_valid_val,
-  entity_is_valid_ptr,
+  entity_valid_val,
+  entity_valid_ptr,
 }
 
-entity_is_valid_val :: #force_inline proc(en: Entity) -> bool
+entity_valid_val :: #force_inline proc(en: Entity) -> bool
 {
   return en.ref.idx != 0
 }
 
-entity_is_valid_ptr :: #force_inline proc(en: ^Entity) -> bool
+entity_valid_ptr :: #force_inline proc(en: ^Entity) -> bool
 {
   return en != nil && en.ref.idx != 0
 }
@@ -1484,16 +1492,28 @@ free_entity :: proc(gm: ^Game, en: ^Entity)
 
 defer_entity_spawn :: proc(en: ^Entity)
 {
-  en.flags.update = false
-  en.flags.render = false
-  en.props += {.Marked_For_Spawn}
+  scratch := mem.temp_begin(mem.get_scratch())
+  defer mem.temp_end(scratch)
 
-  for child in en.children
+  dfs_stack: [dynamic]Entity_Ref
+  dfs_stack.allocator = mem.allocator(scratch)
+
+  append(&dfs_stack, en.ref)
+
+  for node in dfs_stack
   {
-    child := entity_from_ref(child) or_continue
-    child.flags.update = false
-    child.flags.render = false
-    child.props += {.Marked_For_Spawn}
+    node := entity_from_ref(node) or_continue
+    node.flags.update = false
+    node.flags.render = false
+    node.props += {.Marked_For_Spawn}
+    
+    for child in node.children
+    {
+      if entity_is_valid(entity_from_ref(child))
+      {
+        append(&dfs_stack, child)
+      }
+    }
   }
 }
 
@@ -1771,13 +1791,27 @@ entity_holster_weapon :: proc(en: ^Entity, holster: bool)
 
 entity_set_zone_change_op :: proc(en: ^Entity, op: type_of(Entity{}.flags.zone_change_op))
 {
-  en.flags.zone_change_op = op
+  scratch := mem.temp_begin(mem.get_scratch())
+  defer mem.temp_end(scratch)
 
-  for child in en.children
+  dfs_stack: [dynamic]Entity_Ref
+  dfs_stack.allocator = mem.allocator(scratch)
+
+  append(&dfs_stack, en.ref)
+
+  for node in dfs_stack
   {
-    child := entity_from_ref(child) or_continue
-    child.flags.zone_change_op = op
-  } 
+    node := entity_from_ref(node) or_continue
+    node.flags.zone_change_op = op
+    
+    for child in node.children
+    {
+      if entity_is_valid(entity_from_ref(child))
+      {
+        append(&dfs_stack, child)
+      }
+    }
+  }
 }
 
 entity_set_state :: proc(en: ^Entity, st: Entity_State, reset := false)
@@ -2100,8 +2134,6 @@ generate_wilderness :: proc()
 
   for _ in 0..<64
   {
-    zone := res.zones[gm.active_zone]
-
     bounds := [2]Range(f32){
       {0, f32(zone.width)}, 
       {0, f32(zone.height)},
@@ -2112,6 +2144,9 @@ generate_wilderness :: proc()
 
     spawn_decoration(choice, pos)
   }
+
+  unpause_sound_group(.Ambience)
+  play_sound(.Forest_Ambience, volume=0.25)
 }
 
 generate_shop :: proc()
@@ -2126,21 +2161,24 @@ generate_shop :: proc()
   {
     sprite: Sprite_Name
 
-    roll := rand.range_i32({1, 25})
+    roll := rand.range_i32({1, 5})
     switch roll
     {
     case 1:
-      sprite = .Tile_Stone_2
+      sprite = .Tile_Plank_2
     case:
-      sprite = .Tile_Stone_1
+      sprite = .Tile_Plank_1
     }
 
     gm.tiles[tile_idx].sprite = sprite
 
     @(static)
-    rotations := [4]f16{0, math.PI/2, math.PI, 3*math.PI/2}
-    gm.tiles[tile_idx].rot = rotations[rand.range_i32({0, 3})]
+    rotations := [?]f16{0}
+    gm.tiles[tile_idx].rot = rotations[rand.range_i32({0, len(rotations)-1})]
   }
+
+  pause_sound_group(.Ambience)
+  reset_sound_group(.Ambience)
 }
 
 

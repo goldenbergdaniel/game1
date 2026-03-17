@@ -3,3 +3,4 @@ game.bin
 imgui.ini
 
 .vscode/
+dist/
