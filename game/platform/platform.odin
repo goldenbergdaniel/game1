@@ -1,6 +1,7 @@
 package platform
 
 import "core:fmt"
+import "core:log"
 import "core:math"
 import "core:strings"
 import "core:os"
@@ -80,7 +81,7 @@ create_window :: proc(desc: Window_Desc, arena: ^mem.Arena) -> Window
 	
 	if !sdl.Init({.VIDEO, .EVENTS})
 	{
-		fmt.eprintln("[FATAL][platform]: Failed to init SDL3!")
+		log.fatal("[platform]: Failed to init SDL3!")
 		os.exit(1)
 	}
 
@@ -137,11 +138,11 @@ create_window :: proc(desc: Window_Desc, arena: ^mem.Arena) -> Window
 		vsync: i32 = .Vsync in desc.props ? 1 : 0
 		sdl.GL_SetSwapInterval(vsync)
 
-		when false
+		when true
 		{
-			fmt.println("    OpenGL Version:", gl.GetString(gl.VERSION))
-			fmt.println("       SDL Version:", sdl.GetVersion())
-			fmt.println("Dear ImGui Version:", imgui.GetVersion())
+			// log.infof("OpenGL Version: %s", gl.GetString(gl.VERSION))
+			log.infof("[platform]: SDL version: %i\n", sdl.GetVersion())
+			log.infof("[platform]: DearImGui version: %s\n", imgui.GetVersion())
 		}
 
 		result.render_ctx.gl.ctx = gl_ctx

@@ -1,5 +1,6 @@
 package game
 
+import "core:log"
 import "core:strings"
 import ma "ext:miniaudio"
 import "basic/mem"
@@ -36,7 +37,7 @@ init_audio :: proc()
   result := ma.engine_init(&config, &audio.engine)
   if result != .SUCCESS
   {
-    println("[ERROR][game_audio] Failed to init miniaudio engine!", res)
+    log.errorf("[audio]: Failed to init miniaudio engine! (%s)", result)
     uninit_audio()
     return
   }
@@ -73,14 +74,15 @@ play_sound :: proc(
   if !audio.initialized do return false
 
   result: ma.result
+  sound: ^ma.sound
   sound_desc := res.sounds[name]
   
   switch sound_desc.group
   {
   case .Nil:
-  
+    
   case .Ambience:
-    sound := &audio.ambience
+    sound = &audio.ambience
     if !ma.sound_is_playing(sound) || ma.sound_at_end(sound)
     {
       ma_sound_init(sound, sound_desc.path) or_return
@@ -88,17 +90,10 @@ play_sound :: proc(
       ma.sound_set_spatialization_enabled(sound, false)
       ma.sound_set_volume(sound, volume)
       ma.sound_set_pitch(sound, pitch)
-      
-      result = ma.sound_start(sound)
-      if result != .SUCCESS
-      {
-        printf("[ERROR][game_audio]: Failed to start sound %s! %s\n", name, result)
-        return false
-      }
     }
 
   case .Music:
-    sound := &audio.music
+    sound = &audio.music
     if !ma.sound_is_playing(sound) || ma.sound_at_end(sound)
     {
       ma_sound_init(sound, sound_desc.path) or_return
@@ -106,17 +101,10 @@ play_sound :: proc(
       ma.sound_set_spatialization_enabled(sound, false)
       ma.sound_set_volume(sound, volume)
       ma.sound_set_pitch(sound, pitch)
-
-      result = ma.sound_start(sound)
-      if result != .SUCCESS
-      {
-        printf("[ERROR][game_audio]: Failed to start sound %s! %s\n", name, result)
-        return false
-      }
     }
   
   case .Effect:
-    sound := next_sound_effect()
+    sound = next_sound_effect()
     ma_sound_init(sound, sound_desc.path) or_return
 
     if pos != nil
@@ -132,11 +120,14 @@ play_sound :: proc(
 
     ma.sound_set_volume(sound, volume)
     ma.sound_set_pitch(sound, pitch)
+  }
 
+  if sound != nil
+  {
     result = ma.sound_start(sound)
     if result != .SUCCESS
     {
-      printf("[ERROR][game_audio]: Failed to start sound %s! %s\n", result)
+      log.errorf("[audio]: Failed to start sound %s! (%s)", name, result)
       return false
     }
   }
@@ -156,91 +147,79 @@ play_sound_looping :: proc(
   return false
 }
 
-pause_sound_group :: proc(group: Sound_Group) -> (ok: bool)
+pause_sound_group :: proc(group: Sound_Group)
 {
-  if !audio.initialized do return false
+  if !audio.initialized do return
 
   ma_result: ma.result
 
   switch group
   {
   case .Nil, .Effect:
-    ok = false
     
   case .Ambience:
     ma_result = ma.sound_stop(&audio.ambience)
-    ok = true
 
   case .Music:
     ma_result = ma.sound_stop(&audio.music)
-    ok = true
   }
 
   if ma_result != .SUCCESS
   {
-    printf("[ERROR][game_audio]: Error: Failed to pause sound group %s! %s\n", group, ma_result)
-    ok = false
+    log.errorf("[audio]: Error: Failed to pause sound group %s! (%s)", group, ma_result)
   }
-
-  return
 }
 
-unpause_sound_group :: proc(group: Sound_Group) -> (ok: bool)
+unpause_sound_group :: proc(group: Sound_Group)
 {
-  if !audio.initialized do return false
+  if !audio.initialized do return
 
   ma_result: ma.result
 
   switch group
   {
   case .Nil, .Effect:
-    ok = false
     
   case .Ambience:
     ma_result = ma.sound_start(&audio.ambience)
-    ok = true
 
   case .Music:
     ma_result = ma.sound_start(&audio.music)
-    ok = true
   }
 
   if ma_result != .SUCCESS
   {
-    printf("[ERROR][game_audio]: Error: Failed to unpause sound group %s! %s\n", group, ma_result)
-    ok = false
+    log.errorf("[audio]: Error: Failed to unpause sound group %s! (%s)", group, ma_result)
   }
-
-  return
 }
 
-reset_sound_group :: proc(group: Sound_Group) -> (ok: bool)
+reset_sound_group :: proc(group: Sound_Group)
 {
-  if !audio.initialized do return false
+  if !audio.initialized do return
 
   result: ma.result
 
   switch group
   {
   case .Nil, .Effect:
-    ok = false
 
   case .Ambience:
-    result = ma.sound_seek_to_pcm_frame(&audio.ambience, 0)
-    ok = true
+    if ma.sound_is_playing(&audio.ambience)
+    {
+      result = ma.sound_seek_to_pcm_frame(&audio.ambience, 0)
+    }
 
   case .Music:
-    result = ma.sound_seek_to_pcm_frame(&audio.music, 0)
-    ok = true
+    if ma.sound_is_playing(&audio.music)
+    {
+      result = ma.sound_seek_to_pcm_frame(&audio.music, 0)
+    }
   }
 
   if result != .SUCCESS
   {
-    printf("[ERROR][game_audio]: Failed to reset sound group '%s'! %s\n", group, result)
-    ok = false
+    log.errorf("[audio]: Failed to reset sound group '%s'! (%s)", group, result)
   }
-
-  return
 }
 
 set_audio_listener_pos :: proc(pos: v2f32)
@@ -258,7 +237,7 @@ set_music_volume :: proc(volume: f32)
   ma.sound_set_volume(&audio.music, volume)
 }
 
-// TODO(dg): Currently, one sound may overshadow others if too many. 
+// TODO(dg): One sound file may overshadow others if too many playing.
 @(private="file")
 next_sound_effect :: proc() -> ^ma.sound
 {
@@ -281,7 +260,7 @@ ma_sound_init :: proc(ma_sound: ^ma.sound, path: string) -> bool
   ma_res := ma.sound_init_from_file(&audio.engine, path_cstr, 0, nil, nil, ma_sound)
   if ma_res != .SUCCESS
   {
-    printf("[ERROR][game_audio]: Failed to init sound %s! %s\n", path, ma_res)
+    log.errorf("[audio]: Failed to init sound %s! (%s)", path, ma_res)
     return false
   }
 

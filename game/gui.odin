@@ -40,6 +40,7 @@ update_gui_test :: proc()
       if ui.is_hovered()
       {
         ui.layout_color({f32(i+1)/(N+1), f32(i+1)/(N+1), f32(i+1)/(N+1), 1} * 0.9)
+        ui.text("Bücher")
 
         if ui.P(ui_tooltip(i, cursor_pos))
         {

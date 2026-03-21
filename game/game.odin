@@ -2,11 +2,12 @@
 package game
 
 import "core:math"
-import "core:math/noise"
+import "core:log"
 import "core:os"
 import "core:slice"
 import "core:time"
 import imgui "ext:dear_imgui"
+import "basic/bytes"
 import "basic/mem"
 import "basic/rand"
 import "basic/vmath"
@@ -78,7 +79,7 @@ Game :: struct
   particles:          [MAX_PARTICLES]Particle,
   particles_pos:      int,
   special_entities:   [enum{Player}]^Entity,
-  tiles:              [MAX_ZONE_TILES*MAX_ZONE_TILES]Tile,
+  tiles:              [MAX_ZONE_TILES]Tile,
   active_zone:        Zone_Name,
   weapon:             struct
   {
@@ -127,18 +128,63 @@ game_copy :: proc(dst, src: ^Game)
   tt.copy_tree(&dst.transform_tree, &src.transform_tree)
 }
 
+game_save :: proc(gm: ^Game, path: string)
+{
+  scratch := mem.temp_begin(mem.get_scratch())
+  defer mem.temp_end(scratch)
+  context.allocator = mem.allocator(scratch)
+
+  file, open_err := os.open(path, {.Write, .Create, .Trunc})
+  if open_err != nil
+  {
+    log.errorf("[game]: Failed to open save file '%s' for writing. (%s)", path, open_err)
+    return
+  }
+
+  save_buf := bytes.make_buffer(make([]byte, size_of(Game)), .LE)
+  bytes.write_u8(&save_buf, cast(u8) gm.active_zone)
+  os.write(file, save_buf.data)
+
+  file_info, _ := os.fstat(file, mem.allocator(scratch))
+  log.infof("[game]: Saved data to file '%s'.\n", file_info.fullpath)
+}
+
+game_load :: proc(gm: ^Game, path: string)
+{
+  scratch := mem.temp_begin(mem.get_scratch())
+  defer mem.temp_end(scratch)
+  context.allocator = mem.allocator(scratch)
+
+  file, open_err := os.open(path, {.Read})
+  if open_err != nil
+  {
+    log.warnf("[game]: Failed to open save file '%s' for reading. (%s)\n", path, open_err)
+    return
+  }
+
+  save_data := make([]byte, size_of(Game))
+  os.read(file, save_data)
+  save_buf := bytes.make_buffer(save_data, .LE)
+  gm.active_zone = cast(Zone_Name) bytes.read_u8(&save_buf)
+
+  file_info, _ := os.fstat(file, mem.allocator(scratch))
+  log.infof("[game]: Loaded data from file '%s'.\n", file_info.fullpath)
+}
+
 game_start :: proc(gm: ^Game)
 {
   set_active_game(gm)
 
+  game_load(gm, "res/data/debug.dat")
+
   gm.t_mult = 1
   gm.camera.scl = {1, 1}
-  // gm.light_color = {1.0, 1.0, 1.0, 1.0}
-  gm.light_color = {1.0, 0.8, 0.8, 1.0}
+  gm.light_color = {1.0, 1.0, 1.0, 1.0}
+  // gm.light_color = {1.0, 0.8, 0.8, 1.0}
 
   player := spawn_player()
 
-  set_active_zone(.Wilderness, true)
+  set_active_zone(gm.active_zone, true)
 
   for _ in 0..<1
   {
@@ -155,6 +201,11 @@ game_start :: proc(gm: ^Game)
   global.debug.silence_noise = true
 
   set_active_game(nil)
+}
+
+game_quit :: proc(gm: ^Game)
+{
+  game_save(gm, "res/data/debug.dat")
 }
 
 game_update :: proc(gm: ^Game, dt: f32)
@@ -251,6 +302,10 @@ game_update :: proc(gm: ^Game, dt: f32)
         entity_equip_weapon(player, .Nil)
       }
       else if key_just_down(.S_2)
+      {
+        entity_equip_weapon(player, .Revolver)
+      }
+      else if key_just_down(.S_3)
       {
         entity_equip_weapon(player, .Rifle)
       }
@@ -412,13 +467,16 @@ game_update :: proc(gm: ^Game, dt: f32)
   // - Player attack (:attack, :combat) ---
   {
     weapon, _ := entity_child_at(player, 1)
-    // debug_circle(tt.global_pos(weapon.shot_point), 1, {1, 0, 0, 0})
+    weapon_desc := &res.weapons[gm.weapon.kind]
+
+    debug_circle(tt.global_pos(player) + weapon_desc.hold_off, 1, {1, 0, 0, 0})
 
     // - Rotate equipped weapon ---
     if player.equipped.weapon_kind != .Nil
     {
       pivot := tt.global_pos(player)
-      pivot.y += res.weapons[.Rifle].hold_off.y + res.weapons[.Rifle].shot_pos.y
+      pivot.x += weapon_desc.hold_off.x * -1 if .Flip_H in player.props else 1
+      pivot.y += weapon_desc.hold_off.y
 
       diff := vmath.normalize(cursor_pos - pivot)
       angle := math.atan2(diff.y, diff.x)
@@ -443,11 +501,10 @@ game_update :: proc(gm: ^Game, dt: f32)
     // - Shoot weapon (:shoot) ---
     if gm.weapon.kind != .Nil
     {
-      weapon_desc := &res.weapons[gm.weapon.kind]
       muzzle_flash, ok := entity_child_at(weapon, 0)
       if !ok
       {
-        println("[FATAL][game]: Failed to get muzzle_flash entity.")
+        log.fatal("[game]: Failed to get muzzle_flash entity.")
         os.exit(1)
       }
 
@@ -464,7 +521,9 @@ game_update :: proc(gm: ^Game, dt: f32)
       {
         player.attack_timer.ticking = false
 
-        proj := spawn_projectile(.Bullet, tt.global_pos(weapon.shot_point))
+        shot_point_pos := tt.global_pos(weapon.shot_point)
+
+        proj := spawn_projectile(.Bullet, shot_point_pos)
         tt.local(proj).rot = tt.global_rot(weapon.shot_point)
         proj.vel.x = math.cos(tt.local_rot(proj)) * weapon_desc.speed
         proj.vel.y = math.sin(tt.local_rot(proj)) * weapon_desc.speed
@@ -472,10 +531,10 @@ game_update :: proc(gm: ^Game, dt: f32)
         timer_start(&player.equipped.muzzle_timer, 0.1)
         muzzle_flash.flags.render = true
 
-        entity_distort(weapon, .W, tt.local(weapon).scl.x*0.8, 5*dt)
-        spawn_particles(.Gun_Smoke, tt.global_pos(weapon.shot_point))
+        entity_distort(weapon, .Width, tt.local(weapon).scl.x*0.8, 5*dt)
+        spawn_particles(.Gun_Smoke, shot_point_pos)
         play_sound(.Gun_Shot, volume=0.1, pitch=rand.range_f32({0.8, 1.2}))
-        emit_noise(60, tt.global_pos(weapon.shot_point))
+        emit_noise(60, shot_point_pos)
       }
 
       // - Position effects ---
@@ -1215,11 +1274,11 @@ set_active_zone :: proc(zone: Zone_Name, regen := false)
       free_entity(gm, &en)
 
     case .Persist:
-      panic("[FATAL][game]: Zone change operation 'Persist' not yet implemented!")
+      panic("[game]: Zone change operation 'Persist' not yet implemented!")
 
     case .Move:
       continue
-    } 
+    }
   }
 
   // generate zone
@@ -1233,7 +1292,7 @@ set_active_zone :: proc(zone: Zone_Name, regen := false)
       generate_shop()
     }
 
-    printf("[INFO][game]: Switched zone to '%s'.\n", zone)
+    log.infof("[game]: Set active zone to '%s'.\n", zone)
   }
 }
 
@@ -1387,6 +1446,7 @@ Creature_Kind :: enum
 Weapon_Kind :: enum
 {
   Nil,
+  Revolver,
   Rifle,
 }
 
@@ -1733,12 +1793,17 @@ entity_move_to_point :: proc(en: ^Entity, p: v2f32, speed: f32, flip := true) ->
   return new_pos == p
 }
 
-entity_distort :: proc(en: ^Entity, axis: enum{W, H}, target, rate: f32)
+entity_distort :: proc(en: ^Entity, axis: enum{Width, Height}, target, rate: f32)
 {
   en.distort[axis].rate = rate
   en.distort[axis].target = target
   en.distort[axis].saved = tt.local(en).scl.x
   en.distort[axis].state = .Distort
+}
+
+entity_tint :: proc(en: ^Entity, tint: v4f32, rate: f32)
+{
+
 }
 
 entity_equip_weapon :: proc(en: ^Entity, kind: Weapon_Kind)
@@ -1748,6 +1813,7 @@ entity_equip_weapon :: proc(en: ^Entity, kind: Weapon_Kind)
   weapon, ok := entity_child_at(en, 1)
   if !ok do return
 
+  weapon.animation.data[.Idle] = res.weapons[kind].sprite
   weapon.flags.render = kind != .Nil
 
   gm := get_active_game()
@@ -2000,12 +2066,12 @@ roll_loot_table :: proc(loot_table: Loot_Table_Name) -> Item_Kind
 
 TILE_SIZE        :: 8
 ZONE_MARGIN_SIZE :: TILE_SIZE * 2
-MAX_ZONE_TILES   :: 64
+MAX_ZONE_TILES   :: 128 * 128
 
 Zone_Name :: enum
 {
-  Wilderness,
   Shop,
+  Wilderness,
 }
 
 Zone_Desc :: struct

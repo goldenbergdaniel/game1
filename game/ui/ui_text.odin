@@ -3,6 +3,7 @@ package ui
 import "core:fmt"
 import "core:image"
 import "core:image/netpbm"
+import "core:log"
 import "core:slice"
 import "core:os"
 import ft "ext:freetype"
@@ -161,7 +162,7 @@ load_font_from_bytes :: proc(bytes: []byte, size: int, arena: ^mem.Arena) -> (fo
     err := netpbm.save_to_file("res/gen/font_atlas.pbm", &atlas)
     if err != nil
     {
-      fmt.eprintln("[ERROR][ui]: Failed to save atlas to file.", err)
+      log.errorf("[ui]: Failed to save atlas to file. (%s)\n", err)
     }
 
     font = Font{

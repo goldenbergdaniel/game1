@@ -1,7 +1,10 @@
 package game
 
+import "base:runtime"
 import "core:fmt"
+import "core:log"
 import "core:math"
+import "core:os"
 import "core:time"
 import "basic"
 import "basic/mem"
@@ -40,13 +43,15 @@ main :: proc()
   @(static)
   prev_keys: [platform.Key_Kind]bool
 
+  context.logger = make_logger()
+
   arena_err: mem.Allocator_Error
 
   arena_err = mem.arena_init_static(&user.perm_arena)
   if arena_err != nil
   {
-    fmt.eprintln("Failed to allocate static arena!", arena_err)
-    return
+    log.fatalf("[game]: Failed to allocate static arena! (%v)\n", arena_err)
+    os.exit(1)
   }
 
   window_desc := platform.Window_Desc{
@@ -167,6 +172,51 @@ main :: proc()
 
     prev_keys = platform.global_input.keys
     platform.window_draw(&user.window)
+
+    if user.window.should_close
+    {
+      game_quit(&curr_game)
+    }
+  }
+}
+
+logger_proc :: proc(
+  data:    rawptr, 
+  level:   runtime.Logger_Level, 
+  text:    string, 
+  options: runtime.Logger_Options, 
+  location := #caller_location
+){
+  level_str: string
+  color_code: string = "\033[0m"
+
+  switch level
+  {
+  case .Debug:
+    level_str = "DEBUG"
+  case .Info:
+    level_str = "INFO "
+  case .Warning:
+    level_str = "WARN "
+    color_code = "\033[33m"
+  case .Error:
+    level_str = "ERROR"
+    color_code = "\033[31m"
+  case .Fatal:
+    level_str = "FATAL"
+    color_code = "\033[31m"
+  }
+  
+  printf("%s[%s] --- %s\033[0m", color_code, level_str, text)
+}
+
+make_logger :: proc() -> (logger: runtime.Logger)
+{
+  return {
+    data = nil,
+    lowest_level = .Debug,
+    options = {.Level, .Short_File_Path, .Line, .Procedure, .Terminal_Color},
+    procedure = logger_proc,
   }
 }
 

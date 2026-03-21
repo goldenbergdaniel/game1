@@ -5,6 +5,7 @@ import "base:runtime"
 import "core:fmt"
 import "core:image"
 import "core:image/tga"
+import "core:log"
 import "core:math"
 import "core:os"
 import "core:strings"
@@ -84,6 +85,7 @@ Sprite_Name :: enum
   Player_Sneak_4,
   Player_Sneak_5,
 
+  Revolver,
   Rifle,
   Shotgun,
   Muzzle_Flash,
@@ -357,6 +359,7 @@ init_resources :: proc(arena: ^mem.Arena)
     res.sprites[.Player_Sneak_4  ].pivot = {2.5, 13.0, 0}
     res.sprites[.Player_Sneak_5  ].pivot = {2.5, 13.0, 0}
     
+    res.sprites[.Revolver        ].pivot = {0.0, 3.0, 0}
     res.sprites[.Rifle           ].pivot = {4.0, 3.0, 0}
     res.sprites[.Muzzle_Flash    ].pivot = {0.0, 1.5, 0}
     res.sprites[.Bullet          ].pivot = {2.0, 0.5, 0}
@@ -431,14 +434,19 @@ init_resources :: proc(arena: ^mem.Arena)
     res.zones = {
       .Wilderness = {
         name = "The Wilderness",
-        width = 64 * TILE_SIZE,
-        height = 64 * TILE_SIZE,
+        width = 96 * TILE_SIZE,
+        height = 96 * TILE_SIZE,
       },
       .Shop = {
         name = "The Shop",
         width = 28 * TILE_SIZE,
         height = 14 * TILE_SIZE,
       },
+    }
+
+    for zone in res.zones
+    {
+      assert(zone.width * zone.height <= MAX_ZONE_TILES * TILE_SIZE * TILE_SIZE)
     }
   }
 
@@ -544,7 +552,7 @@ init_resources :: proc(arena: ^mem.Arena)
         count = 4,
         lifetime = 3.0,
         scl = {0.7, 0.7},
-        scl_dt = -{0.7, 0.7},
+        scl_dt = {-0.7, -0.7},
         vel = {48.0, 48.0},
         vel_dt = {0, -120},
       },
@@ -645,6 +653,18 @@ init_resources :: proc(arena: ^mem.Arena)
   {
     res.weapons = {
       .Nil = {},
+      .Revolver = {
+        sprite = .Revolver,
+        hold_off = {3.5, -6},
+        holster_off = {-2.5, -6},
+        holster_rot = rad_from_deg(f32(90.0)),
+        shot_pos = {6.0, -1.5},
+        shot_time = 0.35,
+        reload_time = 3.0,
+        damage = 3,
+        speed = 512.0,
+        capacity = 6,
+      },
       .Rifle = {
         sprite = .Rifle,
         hold_off = {0.5, -6},
@@ -754,7 +774,7 @@ build_sprite_atlas :: proc(textures_path, atlas_path: string)
     defer tga.destroy(sprite_img)
     if err != nil
     {
-      fmt.printf("[ERROR][metagen]: Failed to open texture '%s'\n", fi.name)
+      log.fatalf("[game]: Failed to open texture '%s'\n", fi.name)
       os.exit(1)
     }
 
@@ -800,7 +820,7 @@ build_sprite_atlas :: proc(textures_path, atlas_path: string)
     defer tga.destroy(sprite_img)
     if err != nil
     {
-      fmt.println("[ERROR][game]: Failed to open texture '%s'", fi.name)
+      log.fatalf("[game]: Failed to open texture '%s'", fi.name)
       os.exit(1)
     }
 
@@ -845,12 +865,12 @@ build_sprite_atlas :: proc(textures_path, atlas_path: string)
     err := tga.save_to_file(atlas_path, &atlas)
     if err != nil
     {
-      fmt.eprintln("[ERROR][game]: Failed to save sprite atlas to file.", err)
+      log.errorf("[game]: Failed to save sprite atlas to file. (%s)\n", err)
     }
   }
   else
   {
-    fmt.eprintln("[ERROR][game]: Failed to make sprite atlas image from pixels.")
+    log.error("[game]: Failed to make sprite atlas image from pixels.")
   }
 }
 

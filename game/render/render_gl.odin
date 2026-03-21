@@ -3,6 +3,7 @@
 package render
 
 import "core:fmt"
+import "core:log"
 import "core:os"
 import gl "ext:opengl"
 import "../basic"
@@ -108,7 +109,7 @@ gl_create_shader :: proc(vsrc, fsrc: string) -> Shader
   verify_shader :: proc(id, type: u32)
   {
     success: i32 = 1
-    log: [1000]byte
+    log_buf: [1000]byte
 
     if type == gl.COMPILE_STATUS
     {
@@ -117,11 +118,8 @@ gl_create_shader :: proc(vsrc, fsrc: string) -> Shader
       {
         length: i32
         gl.GetShaderiv(id, gl.INFO_LOG_LENGTH, &length)
-        gl.GetShaderInfoLog(id, length, &length, &log[0])
-
-        fmt.eprintln("[ERROR]: Shader compile error!")
-        fmt.eprintln(cast(string) log[:])
-
+        gl.GetShaderInfoLog(id, length, &length, &log_buf[0])
+        log.fatalf("[render_gl]: Shader compile error!\n%s", cast(string) log_buf[:])
         os.exit(1)
       }
     }
@@ -133,11 +131,8 @@ gl_create_shader :: proc(vsrc, fsrc: string) -> Shader
       {
         length: i32
         gl.GetProgramiv(id, gl.INFO_LOG_LENGTH, &length)
-        gl.GetProgramInfoLog(id, length, &length, &log[0])
-
-        fmt.eprintln("[ERROR]: Shader link error!")
-        fmt.eprintln(cast(string) log[:length])
-        
+        gl.GetProgramInfoLog(id, length, &length, &log_buf[0])
+        log.fatalf("[render_gl]: Shader link error!\n%s", cast(string) log_buf[:])
         os.exit(1)
       }
     }
@@ -172,7 +167,7 @@ gl_create_shader :: proc(vsrc, fsrc: string) -> Shader
   }
   else
   {
-    fmt.eprintln("Warning [render]: Shader uniform 'u_tex' not found!")
+    log.warn("[render_gl]: Shader uniform 'u_tex' not found!")
   }
 
   fnt_loc := gl.GetUniformLocation(program, "u_fnt")
@@ -182,7 +177,7 @@ gl_create_shader :: proc(vsrc, fsrc: string) -> Shader
   }
   else
   {
-    fmt.eprintln("Warning [render]: Shader uniform 'u_fnt' not found!")
+    log.warn("[render_gl]: Shader uniform 'u_fnt' not found!")
   }
 
   light_loc := gl.GetUniformLocation(program, "u_light")
@@ -192,7 +187,7 @@ gl_create_shader :: proc(vsrc, fsrc: string) -> Shader
   }
   else
   {
-    fmt.eprintln("Warning [render]: Shader uniform 'u_light' not found!")
+    log.warn("[render_gl]: Shader uniform 'u_light' not found!")
   }
 
   return result

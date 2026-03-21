@@ -67,7 +67,6 @@ spawn_player :: proc() -> ^Entity
     weapon.z_layer = .Player
     weapon.z_index = 1
     weapon.shot_point = tt.alloc_transform(&gm.transform_tree, weapon)
-    weapon.animation.data[.Idle] = .Rifle
 
     tt.set_parent(weapon, player)
 
@@ -89,7 +88,7 @@ spawn_player :: proc() -> ^Entity
     entity_attach_child(player, weapon)
   }
 
-  entity_equip_weapon(player, .Rifle)
+  entity_equip_weapon(player, .Revolver)
   entity_set_zone_change_op(player, .Move)
   
   gm.special_entities[.Player] = player
