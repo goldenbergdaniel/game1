@@ -13,16 +13,17 @@ global_tree: ^Tree
 
 Tree :: struct
 {
-  boxes:       []Box,
-  cache:       map[Box_ID]Retained_Box_Data,
-  capacity:    int,
-  count:       int,
-  root:        ^Box,
-  curr:        ^Box,
-  cursor_pos:  [2]f32,
-  input_down:  [enum{Curr, Prev}]bool,
-  perm_arena:  ^mem.Arena,
-  temp_arena: ^mem.Arena,
+  boxes:           []Box,
+  cache:           map[Box_ID]Retained_Box_Data,
+  capacity:        int,
+  count:           int,
+  root:            ^Box,
+  curr:            ^Box,
+  cursor_pos:      [2]f32,
+  last_cursor_pos: [2]f32,
+  input_down:      [enum{Curr, Prev}]bool,
+  perm_arena:      ^mem.Arena,
+  temp_arena:      ^mem.Arena,
 }
 
 tree_init :: proc(tree: ^Tree, cap: int, perm_arena, temp_arena: ^mem.Arena)
@@ -152,6 +153,8 @@ tree_resolve_layout :: proc(tree: ^Tree)
         }
       }
 
+      box.color.rgb *= box.shade
+
       // fmt.println(node.name, node.rect_pos, node.rect_dim)
     }
   }
@@ -167,8 +170,8 @@ tree_resolve_interaction :: proc(tree: ^Tree)
 
     box.interaction[.Prev] = box.interaction[.Curr]
 
-    x_intersect := cursor.x >= box.rect_pos.x && cursor.x <= box.rect_pos.x + box.rect_dim.x
-    y_intersect := cursor.y >= box.rect_pos.y && cursor.y <= box.rect_pos.y + box.rect_dim.y
+    x_intersect := cursor.x > box.rect_pos.x && cursor.x < box.rect_pos.x + box.rect_dim.x
+    y_intersect := cursor.y > box.rect_pos.y && cursor.y < box.rect_pos.y + box.rect_dim.y
 
     box.interaction[.Curr].hovered = x_intersect && y_intersect
     box.interaction[.Curr].pressed = box.interaction[.Curr].hovered && tree.input_down[.Curr]
@@ -375,6 +378,7 @@ Layout :: struct
   offset:           [2]f32,
   size:             [2]Size,
   color:            [4]f32,
+  shade:            [3]f32,
   child_align:      Alignment,
   text_size:        f32,
   text_line_height: f32,
@@ -391,6 +395,7 @@ Box_ID :: distinct string
 Box_Prop :: enum
 {
   Floating,
+  Dragable,
 }
 
 Size :: struct
@@ -548,7 +553,13 @@ box_generate_id :: proc(box: ^Box)
 @(private)
 box_cache_retained_data :: proc(box: ^Box)
 {
-  global_tree.cache[box.id] = box.retained_data
+  id_str := cast(string) box.id
+  if box.id not_in global_tree.cache
+  {
+    id_str, _ = strings.clone(string(box.id), mem.allocator(global_tree.perm_arena))
+  }
+
+  global_tree.cache[Box_ID(id_str)] = box.retained_data
 }
 
 @(private)
@@ -558,7 +569,6 @@ box_fetch_retained_data :: proc(box: ^Box)
   if ok
   {
     box.retained_data = data
-    // fmt.printf("Fetched %s with count %i\n", box.id, box.counter)
   }
 }
 
@@ -567,7 +577,7 @@ box_fetch_retained_data :: proc(box: ^Box)
 
 
 begin_tree :: proc(
-  tree:     ^Tree,
+  tree: ^Tree,
   st: struct
   {
     background_color: [4]f32,
@@ -581,6 +591,7 @@ begin_tree :: proc(
   tree.cursor_pos = st.cursor_pos
   tree.input_down[.Curr] = st.input_down
   tree.root.name = "root"
+  tree.root.shade = 1
   tree.curr = tree.root
   global_tree = tree
 
@@ -605,6 +616,7 @@ end_tree :: proc()
     }
   }
 
+  global_tree.last_cursor_pos = global_tree.cursor_pos
   global_tree.input_down[.Prev] = global_tree.input_down[.Curr]
   global_tree = nil
 }
@@ -617,13 +629,17 @@ create_box :: proc(name: string, idx: Maybe(int), retained: bool) -> ^Box
   box.name = name
   box.idx = idx
   box.retain = retained
+  box.shade = {1, 1, 1}
 
   box_generate_id(box)
 
   if retained
   {
     box_fetch_retained_data(box)
+    // fmt.println(box.id, "Retaining.")
   }
+
+  // fmt.println("Geneterated", box.id, box.retain)
   
   return box
 }
@@ -662,21 +678,8 @@ set_descendant_layout :: proc(layout: Layout)
 is_hovered :: proc() -> bool
 {
   assert(global_tree.curr != nil)
-  global_tree.curr.retain = true
+  // global_tree.curr.retain = true
   return global_tree.curr.interaction[.Curr].hovered
-}
-
-is_pressed :: proc() -> bool
-{
-  assert(global_tree.curr != nil)
-  return global_tree.curr.interaction[.Curr].pressed
-}
-
-is_just_pressed :: proc() -> bool
-{
-  assert(global_tree.curr != nil)
-  return global_tree.curr.interaction[.Curr].pressed && 
-        !global_tree.curr.interaction[.Prev].pressed
 }
 
 layout_size :: proc(kind: Size_Kind, val: [2]f32)
@@ -704,10 +707,22 @@ layout_offset :: proc(off: [2]f32)
   global_tree.curr.offset = off
 }
 
+layout_follow_cursor :: proc()
+{
+  assert(global_tree.curr != nil)
+  global_tree.curr.offset = global_tree.cursor_pos - global_tree.last_cursor_pos
+}
+
 layout_color :: proc(color: [4]f32)
 {
   assert(global_tree.curr != nil)
   global_tree.curr.color = color
+}
+
+layout_shade :: proc(shade: [3]f32)
+{
+  assert(global_tree.curr != nil)
+  global_tree.curr.shade = shade
 }
 
 layout_props :: proc(props: bit_set[Box_Prop])
@@ -741,15 +756,21 @@ box :: proc(name: string, idx: Maybe(int) = nil) -> ^Box
   return create_box(name == "" ? "Box" : name, idx, true)
 }
 
+image :: proc(name: string, sprite: int, idx: Maybe(int) = nil) -> ^Box
+{
+  image := create_box(name, idx, true)
+  image.sprite = sprite
+  return image
+}
+
 spacer :: proc(width: Size, height: Size, idx: Maybe(int) = nil) -> ^Box
 {
   spacer := create_box("Spacer", idx, false)
-
   begin_box(spacer)
   layout_width(width.kind, width.value)
   layout_height(height.kind, height.value)
   end_box()
-  
+
   return spacer
 }
 

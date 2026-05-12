@@ -23,6 +23,7 @@ Resources :: struct
   sprites:      [Sprite_Name]Sprite,
   sounds:       [Sound_Name]Sound,
   animations:   [Animation_Name]Animation_Desc,
+  entities:     [Entity_Name]Entity_Desc,
   zones:        [Zone_Name]Zone_Desc,
   particles:    [Particle_Name]Particle_Desc,
   creatures:    [Creature_Kind]Creature_Desc,
@@ -67,7 +68,7 @@ Sprite_Name :: enum
   Square,
   UI_Square,
   Circle,
-  
+
   Shadow_1,
   Shadow_2,
   Shadow_3,
@@ -106,7 +107,7 @@ Sprite_Name :: enum
   Deer_Walk_3,
   Deer_Walk_4,
   Deer_Corpse,
-  
+
   Rabbit_Idle_1,
   Rabbit_Idle_2,
   Rabbit_Idle_3,
@@ -225,7 +226,7 @@ Particle_Desc :: struct
   lifetime:      f32,
   lifetime_var:  f32,
   spread:        f32,
-  colors:        [dynamic]v4f32,
+  colors:        [dynamic; 8]v4f32,
   scl:           v2f32,
   scl_dt:        v2f32,
   scl_var:       f32,
@@ -235,6 +236,27 @@ Particle_Desc :: struct
   dir_dt:        f32,
   rot:           f32,
   rot_dt:        f32,
+}
+
+Entity_Name :: enum u64
+{
+  Nil,
+
+  Grass,
+  Chamomile,
+  Sunflower,
+  Lavender,
+  Brown_Mushroom,
+  Red_Mushroom,
+  Stump,
+}
+
+Entity_Desc :: struct
+{
+  sprites: [dynamic; 8]Sprite_Name,
+  props:   bit_set[Entity_Prop],
+  color:   v4f32,
+  tint:    v4f32,
 }
 
 Creature_Desc :: struct #all_or_none
@@ -317,7 +339,7 @@ init_resources :: proc(arena: ^mem.Arena)
   {
     sprite_atlas_path := "res/gen/sprite_atlas.tga"
     build_sprite_atlas("res/textures/", sprite_atlas_path)
-    
+
     img, err := tga.load(sprite_atlas_path)
     if err != nil
     {
@@ -358,7 +380,7 @@ init_resources :: proc(arena: ^mem.Arena)
     res.sprites[.Player_Sneak_3  ].pivot = {2.5, 13.0, 0}
     res.sprites[.Player_Sneak_4  ].pivot = {2.5, 13.0, 0}
     res.sprites[.Player_Sneak_5  ].pivot = {2.5, 13.0, 0}
-    
+
     res.sprites[.Revolver        ].pivot = {0.0, 3.0, 0}
     res.sprites[.Rifle           ].pivot = {4.0, 3.0, 0}
     res.sprites[.Muzzle_Flash    ].pivot = {0.0, 1.5, 0}
@@ -373,7 +395,7 @@ init_resources :: proc(arena: ^mem.Arena)
     res.sprites[.Deer_Walk_3     ].pivot = {5.0, 14.0, 0}
     res.sprites[.Deer_Walk_4     ].pivot = {5.0, 13.0, 0}
     res.sprites[.Deer_Corpse     ].pivot = {0.5, 1.0, 1}
-    
+
     res.sprites[.Rabbit_Idle_1   ].pivot = {4.0, 8.0, 0}
     res.sprites[.Rabbit_Idle_2   ].pivot = {4.0, 8.0, 0}
     res.sprites[.Rabbit_Idle_3   ].pivot = {4.0, 7.0, 0}
@@ -425,8 +447,43 @@ init_resources :: proc(arena: ^mem.Arena)
     {
       println("Error [freetype]:", err)
     }
+  }
 
-    // os2.exit(0)
+  // - Entities ---
+  {
+    for &en in res.entities
+    {
+      en.tint = {1, 1, 1, 1}
+    }
+
+    res.entities = {
+      .Nil = {},
+      .Grass = {
+        sprites = {.Grass},
+      },
+      .Lavender = {
+        sprites = {.Lavender},
+      },
+      .Chamomile = {
+        sprites = {.Chamomile},
+        props = {.Collectable},
+      },
+      .Sunflower = {
+        sprites = {.Sunflower},
+        props = {.Collectable},
+      },
+      .Brown_Mushroom = {
+        sprites = {.Brown_Mushroom},
+        props = {.Collectable},
+      },
+      .Red_Mushroom = {
+        sprites = {.Red_Mushroom},
+        props = {.Collectable},
+      },
+      .Stump = {
+        sprites = {.Stump},
+      },
+    }
   }
 
   // - Zones ---
@@ -474,7 +531,7 @@ init_resources :: proc(arena: ^mem.Arena)
       },
       .Deer_Idle = {
         frames = {
-          {sprite=.Deer_Idle_1, duration=0.3}, 
+          {sprite=.Deer_Idle_1, duration=0.3},
           {sprite=.Deer_Idle_2, duration=0.3},
           {sprite=.Deer_Idle_3, duration=0.3},
           {sprite=.Deer_Idle_4, duration=0.3},
@@ -482,7 +539,7 @@ init_resources :: proc(arena: ^mem.Arena)
       },
       .Deer_Walk = {
         frames = {
-          {sprite=.Deer_Walk_1, duration=0.20}, 
+          {sprite=.Deer_Walk_1, duration=0.20},
           {sprite=.Deer_Walk_2, duration=0.20},
           {sprite=.Deer_Walk_3, duration=0.20},
           {sprite=.Deer_Walk_4, duration=0.20},
@@ -507,7 +564,7 @@ init_resources :: proc(arena: ^mem.Arena)
       },
       .Rabbit_Idle = {
         frames = {
-          {sprite=.Rabbit_Idle_1, duration=0.3}, 
+          {sprite=.Rabbit_Idle_1, duration=0.3},
           {sprite=.Rabbit_Idle_2, duration=0.3},
           {sprite=.Rabbit_Idle_3, duration=0.3},
           {sprite=.Rabbit_Idle_4, duration=0.3},
@@ -515,7 +572,7 @@ init_resources :: proc(arena: ^mem.Arena)
       },
       .Rabbit_Walk = {
         frames = {
-          {sprite=.Rabbit_Walk_1, duration=0.2}, 
+          {sprite=.Rabbit_Walk_1, duration=0.2},
           {sprite=.Rabbit_Walk_2, duration=0.2},
           {sprite=.Rabbit_Walk_3, duration=0.2},
           {sprite=.Rabbit_Walk_4, duration=0.2},
@@ -523,7 +580,7 @@ init_resources :: proc(arena: ^mem.Arena)
       },
       .Squirrel_Idle = {
         frames = {
-          {sprite=.Squirrel_Idle_1, duration=0.3}, 
+          {sprite=.Squirrel_Idle_1, duration=0.3},
           {sprite=.Squirrel_Idle_2, duration=0.3},
           {sprite=.Squirrel_Idle_3, duration=0.3},
           {sprite=.Squirrel_Idle_4, duration=0.3},
@@ -531,7 +588,7 @@ init_resources :: proc(arena: ^mem.Arena)
       },
       .Squirrel_Walk = {
         frames = {
-          {sprite=.Squirrel_Walk_1, duration=0.2}, 
+          {sprite=.Squirrel_Walk_1, duration=0.2},
           {sprite=.Squirrel_Walk_2, duration=0.2},
           {sprite=.Squirrel_Walk_3, duration=0.2},
           {sprite=.Squirrel_Walk_4, duration=0.2},
@@ -743,6 +800,9 @@ build_sprite_atlas :: proc(textures_path, atlas_path: string)
   MAX_ATLAS_WIDTH :: 128
   PADDING         :: 1
 
+  scratch := mem.temp_begin(mem.get_scratch())
+  defer mem.temp_end(scratch)
+
   walker: os.Walker
   defer os.walker_destroy(&walker)
 
@@ -770,7 +830,7 @@ build_sprite_atlas :: proc(textures_path, atlas_path: string)
     sprite_name := sprite_name_from_string(sprite_name_str)
     if sprite_name == nil && sprite_name_str != "nil" do continue
 
-    sprite_img, err := tga.load(fi.fullpath)
+    sprite_img, err := tga.load(fi.fullpath, allocator=mem.allocator(scratch))
     defer tga.destroy(sprite_img)
     if err != nil
     {
@@ -789,7 +849,7 @@ build_sprite_atlas :: proc(textures_path, atlas_path: string)
   }
 
   max_sprite_height += PADDING
-  
+
   atlas_width = MAX_ATLAS_WIDTH
   atlas_height = max_sprite_height * num_rows
 
@@ -837,13 +897,10 @@ build_sprite_atlas :: proc(textures_path, atlas_path: string)
       for c in 0..<sprite_img.width
       {
         pos := atlas_pos[.Abs] + atlas_pos[.Rel]
-        atlas_pixels[pos.x + pos.y * atlas_width] = image.RGBA_Pixel{
-          sprite_img.pixels.buf[sprite_pos+0],
-          sprite_img.pixels.buf[sprite_pos+1],
-          sprite_img.pixels.buf[sprite_pos+2],
-          sprite_img.pixels.buf[sprite_pos+3],
-        }
-
+        atlas_pixels[pos.x + (pos.y * atlas_width)].r = sprite_img.pixels.buf[sprite_pos+0]
+        atlas_pixels[pos.x + (pos.y * atlas_width)].g = sprite_img.pixels.buf[sprite_pos+1]
+        atlas_pixels[pos.x + (pos.y * atlas_width)].b = sprite_img.pixels.buf[sprite_pos+2]
+        atlas_pixels[pos.x + (pos.y * atlas_width)].a = sprite_img.pixels.buf[sprite_pos+3]
         sprite_pos += 4
         atlas_pos[.Rel].x += 1
       }
@@ -852,9 +909,9 @@ build_sprite_atlas :: proc(textures_path, atlas_path: string)
       atlas_pos[.Rel].y += 1
     }
 
-    res.sprites[sprite_name].coord = array_cast(atlas_pos[.Abs], f32)
-    res.sprites[sprite_name].size = array_cast([2]int{sprite_img.width, sprite_img.height}, f32)
-    
+    res.sprites[sprite_name].coord = cast(v2f32) atlas_pos[.Abs]
+    res.sprites[sprite_name].size = cast(v2f32) [2]int{sprite_img.width, sprite_img.height}
+
     atlas_pos[.Rel].y = 0
     atlas_pos[.Abs].x += sprite_img.width + PADDING
   }

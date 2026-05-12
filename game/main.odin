@@ -26,8 +26,8 @@ User :: struct
 
 Screen :: enum
 {
-  Main_Menu, 
-  Game, 
+  Main_Menu,
+  Game,
 }
 
 user: User
@@ -43,7 +43,12 @@ main :: proc()
   @(static)
   prev_keys: [platform.Key_Kind]bool
 
-  context.logger = make_logger()
+  context.logger = {
+    data = nil,
+    lowest_level = .Debug,
+    options = {.Level, .Short_File_Path, .Line, .Procedure, .Terminal_Color},
+    procedure = logger_proc,
+  }
 
   arena_err: mem.Allocator_Error
 
@@ -65,7 +70,7 @@ main :: proc()
   user.window = platform.create_window(window_desc, &user.perm_arena)
   defer platform.destroy_window(&user.window)
 
-  user.screen = .Game
+  user.screen = .Main_Menu
 
   render.init_renderer(&user.window)
   init_resources(&user.perm_arena)
@@ -137,7 +142,7 @@ main :: proc()
       {
         game_copy(&prev_game, &curr_game)
         game_update(&curr_game, TIME_STEP * curr_game.t_mult)
-         
+
         curr_game.t += TIME_STEP * curr_game.t_mult
       }
     }
@@ -154,11 +159,14 @@ main :: proc()
     {
     case .Main_Menu:
       render_gui_test()
-      
+
     case .Game:
       alpha := accumulator / TIME_STEP
       interpolate_games(&curr_game, &prev_game, &res_game, f32(alpha))
-      game_render(&res_game)
+      if res_game.started
+      {
+        game_render(&res_game)
+      }
     }
 
     render_end_tick = time.tick_now()
@@ -181,10 +189,10 @@ main :: proc()
 }
 
 logger_proc :: proc(
-  data:    rawptr, 
-  level:   runtime.Logger_Level, 
-  text:    string, 
-  options: runtime.Logger_Options, 
+  data:    rawptr,
+  level:   runtime.Logger_Level,
+  text:    string,
+  options: runtime.Logger_Options,
   location := #caller_location
 ){
   level_str: string
@@ -194,30 +202,24 @@ logger_proc :: proc(
   {
   case .Debug:
     level_str = "DEBUG"
+
   case .Info:
     level_str = "INFO "
+
   case .Warning:
     level_str = "WARN "
     color_code = "\033[33m"
+
   case .Error:
     level_str = "ERROR"
     color_code = "\033[31m"
+
   case .Fatal:
     level_str = "FATAL"
     color_code = "\033[31m"
   }
-  
-  printf("%s[%s] --- %s\033[0m", color_code, level_str, text)
-}
 
-make_logger :: proc() -> (logger: runtime.Logger)
-{
-  return {
-    data = nil,
-    lowest_level = .Debug,
-    options = {.Level, .Short_File_Path, .Line, .Procedure, .Terminal_Color},
-    procedure = logger_proc,
-  }
+  printf("%s[%s] --- %s\033[0m", color_code, level_str, text)
 }
 
 v2f32 :: [2]f32
@@ -231,7 +233,6 @@ Range :: basic.Range
 
 range_overlap :: basic.range_overlap
 range_clamp   :: basic.range_clamp
-array_cast    :: basic.array_cast
 approx        :: basic.approx
 rad_from_deg  :: basic.rad_from_deg
 deg_from_rad  :: basic.deg_from_rad

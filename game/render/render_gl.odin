@@ -6,7 +6,6 @@ import "core:fmt"
 import "core:log"
 import "core:os"
 import gl "ext:opengl"
-import "../basic"
 import "../platform"
 
 gl_init :: proc(window: ^platform.Window)
@@ -29,26 +28,17 @@ gl_init :: proc(window: ^platform.Window)
   // - Uniform buffer ---
   gl.CreateBuffers(1, &renderer.ubo)
   gl.BindBufferBase(gl.UNIFORM_BUFFER, 0, renderer.ubo)
-  gl.NamedBufferStorage(renderer.ubo, 
-                        size_of(renderer.uniforms), 
-                        &renderer.uniforms, 
-                        gl.DYNAMIC_STORAGE_BIT)
+  gl.NamedBufferStorage(renderer.ubo, size_of(renderer.uniforms), &renderer.uniforms, gl.DYNAMIC_STORAGE_BIT)
 
   // - Shader storage buffer ---
   gl.CreateBuffers(1, &renderer.ssbo)
   gl.BindBufferBase(gl.SHADER_STORAGE_BUFFER, 1, renderer.ssbo)
-  gl.NamedBufferStorage(renderer.ssbo, 
-                        size_of(renderer.vertices),
-                        raw_data(&renderer.vertices), 
-                        gl.DYNAMIC_STORAGE_BIT)
+  gl.NamedBufferStorage(renderer.ssbo, size_of(renderer.vertices), raw_data(&renderer.vertices), gl.DYNAMIC_STORAGE_BIT)
 
   // - Index buffer ---
   gl.CreateBuffers(1, &renderer.ibo)
   gl.VertexArrayElementBuffer(vao, renderer.ibo)
-  gl.NamedBufferData(renderer.ibo,
-                     size_of(renderer.indices),
-                     raw_data(&renderer.indices),
-                     gl.DYNAMIC_DRAW)
+  gl.NamedBufferData(renderer.ibo, size_of(renderer.indices), raw_data(&renderer.indices), gl.DYNAMIC_DRAW)
 
   // - Textures ---
   gl.CreateTextures(gl.TEXTURE_2D, MAX_TEXTURES, &renderer.textures[0])
@@ -67,17 +57,11 @@ gl_draw :: proc()
   renderer.uniforms.projection = cast(m4x4f32) renderer.pass.projection
   renderer.uniforms.camera = cast(m4x4f32) renderer.pass.camera
 
-  gl.Viewport(expand_values(basic.array_cast(renderer.pass.viewport, i32)))
+  gl.Viewport(expand_values(([4]i32)(renderer.pass.viewport)))
 
-  gl.NamedBufferSubData(buffer=renderer.ssbo,
-                        offset=0,
-                        size=renderer.vertices_count * size_of(Vertex),
-                        data=&renderer.vertices[0])
-
-  gl.NamedBufferSubData(buffer=renderer.ibo,
-                        offset=0,
-                        size=renderer.indices_count * size_of(u16),
-                        data=&renderer.indices[0])
+  gl.NamedBufferSubData(renderer.ssbo, 0, renderer.vertices_count * size_of(Vertex), &renderer.vertices[0])
+  gl.NamedBufferSubData(renderer.ibo, 0, renderer.indices_count * size_of(u16), &renderer.indices[0])
+  gl.NamedBufferSubData(renderer.ubo, 0, size_of(renderer.uniforms), &renderer.uniforms)
   
   program := renderer.shaders[renderer.pass.shader.id]
   gl.UseProgram(program)
@@ -86,14 +70,7 @@ gl_draw :: proc()
   gl.Uniform1i(renderer.pass.shader.uniforms.fnt, 1)
   gl.Uniform4f(renderer.pass.shader.uniforms.light, expand_values(renderer.pass.light_color))
 
-  gl.NamedBufferSubData(buffer=renderer.ubo,
-                        offset=0,
-                        size=size_of(renderer.uniforms),
-                        data=&renderer.uniforms)
-
   gl.DrawElements(gl.TRIANGLES, i32(renderer.indices_count), gl.UNSIGNED_SHORT, nil)
-
-  gl.UseProgram(0)
 
   renderer.vertices_count = 0
   renderer.indices_count = 0

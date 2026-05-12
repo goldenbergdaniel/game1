@@ -72,7 +72,7 @@ draw_text :: proc(
 
     glyph := ui.glyph_from_rune(r)
     tl, tr, br, bl := render.uv_from_texture(&res.textures[.Glyph_Atlas], 
-                                             array_cast(glyph.coord, f32), 
+                                             v2f32(glyph.coord), 
                                              {f32(glyph.width), f32(glyph.height)})
 
     offset := pos + {cursor.x + glyph.bearing.x * size, cursor.y - glyph.bearing.y * size}

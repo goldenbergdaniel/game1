@@ -15,7 +15,7 @@ import "../basic/mem"
 Window :: struct
 {
   handle:       ^sdl.Window,
-	desc:					Window_Desc,
+  desc:					Window_Desc,
   imio_handle:  ^imgui.IO,
   render_ctx:   struct #raw_union
   {
@@ -43,7 +43,7 @@ Window_Desc :: struct #all_or_none
   width:  	int,
   height: 	int,
   props:  	bit_set[Window_Props],
-	renderer:	enum{OpenGL, Vulkan},
+  renderer:	enum{OpenGL, Vulkan},
 }
 
 Event :: struct
@@ -78,7 +78,7 @@ create_window :: proc(desc: Window_Desc, arena: ^mem.Arena) -> Window
 		sdl.SetHint("SDL_VIDEO_WAYLAND_ALLOW_LIBDECOR", deco)
 		sdl.SetHint("SDL_VIDEO_DOUBLE_BUFFER", "1")
 	}
-	
+
 	if !sdl.Init({.VIDEO, .EVENTS})
 	{
 		log.fatal("[platform]: Failed to init SDL3!")
@@ -109,7 +109,7 @@ create_window :: proc(desc: Window_Desc, arena: ^mem.Arena) -> Window
 			sdl.GL_SetAttribute(.MULTISAMPLESAMPLES, 2)
 		}
 	}
-	
+
 	for prop in desc.props
 	{
 		#partial switch prop
@@ -134,11 +134,11 @@ create_window :: proc(desc: Window_Desc, arena: ^mem.Arena) -> Window
 	{
 		gl_ctx := sdl.GL_CreateContext(sdl_window)
 		sdl.GL_MakeCurrent(sdl_window, gl_ctx)
-		
+
 		vsync: i32 = .Vsync in desc.props ? 1 : 0
 		sdl.GL_SetSwapInterval(vsync)
 
-		when true
+		when false
 		{
 			// log.infof("OpenGL Version: %s", gl.GetString(gl.VERSION))
 			log.infof("[platform]: SDL version: %i\n", sdl.GetVersion())
@@ -199,7 +199,7 @@ window_pump_events :: proc(window: ^Window)
   {
   	result: bool
   	sdl_event: sdl.Event
-		
+
   	result = sdl.PollEvent(&sdl_event)
   	event^ = sdl_translate_event(&sdl_event)
 
@@ -225,7 +225,7 @@ window_pump_events :: proc(window: ^Window)
     switch event.kind
     {
     case .Nil:
-    case .Quit: 
+    case .Quit:
       window.should_close = true
     case .Key_Down:
       global_input.keys[event.key_kind] = true
@@ -280,7 +280,7 @@ get_mouse_scroll :: proc() -> [2]f32
 
 reset_mouse_scroll :: proc()
 {
-	global_input.mouse_scroll = 0	
+	global_input.mouse_scroll = 0
 }
 
 @(require_results)

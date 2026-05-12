@@ -19,6 +19,7 @@ import "ui"
 
 // Global //////////////////////////////////////////////////////////////////////////////////
 
+
 global: struct
 {
   frame_arena:     mem.Arena,
@@ -60,6 +61,7 @@ init_global :: proc()
 
 Game :: struct
 {
+  started:            bool,
   t:                  f32,
   t_mult:             f32,
   interpolate:        bool,
@@ -92,6 +94,7 @@ Game :: struct
     items:            [Item_Kind]int,
   },
   light_color:        v4f32,
+  selected_entity:    Entity_Ref,
 }
 
 @(private="file")
@@ -179,8 +182,8 @@ game_start :: proc(gm: ^Game)
 
   gm.t_mult = 1
   gm.camera.scl = {1, 1}
-  gm.light_color = {1.0, 1.0, 1.0, 1.0}
-  // gm.light_color = {1.0, 0.8, 0.8, 1.0}
+  // gm.light_color = {1.0, 1.0, 1.0, 1.0}
+  gm.light_color = {1.0, 0.8, 0.8, 1.0}
 
   player := spawn_player()
 
@@ -195,8 +198,8 @@ game_start :: proc(gm: ^Game)
 
   // play_sound(.Minecraft, volume=global.audio.music_volume)
 
-  spawn_decoration(.Stump, {300, 100})
-  spawn_decoration(.Stump, {100, 300})
+  spawn_entity(.Stump, {300, 100})
+  spawn_entity(.Stump, {100, 300})
 
   global.debug.silence_noise = true
 
@@ -211,6 +214,8 @@ game_quit :: proc(gm: ^Game)
 game_update :: proc(gm: ^Game, dt: f32)
 {
   set_active_game(gm)
+
+  gm.started = true
 
   player := gm.special_entities[.Player]
   cursor_pos := screen_to_world_space(platform.get_cursor_position())
@@ -248,11 +253,6 @@ game_update :: proc(gm: ^Game, dt: f32)
     {
       pop_debug_entity(&den)
     }
-  }
-
-  if !point_in_zone_bounds(cursor_pos, gm.active_zone)
-  {
-    debug_circle(cursor_pos, 4, {1, 0, 0, 0})
   }
 
   // Test noise
@@ -324,38 +324,6 @@ game_update :: proc(gm: ^Game, dt: f32)
       }
     }
   }
-
-  // // - Move region ---
-  // {
-  //   region_pos := region_pos_to_world_pos({0, 0})
-  //   relative_player_pos := tt.global_pos(player) - region_pos
-
-  //   if gm.active_zone.x < 2 && relative_player_pos.x > REGION_SPAN
-  //   {
-  //     // - Move right ---
-  //     gm.active_zone.x += 1
-  //     gm.interpolate = false
-  //   }
-  //   else if gm.active_zone.x > 0 && relative_player_pos.x < -0
-  //   {
-  //     // - Move left ---
-  //     gm.active_zone.x -= 1
-  //     gm.interpolate = false
-  //   }
-
-  //   if gm.active_zone.y < 2 && relative_player_pos.y > REGION_SPAN
-  //   {
-  //     // - Move down ---
-  //     gm.active_zone.y += 1
-  //     gm.interpolate = false
-  //   }
-  //   else if gm.active_zone.y > 0 && relative_player_pos.y < -0
-  //   {
-  //     // - Move up ---
-  //     gm.active_zone.y -= 1
-  //     gm.interpolate = false
-  //   }
-  // }
 
   // - Entity movement (:move, :movement) ---
   {
@@ -613,6 +581,47 @@ game_update :: proc(gm: ^Game, dt: f32)
     clear(&collided_cache)
   }
 
+  // - Pickup decoration ---
+  {
+    RANGE :: 10.0
+
+    nearest_dist: f32 = max(f32)
+    nearest_en: ^Entity
+
+    for &en in gm.entities do if .Collectable in en.props
+    {
+      dist := vmath.distance_2f32(tt.global_pos(player), tt.global_pos(en))
+      if dist < RANGE
+      {
+        if dist < nearest_dist
+        {
+          nearest_dist = dist
+          nearest_en = &en
+        }
+      }
+    }
+
+    selected := entity_from_ref(gm.selected_entity)
+
+    if entity_is_valid(selected) && (nearest_en == nil || (nearest_en != nil && !entity_is_same(nearest_en^, selected^)))
+    {
+      // entity_stop_fade(selected, .Color)
+      selected.props -= {.Highlighted}
+    }
+
+    if nearest_en != nil
+    {
+      gm.selected_entity = nearest_en.ref
+      selected = nearest_en
+
+      if selected.fade[0].state != .Fade
+      {
+        // entity_start_fade(nearest_en, .Color, {.R, .G, .B}, {1, 1, 1, 0}, 0)
+        selected.props += {.Highlighted}
+      }
+    }
+  }
+
   // - Misc behavior ---
   for &en in gm.entities do if en.flags.update
   {
@@ -713,98 +722,126 @@ game_update :: proc(gm: ^Game, dt: f32)
       tt.local(en).rot += 0.25 * math.PI * dt
     }
 
-    // - Distort scale ---
+    if .Highlighted in en.props
     {
-      distort_up: bool
+      en.tint.rgb = {1.2, 1.2, 1.2}
+    }
+    else
+    {
+      en.tint.rgb = {1, 1, 1}
+    }
 
-      distort_up = en.distort[0].target > en.distort[0].saved
-      switch en.distort[0].state
+    // - Distort ---
+    {
+      for i in 0..<len(en.distort)
       {
-      case .Hold:
+        distort_up: bool
 
-      case .Distort:
-        if distort_up
+        distort_up = en.distort[i].target > en.distort[i].saved
+        switch en.distort[i].state
         {
-          tt.local(en).scl.x += en.distort[0].rate
-          if tt.local(en).scl.x >= en.distort[0].target
-          {
-            tt.local(en).scl.x = en.distort[0].target
-            en.distort[0].state = .Return
-          }
-        }
-        else
-        {
-          tt.local(en).scl.x -= en.distort[0].rate
-          if tt.local(en).scl.x <= en.distort[0].target
-          {
-            tt.local(en).scl.x = en.distort[0].target
-            en.distort[0].state = .Return
-          }
-        }
+        case .Hold:
 
-      case .Return:
-        if distort_up
-        {
-          tt.local(en).scl.x -= en.distort[0].rate
-          if tt.local(en).scl.x <= en.distort[0].saved
+        case .Distort:
+          if distort_up
           {
-            tt.local(en).scl.x = en.distort[0].saved
-            en.distort[0].state = .Hold
+            tt.local(en).scl[i] += en.distort[i].rate
+            if tt.local(en).scl[i] >= en.distort[i].target
+            {
+              tt.local(en).scl[i] = en.distort[i].target
+              en.distort[i].state = .Return
+            }
           }
-        }
-        else
-        {
-          tt.local(en).scl.x += en.distort[0].rate
-          if tt.local(en).scl.x >= en.distort[0].saved
+          else
           {
-            tt.local(en).scl.x = en.distort[0].saved
-            en.distort[0].state = .Hold
+            tt.local(en).scl[i] -= en.distort[i].rate
+            if tt.local(en).scl[i] <= en.distort[i].target
+            {
+              tt.local(en).scl[i] = en.distort[i].target
+              en.distort[i].state = .Return
+            }
+          }
+
+        case .Return:
+          if distort_up
+          {
+            tt.local(en).scl[i] -= en.distort[i].rate
+            if tt.local(en).scl[i] <= en.distort[i].saved
+            {
+              tt.local(en).scl[i] = en.distort[i].saved
+              en.distort[i].state = .Hold
+            }
+          }
+          else
+          {
+            tt.local(en).scl[i] += en.distort[i].rate
+            if tt.local(en).scl[i] >= en.distort[i].saved
+            {
+              tt.local(en).scl[i] = en.distort[i].saved
+              en.distort[i].state = .Hold
+            }
           }
         }
       }
+    }
 
-      distort_up = en.distort[1].target > en.distort[1].saved
-      switch en.distort[1].state
+    // - Fade ---
+    {
+      for i in 0..<2
       {
-      case .Hold:
+        prop: ^[4]f32 = (i == 0) ? &en.color : &en.tint
 
-      case .Distort:
-        if distort_up
+        switch en.fade[i].state
         {
-          tt.local(en).scl.y += en.distort[1].rate
-          if tt.local(en).scl.y >= en.distort[1].target
-          {
-            tt.local(en).scl.y = en.distort[1].target
-            en.distort[1].state = .Return
-          }
-        }
-        else
-        {
-          tt.local(en).scl.y -= en.distort[1].rate
-          if tt.local(en).scl.y <= en.distort[1].target
-          {
-            tt.local(en).scl.y = en.distort[1].target
-            en.distort[1].state = .Return
-          }
-        }
+        case .Hold:
 
-      case .Return:
-        if distort_up
-        {
-          tt.local(en).scl.y -= en.distort[1].rate
-          if tt.local(en).scl.y <= en.distort[1].saved
+        case .Fade:
+          if en.fade[i].rate > 0
           {
-            tt.local(en).scl.y = en.distort[1].saved
-            en.distort[1].state = .Hold
+            prop.r = vmath.lerp(prop.r, en.fade[i].target.r, en.fade[i].rate) if .R in en.fade[i].comps else prop.r
+            prop.g = vmath.lerp(prop.g, en.fade[i].target.g, en.fade[i].rate) if .G in en.fade[i].comps else prop.g
+            prop.b = vmath.lerp(prop.b, en.fade[i].target.b, en.fade[i].rate) if .B in en.fade[i].comps else prop.b
+            prop.a = vmath.lerp(prop.a, en.fade[i].target.a, en.fade[i].rate) if .A in en.fade[i].comps else prop.a
           }
-        }
-        else
-        {
-          tt.local(en).scl.y += en.distort[1].rate
-          if tt.local(en).scl.y >= en.distort[1].saved
+          else
           {
-            tt.local(en).scl.y = en.distort[1].saved
-            en.distort[1].state = .Hold
+            prop.r = en.fade[i].target.r if .R in en.fade[i].comps else prop.r
+            prop.g = en.fade[i].target.g if .G in en.fade[i].comps else prop.g
+            prop.b = en.fade[i].target.b if .B in en.fade[i].comps else prop.b
+            prop.a = en.fade[i].target.a if .A in en.fade[i].comps else prop.a
+          }
+
+          // if .R not_in en.fade[i].comps || prop.r == en.fade[i].target.r &&
+          //    .G not_in en.fade[i].comps || prop.g == en.fade[i].target.g &&
+          //    .B not_in en.fade[i].comps || prop.b == en.fade[i].target.b &&
+          //    .A not_in en.fade[i].comps || prop.a == en.fade[i].target.a
+          // {
+          //   en.fade[i].state = .Return
+          //   println("Returning!")
+          // }
+
+        case .Return:
+          if en.fade[i].rate > 0
+          {
+            prop.r = vmath.lerp(prop.r, en.fade[i].saved.r, en.fade[i].rate) if .R in en.fade[i].comps else prop.r
+            prop.g = vmath.lerp(prop.g, en.fade[i].saved.g, en.fade[i].rate) if .G in en.fade[i].comps else prop.g
+            prop.b = vmath.lerp(prop.b, en.fade[i].saved.b, en.fade[i].rate) if .B in en.fade[i].comps else prop.b
+            prop.a = vmath.lerp(prop.a, en.fade[i].saved.a, en.fade[i].rate) if .A in en.fade[i].comps else prop.a
+          }
+          else
+          {
+            prop.r = en.fade[i].saved.r if .R in en.fade[i].comps else prop.r
+            prop.g = en.fade[i].saved.g if .G in en.fade[i].comps else prop.g
+            prop.b = en.fade[i].saved.b if .B in en.fade[i].comps else prop.b
+            prop.a = en.fade[i].saved.a if .A in en.fade[i].comps else prop.a
+          }
+
+          if .R not_in en.fade[i].comps || prop.r == en.fade[i].saved.r &&
+             .G not_in en.fade[i].comps || prop.g == en.fade[i].saved.g &&
+             .B not_in en.fade[i].comps || prop.b == en.fade[i].saved.b &&
+             .A not_in en.fade[i].comps || prop.a == en.fade[i].saved.a
+          {
+            en.fade[i].state = .Hold
           }
         }
       }
@@ -894,7 +931,7 @@ game_render :: proc(gm: ^Game)
     tile := &gm.tiles[tile_idx]
     if tile.sprite != .Nil
     {
-      pos := array_cast(tile_coord_from_idx(tile_idx), f32)
+      pos := cast(v2f32) tile_coord_from_idx(tile_idx)
       pos *= TILE_SIZE
       // pos += ({REGION_SPAN, REGION_SPAN}) * v2f32(region_coord)
       pos += {TILE_SIZE/2.0, TILE_SIZE/2.0}
@@ -994,23 +1031,14 @@ interpolate_games :: proc(curr_gm, prev_gm, res_gm: ^Game, alpha: f32)
 
     if curr_en.gen == prev_en.gen && curr_en.flags.interpolate
     {
-      tt.set_global_pos(res_gm.entities[i],
-                        vmath.lerp(tt.global_pos(prev_en, prev_tt),
-                                   tt.global_pos(curr_en, curr_tt),
-                                   alpha),
-                        &res_gm.transform_tree)
+      lerped_pos := vmath.lerp(tt.global_pos(prev_en, prev_tt), tt.global_pos(curr_en, curr_tt), alpha)
+      tt.set_global_pos(res_gm.entities[i], lerped_pos, &res_gm.transform_tree)
+      
+      lerped_scl := vmath.lerp(tt.global_scl(prev_en, prev_tt), tt.global_scl(curr_en, curr_tt), alpha)
+      tt.set_global_scl(res_gm.entities[i], lerped_scl, &res_gm.transform_tree)
 
-      tt.set_global_scl(res_gm.entities[i],
-                        vmath.lerp(tt.global_scl(prev_en, prev_tt),
-                                   tt.global_scl(curr_en, curr_tt),
-                                   alpha),
-                        &res_gm.transform_tree)
-
-      tt.set_global_rot(res_gm.entities[i],
-                        vmath.lerp_angle(tt.global_rot(prev_en, prev_tt),
-                                         tt.global_rot(curr_en, curr_tt),
-                                         alpha),
-                        &res_gm.transform_tree)
+      lerped_rot := vmath.lerp_angle(tt.global_rot(prev_en, prev_tt), tt.global_rot(curr_en, curr_tt), alpha)
+      tt.set_global_rot(res_gm.entities[i], lerped_rot, &res_gm.transform_tree)
     }
   }
 
@@ -1024,23 +1052,14 @@ interpolate_games :: proc(curr_gm, prev_gm, res_gm: ^Game, alpha: f32)
 
       if entity_is_same(curr_den^, prev_den^) && curr_den.flags.interpolate
       {
-        tt.set_global_pos(res_gm.debug_entities[i],
-                          vmath.lerp(tt.global_pos(prev_den, prev_tt),
-                                     tt.global_pos(curr_den, curr_tt),
-                                     alpha),
-                          &res_gm.transform_tree)
+        lerped_pos := vmath.lerp(tt.global_pos(prev_den, prev_tt), tt.global_pos(curr_den, curr_tt), alpha)
+        tt.set_global_pos(res_gm.debug_entities[i], lerped_pos, &res_gm.transform_tree)
+        
+        lerped_scl := vmath.lerp(tt.global_scl(prev_den, prev_tt), tt.global_scl(curr_den, curr_tt), alpha)
+        tt.set_global_scl(res_gm.debug_entities[i], lerped_scl, &res_gm.transform_tree)
 
-        tt.set_global_scl(res_gm.debug_entities[i],
-                          vmath.lerp(tt.global_scl(prev_den, prev_tt),
-                                     tt.global_scl(curr_den, curr_tt),
-                                     alpha),
-                          &res_gm.transform_tree)
-
-        tt.set_global_rot(res_gm.debug_entities[i],
-                          vmath.lerp_angle(tt.global_rot(prev_den, prev_tt),
-                                           tt.global_rot(curr_den, curr_tt),
-                                           alpha),
-                          &res_gm.transform_tree)
+        lerped_rot := vmath.lerp_angle(tt.global_rot(prev_den, prev_tt), tt.global_rot(curr_den, curr_tt), alpha)
+        tt.set_global_rot(res_gm.debug_entities[i], lerped_rot, &res_gm.transform_tree)
       }
     }
   }
@@ -1051,9 +1070,7 @@ interpolate_games :: proc(curr_gm, prev_gm, res_gm: ^Game, alpha: f32)
     curr_par := &curr_gm.particles[i]
     prev_par := &prev_gm.particles[i]
 
-    if curr_par.gen == prev_par.gen              &&
-       curr_par.props >= {.Active, .Interpolate} &&
-       prev_par.props >= {.Active}
+    if curr_par.gen == prev_par.gen && curr_par.props >= {.Active, .Interpolate} && prev_par.props >= {.Active}
     {
       res_gm.particles[i].pos = vmath.lerp(prev_par.pos, curr_par.pos, alpha)
       res_gm.particles[i].scl = vmath.lerp(prev_par.scl, curr_par.scl, alpha)
@@ -1264,7 +1281,7 @@ set_active_zone :: proc(zone: Zone_Name, regen := false)
   {
     tt.set_global_pos(player, {30, 30})
   }
-  
+
   // TODO(dg): Only touch active entities?
   for &en in gm.entities do if entity_is_valid(en)
   {
@@ -1359,6 +1376,14 @@ Entity :: struct
     rate:            f32,
     state:           enum{Hold, Distort, Return},
   },
+  fade:              [2]struct
+  {
+    saved:           v4f32,
+    target:          v4f32,
+    rate:            f32,
+    state:           enum{Hold, Fade, Return},
+    comps:           bit_set[enum{R, G, B, A}],
+  },
   equipped:          struct
   {
     weapon_kind:     Weapon_Kind,
@@ -1386,6 +1411,8 @@ Entity_Prop :: enum
   Sneaking,
   Flee_Noise,
   Flash_Color,
+  Collectable,
+  Highlighted,
 }
 
 Entity_State :: enum
@@ -1566,7 +1593,7 @@ defer_entity_spawn :: proc(en: ^Entity)
     node.flags.update = false
     node.flags.render = false
     node.props += {.Marked_For_Spawn}
-    
+
     for child in node.children
     {
       if entity_is_valid(entity_from_ref(child))
@@ -1592,6 +1619,244 @@ kill_entity :: proc(en: ^Entity, kill_children := true)
     }
   }
 }
+
+setup_entity :: proc(en: ^Entity, deferred: bool)
+{
+  en.tint = {1, 1, 1, 1}
+
+  if deferred
+  {
+    defer_entity_spawn(en)
+  }
+  else
+  {
+    en.flags.update = true
+    en.flags.render = true
+  }
+}
+
+spawn_player :: proc() -> ^Entity
+{
+  gm := get_active_game()
+
+  player := alloc_entity(gm)
+  setup_entity(player, true)
+
+  desc := &res.player
+
+  player.z_layer = .Player
+  player.props += {.Is_Player, .Interpolate}
+  player.movement_speed = res.player.speed
+  player.animation.data = desc.animations
+  player.col_layer = .Player
+  player.collider = Circle{
+    radius = 6,
+  }
+
+  entity_set_state(player, .Idle)
+  spawn_shadow(player, .Shadow_1, {0, -0.5})
+
+  // - Weapon ---
+  {
+    weapon := alloc_entity(gm)
+    setup_entity(weapon, true)
+
+    weapon.props += {.Interpolate}
+    weapon.z_layer = .Player
+    weapon.z_index = 1
+    weapon.shot_point = tt.alloc_transform(&gm.transform_tree, weapon)
+
+    tt.set_parent(weapon, player)
+
+    // - Muzzle flash ---
+    {
+      muzzle_flash := alloc_entity(gm)
+      setup_entity(muzzle_flash, false)
+
+      muzzle_flash.props += {.Interpolate}
+      muzzle_flash.z_layer = .Player
+      muzzle_flash.z_index = 2
+      muzzle_flash.flags.render = false
+      muzzle_flash.animation.data[.Idle] = .Muzzle_Flash
+
+      tt.set_parent(muzzle_flash, weapon)
+      entity_attach_child(weapon, muzzle_flash)
+    }
+
+    entity_attach_child(player, weapon)
+  }
+
+  entity_equip_weapon(player, .Revolver)
+  entity_set_zone_change_op(player, .Move)
+
+  gm.special_entities[.Player] = player
+
+  return player
+}
+
+spawn_creature :: proc(kind: Creature_Kind, pos: v2f32, deferred := false) -> ^Entity
+{
+  gm := get_active_game()
+
+  creature := alloc_entity(gm)
+  setup_entity(creature, deferred)
+
+  desc := &res.creatures[kind]
+
+  creature.creature_kind = kind
+  creature.props += {.Interpolate, .Flee_Noise}
+  creature.z_layer = .Enemy
+  creature.col_layer = .Enemy
+  creature.resolve_collision = entity_resolve_collision_creature
+  creature.health = desc.health
+  creature.animation.data = desc.animations
+  creature.collider = res.creatures[kind].collider
+
+  tt.local(creature).pos = pos
+
+  switch kind
+  {
+  case .Nil:
+
+  case .Deer:
+    entity_set_state(creature, .Wander)
+    spawn_shadow(creature, .Shadow_3, {0, -1.5})
+
+  case .Rabbit:
+    entity_set_state(creature, .Wander)
+    spawn_shadow(creature, .Shadow_2, {0.5, -1.5})
+
+  case .Squirrel:
+    entity_set_state(creature, .Idle)
+    spawn_shadow(creature, .Shadow_1, {-0.5, -1.5})
+  }
+
+  return creature
+}
+
+spawn_projectile :: proc(kind: Projectile_Kind, pos: v2f32, deferred := false) -> ^Entity
+{
+  gm := get_active_game()
+
+  projectile := alloc_entity(gm)
+  setup_entity(projectile, deferred)
+
+  projectile.projectile_kind = kind
+  projectile.props += {.Interpolate, .Kill_After_Time}
+  projectile.z_layer = .Projectile
+  projectile.animation.data[.Idle] = .Bullet
+  projectile.col_layer = .Player_Projectile
+  projectile.resolve_collision = entity_resolve_collision_projectile
+  projectile.collider = Circle{
+    radius = 3,
+  }
+
+  tt.local(projectile).pos = pos
+
+  return projectile
+}
+
+spawn_item :: proc(kind: Item_Kind, pos: v2f32, deferred := false) -> ^Entity
+{
+  gm := get_active_game()
+
+  item := alloc_entity(gm)
+  setup_entity(item, deferred)
+
+  desc := &res.items[kind]
+
+  item.item_kind = kind
+  item.props += {.Interpolate}
+  item.z_index = 100
+  item.col_layer = .Item
+  item.animation.data = desc.animations
+  item.resolve_collision = entity_resolve_collision_item
+  item.collider = Circle{
+    radius = 4,
+  }
+
+  tt.local(item).pos = pos
+
+  entity_set_state(item, .Bob)
+
+  return item
+}
+
+spawn_corpse :: proc(owner: ^Entity, deferred := false) -> ^Entity
+{
+  assert(owner.creature_kind != .Nil)
+
+  gm := get_active_game()
+  corpse := alloc_entity(gm)
+  setup_entity(corpse, deferred)
+
+  creature_desc := &res.creatures[owner.creature_kind]
+
+  corpse.props += {.Interpolate}
+  corpse.props += owner.props & {.Flip_H}
+  corpse.animation.data[.Idle] = creature_desc.corpse
+
+  tt.local(corpse).pos = tt.global_pos(owner) + {0, 0}
+
+  // - Blood pool ---
+  {
+    blood_pool := alloc_entity(gm)
+    setup_entity(blood_pool, false)
+
+    blood_pool.props += {.Interpolate}
+    blood_pool.z_index = -1
+    blood_pool.animation.data[.Idle] = .Blood_Pool_1
+    blood_pool.animation.data[.Expand] = creature_desc.blood_pool
+
+    entity_play_animation(blood_pool, .Expand, looping=false)
+
+    entity_attach_child(corpse, blood_pool)
+    tt.attach_child(corpse, blood_pool)
+  }
+
+  return corpse
+}
+
+spawn_shadow :: proc(owner: ^Entity, sprite: Sprite_Name, offet: v2f32, deferred := false) -> ^Entity
+{
+  gm := get_active_game()
+
+  shadow := alloc_entity(gm)
+  setup_entity(shadow, deferred)
+
+  shadow.props += {.Interpolate}
+  shadow.color = {0.2, 0.2, 0.2, 0}
+  shadow.tint.a = 0.5
+  shadow.animation.data[.Idle] = sprite
+  shadow.z_index = -999
+  tt.local(shadow).pos = offet
+
+  tt.set_parent(shadow, owner)
+  entity_attach_child(owner, shadow)
+
+  return shadow
+}
+
+spawn_entity :: proc(name: Entity_Name, pos: v2f32, deferred := false, sprite := Sprite_Name.Nil) -> ^Entity
+{
+  gm := get_active_game()
+
+  en := alloc_entity(gm)
+  setup_entity(en, deferred)
+
+  en.sprite = res.entities[name].sprites[0]
+  en.props += res.entities[name].props
+
+  if sprite != nil
+  {
+    en.sprite = sprite
+  }
+
+  tt.local(en).pos = pos
+
+  return en
+}
+
 
 entity_attach_child :: proc(parent, child: ^Entity) -> (ok: bool)
 {
@@ -1795,15 +2060,24 @@ entity_move_to_point :: proc(en: ^Entity, p: v2f32, speed: f32, flip := true) ->
 
 entity_distort :: proc(en: ^Entity, axis: enum{Width, Height}, target, rate: f32)
 {
-  en.distort[axis].rate = rate
-  en.distort[axis].target = target
   en.distort[axis].saved = tt.local(en).scl.x
+  en.distort[axis].target = target
+  en.distort[axis].rate = rate
   en.distort[axis].state = .Distort
 }
 
-entity_tint :: proc(en: ^Entity, tint: v4f32, rate: f32)
+entity_start_fade :: proc(en: ^Entity, prop: enum{Color, Tint}, comps: bit_set[enum{R, G, B, A}], target: v4f32, rate: f32)
 {
+  en.fade[prop].saved = (prop == .Color) ? en.color : en.tint
+  en.fade[prop].target = target
+  en.fade[prop].rate = rate
+  en.fade[prop].state = .Fade
+  en.fade[prop].comps = comps
+}
 
+entity_stop_fade :: proc(en: ^Entity, prop: enum{Color, Tint})
+{
+  en.fade[prop].state = .Return
 }
 
 entity_equip_weapon :: proc(en: ^Entity, kind: Weapon_Kind)
@@ -1869,7 +2143,7 @@ entity_set_zone_change_op :: proc(en: ^Entity, op: type_of(Entity{}.flags.zone_c
   {
     node := entity_from_ref(node) or_continue
     node.flags.zone_change_op = op
-    
+
     for child in node.children
     {
       if entity_is_valid(entity_from_ref(child))
@@ -1927,14 +2201,23 @@ creature_state_wander :: proc(en: ^Entity, using ctx: ^Entity_State_Context)
   {
   case .Choose:
     point: [2]f32
-    for
+    attempts: int
+    for attempts < 100
     {
-      point = array_cast(rand.range_2i32(creature_desc.wander_range), f32)
+      point = cast(v2f32) rand.range_2i32(creature_desc.wander_range)
       point.x *= -1 if rand.boolean() else 1
       point.y *= -1 if rand.boolean() else 1
       point += en_pos
 
       if point_in_zone_bounds(point, gm.active_zone) do break
+
+      attempts += 1
+    }
+
+    if attempts >= 100
+    {
+      log.warn("[game]: Maximum attempts reached at selecting creature wander point!\n")
+      point = wander.point
     }
 
     wander.point = point
@@ -1984,7 +2267,7 @@ creature_state_flee :: proc(en: ^Entity, using ctx: ^Entity_State_Context)
     point: [2]f32
     for
     {
-      point = array_cast(rand.range_2i32(creature_desc.flee_range), f32)
+      point = cast(v2f32) rand.range_2i32(creature_desc.flee_range)
       point.x *= -1 if rand.boolean() else 1
       point.y *= -1 if rand.boolean() else 1
       point += en_pos
@@ -2103,48 +2386,6 @@ tile_coord_from_idx :: proc(idx: int) -> Tile_Coord
   return {f32(idx % (zone.width / TILE_SIZE)), f32(idx / (zone.width / TILE_SIZE))}
 }
 
-// region_idx_from_coord :: proc(coord: Region_Coord) -> int
-// {
-//   return int(coord.x + coord.y * 3)
-// }
-
-// region_coord_from_idx :: proc(idx: int) -> Region_Coord
-// {
-//   return {f32(idx % 3), f32(idx / 3)}
-// }
-
-// region_from_world_pos :: proc(pos: v2f32) -> Region_Coord
-// {
-//   return {
-//     f32(pos.x / REGION_SPAN),
-//     f32(pos.y / REGION_SPAN),
-//   }
-// }
-
-// region_pos_from_world_pos :: proc(pos: v2f32) -> v2f32
-// {
-//   gm := get_current_game()
-//   region_pos := region_pos_to_world_pos({0, 0})
-//   return {
-//     region_pos.x != 0 ? f32(int(pos.x) % int(region_pos.x)) : pos.x,
-//     region_pos.y != 0 ? f32(int(pos.y) % int(region_pos.y)) : pos.y,
-//   }
-// }
-
-// region_pos_to_world_pos :: proc(pos: v2f32, region := Region_Coord{-1, -1}) -> v2f32
-// {
-//   // gm := get_current_game()
-//   zone := get_active_zone()
-
-//   region := region
-//   if region == {-1, -1}
-//   {
-//     region = gm.active_zone
-//   }
-
-//   return pos + {f32(zone.size), f32(zone.size)} * v2f32(region)
-// }
-
 point_in_zone_bounds :: proc(point: v2f32, region: Zone_Name) -> bool
 {
   gm := get_active_game()
@@ -2156,6 +2397,26 @@ point_in_zone_bounds :: proc(point: v2f32, region: Zone_Name) -> bool
   }
 
   return point_in_bounds(point, bounds)
+}
+
+generate_clump :: proc(kinds: []Entity_Name, count, radius: i32)
+{
+  gm := get_active_game()
+  zone := res.zones[gm.active_zone]
+
+  radius := min(radius, i32(zone.width/2), i32(zone.height/2))
+
+  bounds := [2]Range(i32){
+    {radius, i32(zone.width) - radius},
+    {radius, i32(zone.height) - radius},
+  }
+  origin := rand.range_2i32(bounds)
+
+  for _ in 0..<count
+  {
+    offset := rand.range_2i32({{-radius, radius}, {-radius, radius}})
+    spawn_entity(rand.choice_slice(kinds[:]), v2f32(origin + offset))
+  }
 }
 
 generate_wilderness :: proc()
@@ -2190,25 +2451,36 @@ generate_wilderness :: proc()
 
   for _ in 0..<8
   {
-    spawn_grass_clump(16, 32)
+    @(static)
+    grasses := [?]Entity_Name{.Grass}
+    generate_clump(grasses[:], 16, 32)
   }
 
   for _ in 0..<4
   {
-    spawn_lavender_clump(8, 16)
+    @(static)
+    lavenders := [?]Entity_Name{.Lavender}
+    generate_clump(lavenders[:], 8, 16)
+  }
+
+  for _ in 0..<4
+  {
+    @(static)
+    flowers := [?]Entity_Name{.Chamomile, .Sunflower}
+    generate_clump(flowers[:], 8, 16)
   }
 
   for _ in 0..<64
   {
     bounds := [2]Range(f32){
-      {0, f32(zone.width)}, 
+      {0, f32(zone.width)},
       {0, f32(zone.height)},
     }
 
     pos := rand.range_2f32(bounds)
-    choice := cast(Sprite_Name) rand.range_i32({i32(Sprite_Name.Chamomile), i32(Sprite_Name.Red_Mushroom)})
+    choice := cast(Entity_Name) rand.range_i32({i32(Entity_Name.Chamomile), i32(Entity_Name.Red_Mushroom)})
 
-    spawn_decoration(choice, pos)
+    spawn_entity(choice, pos)
   }
 
   unpause_sound_group(.Ambience)
@@ -2324,4 +2596,88 @@ debug_circle :: proc(
   result.sprite = .Circle
 
   return result
+}
+
+
+// Timer /////////////////////////////////////////////////////////////////////////////////
+
+
+Timer :: struct
+{
+  end_time: f32,
+  ticking:  bool,
+}
+
+timer_start :: proc(timer: ^Timer, duration: f32)
+{
+  timer.end_time = get_active_game().t + duration
+  timer.ticking = true
+}
+
+timer_timeout :: proc(timer: ^Timer) -> bool
+{
+  return timer.ticking && get_active_game().t >= timer.end_time
+}
+
+timer_remaining :: proc(timer: ^Timer) -> f32
+{
+  return timer.end_time - get_active_game().t
+}
+
+
+// Input ///////////////////////////////////////////////////////////////////////////////////
+
+key_down :: platform.key_down
+key_up   :: platform.key_up
+
+@(require_results)
+key_just_down :: proc(key: platform.Key_Kind) -> bool
+{
+  return key_down(key) && !get_active_game().prev_keys[key]
+}
+
+@(require_results)
+key_just_up :: proc(key: platform.Key_Kind) -> bool
+{
+  return key_up(key) && get_active_game().prev_keys[key]
+}
+
+mouse_btn_down :: platform.mouse_btn_down
+mouse_btn_up   :: platform.mouse_btn_up
+
+@(require_results)
+mouse_btn_just_down :: proc(btn: platform.Mouse_Btn_Kind) -> bool
+{
+  return mouse_btn_down(btn) && !get_active_game().prev_mouse_btns[btn]
+}
+
+@(require_results)
+mouse_btn_just_up :: proc(btn: platform.Mouse_Btn_Kind) -> bool
+{
+  return mouse_btn_up(btn) && get_active_game().prev_mouse_btns[btn]
+}
+
+input_down :: platform.input_down
+input_up   :: platform.input_up
+
+@(require_results)
+input_just_down :: proc(input: platform.Input_Source) -> bool
+{
+  switch v in input
+  {
+  case platform.Key_Kind:       return key_just_down(v)
+  case platform.Mouse_Btn_Kind: return mouse_btn_down(v)
+  case:                         return false
+  }
+}
+
+@(require_results)
+input_just_up :: proc(input: platform.Input_Source) -> bool
+{
+  switch v in input
+  {
+  case platform.Key_Kind:       return key_just_up(v)
+  case platform.Mouse_Btn_Kind: return mouse_btn_just_up(v)
+  case:                         return false
+  }
 }

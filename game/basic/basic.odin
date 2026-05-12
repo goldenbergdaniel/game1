@@ -35,19 +35,6 @@ approx :: #force_inline proc "contextless" (val, tar, tol: $T) -> T where intrin
 }
 
 @(require_results)
-array_cast :: #force_inline proc "contextless" (arr: $A/[$N]$T, $E: typeid) -> [N]E
-{
-  result: [N]E
-
-	for i in 0..<N
-  {
-		result[i] = cast(E) arr[i]
-	}
-
-	return result
-}
-
-@(require_results)
 rad_from_deg :: #force_inline proc(deg: $T) -> T where intrinsics.type_is_float(T)
 {
   return deg * PI / 180.0

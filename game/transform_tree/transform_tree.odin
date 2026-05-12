@@ -1,6 +1,7 @@
 package transform_tree
 
 import "core:math"
+// import "core:fmt"
 
 // The float type to use. Default is `f32`
 float :: f32
@@ -17,7 +18,7 @@ Transform_Data :: struct
     position:  [2]float,
     pos:       [2]float,
   },
-  using _:     struct  #raw_union
+  using _:     struct #raw_union
   {
     scale:     [2]float,
     scl:       [2]float,
@@ -29,7 +30,7 @@ Transform_Data :: struct
   },
   _prev_free:  ^Transform_Data,
   _ref:        Transform,
-  _parent_ref: Transform,
+  _parent_ref: Transform, 
 }
 
 Transform_Tree :: struct
@@ -48,7 +49,7 @@ create_tree :: proc(n: int, allocator := context.allocator) -> Transform_Tree
   result.data = make([dynamic]Transform_Data, 1, n+1, allocator)
   return result
 }
-// import "core:fmt"
+
 copy_tree :: proc(dst, src: ^Transform_Tree)
 {
   temp := dst.data
@@ -111,7 +112,7 @@ alloc_transform_parent :: proc(tree: ^Transform_Tree, parent: Transform) -> Tran
   {
     append(&tree.data, Transform_Data{})
     idx := len(tree.data) - 1
-    result = Transform{u32(idx)}
+    result.id = u32(idx)
     tree.data[idx]._ref = result
     tree.data[idx]._parent_ref = parent
     tree.data[idx].scale = {1, 1}
