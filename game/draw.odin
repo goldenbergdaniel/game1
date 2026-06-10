@@ -76,6 +76,8 @@ draw_text :: proc(
                                              {f32(glyph.width), f32(glyph.height)})
 
     offset := pos + {cursor.x + glyph.bearing.x * size, cursor.y - glyph.bearing.y * size}
+    offset.y += 10 * line_height * size
+
     xform := vmath.translation_3x3f(offset)
     cursor += glyph.advance * size
 
@@ -86,11 +88,60 @@ draw_text :: proc(
     p3 := xform * v3f32{1, 1, 1}
     p4 := xform * v3f32{0, 1, 1}
 
-    render.push_vertex({p1.xy, {1, 1, 1, 1}, color, tl, u32(1)})
-    render.push_vertex({p2.xy, {1, 1, 1, 1}, color, tr, u32(1)})
-    render.push_vertex({p3.xy, {1, 1, 1, 1}, color, br, u32(1)})
-    render.push_vertex({p4.xy, {1, 1, 1, 1}, color, bl, u32(1)})
+    render.push_vertex({p1.xy, {1, 1, 1, 1}, color, tl, 1})
+    render.push_vertex({p2.xy, {1, 1, 1, 1}, color, tr, 1})
+    render.push_vertex({p3.xy, {1, 1, 1, 1}, color, br, 1})
+    render.push_vertex({p4.xy, {1, 1, 1, 1}, color, bl, 1})
     render.push_rectangle_indices()
+  }
+}
+
+draw_decorated_text :: proc(
+  text:        ui.Decorated_String,
+  pos:         v2f32,
+  size:        f32 = 1,
+  line_height: f32 = 1,
+){
+  cursor: v2f32
+
+  for chunk in text.chunks
+  {
+    color := v4f32{chunk.color.r, chunk.color.g, chunk.color.b, 0}
+    {
+      for r in chunk.text
+      {
+        if r == '\n'
+        {
+          cursor.x = 0
+          cursor.y += 15 * line_height * size
+          continue
+        }
+
+        glyph := ui.glyph_from_rune(r)
+        tl, tr, br, bl := render.uv_from_texture(&res.textures[.Glyph_Atlas], 
+                                                v2f32(glyph.coord), 
+                                                {f32(glyph.width), f32(glyph.height)})
+
+        offset := pos + {cursor.x + glyph.bearing.x * size, cursor.y - glyph.bearing.y * size}
+        offset.y += 10 * line_height * size
+
+        xform := vmath.translation_3x3f(offset)
+        cursor += glyph.advance * size
+
+        xform *= vmath.scale_3x3f({f32(glyph.width), f32(glyph.height)} * size)
+
+        p1 := xform * v3f32{0, 0, 1}
+        p2 := xform * v3f32{1, 0, 1}
+        p3 := xform * v3f32{1, 1, 1}
+        p4 := xform * v3f32{0, 1, 1}
+
+        render.push_vertex({p1.xy, {1, 1, 1, 1}, color, tl, 1})
+        render.push_vertex({p2.xy, {1, 1, 1, 1}, color, tr, 1})
+        render.push_vertex({p3.xy, {1, 1, 1, 1}, color, br, 1})
+        render.push_vertex({p4.xy, {1, 1, 1, 1}, color, bl, 1})
+        render.push_rectangle_indices()
+      }
+    }
   }
 }
 

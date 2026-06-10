@@ -102,9 +102,11 @@ Mouse_Btn_Kind :: enum
   Left,
   Right,
   Middle,
+  Side1,
+  Side2,
 }
 
-global_input: ^Input = &{}
+input: ^Input = &{}
 
 sdl_key_map := #partial #sparse [sdl.Scancode]Key_Kind{
 	.A 				 		= .A,
@@ -187,6 +189,8 @@ sdl_mouse_btn_map := [?]Mouse_Btn_Kind{
 	1 = .Left,
 	2 = .Middle,
 	3 = .Right,
+  4 = .Side1,
+  5 = .Side2,
 }
 
 sdl_translate_event :: proc(sdl_event: ^sdl.Event) -> Event
@@ -196,39 +200,41 @@ sdl_translate_event :: proc(sdl_event: ^sdl.Event) -> Event
 	#partial switch sdl_event.type
 	{
 	case .QUIT: 
-		result = Event{kind=.Quit}
+		result = Event{
+      kind=.Quit,
+    }
 
   case .KEY_DOWN:
-    global_input.key_down = true
+    input.key_down = true
 		result = Event{
 			kind = .Key_Down, 
 			key_kind = sdl_key_map[sdl_event.key.scancode],
 		}
 
 	case .KEY_UP:
-    global_input.key_down = false
+    input.key_down = false
 		result = Event{
 			kind = .Key_Up, 
 			key_kind = sdl_key_map[sdl_event.key.scancode],
 		}
 
 	case .MOUSE_BUTTON_DOWN:
-    global_input.mouse_btn_down = true
+    input.mouse_btn_down = true
 		result = Event{
 			kind = .Mouse_Btn_Down, 
 			mouse_btn_kind = sdl_mouse_btn_map[sdl_event.button.button],
 		}
 
 	case .MOUSE_BUTTON_UP:
-    global_input.mouse_btn_down = false
+    input.mouse_btn_down = false
 		result = Event{
 			kind = .Mouse_Btn_Up, 
 			mouse_btn_kind = sdl_mouse_btn_map[sdl_event.button.button],
 		}
 
   case .MOUSE_WHEEL:
-    global_input.mouse_scroll.x += sdl_event.wheel.x
-    global_input.mouse_scroll.y += sdl_event.wheel.y
+    input.mouse_scroll.x += sdl_event.wheel.x
+    input.mouse_scroll.y += sdl_event.wheel.y
 	}
 
 	return result
@@ -237,47 +243,47 @@ sdl_translate_event :: proc(sdl_event: ^sdl.Event) -> Event
 @(require_results)
 any_key_down :: proc() -> bool
 {
-  return global_input.key_down
+  return input.key_down
 }
 
 @(require_results)
 any_mouse_btn_down :: proc() -> bool
 {
-  return global_input.mouse_btn_down
+  return input.mouse_btn_down
 }
 
 @(require_results)
 key_down :: proc(key: Key_Kind) -> bool
 {
-  return global_input.keys[key]
+  return input.keys[key]
 }
 
 @(require_results)
 key_up :: proc(key: Key_Kind) -> bool
 {
-  return !global_input.keys[key]
+  return !input.keys[key]
 }
 
 consume_key :: proc(key: Key_Kind)
 {
-  global_input.keys[key] = false
+  input.keys[key] = false
 }
 
 @(require_results)
 mouse_btn_down :: proc(btn: Mouse_Btn_Kind) -> bool
 {
-  return global_input.mouse_btns[btn]
+  return input.mouse_btns[btn]
 }
 
 @(require_results)
 mouse_btn_up :: proc(btn: Mouse_Btn_Kind) -> bool
 {
-  return !global_input.mouse_btns[btn]
+  return !input.mouse_btns[btn]
 }
 
 consume_mouse_btn :: proc(btn: Mouse_Btn_Kind)
 {
-  global_input.mouse_btns[btn] = false
+  input.mouse_btns[btn] = false
 }
 
 @(require_results)

@@ -1,85 +1,211 @@
 package game
 
-import "core:math"
 import "basic/mem"
-import "basic/vmath"
+import vmath "basic/vmath"
 import "platform"
 import "render"
 import "ui"
 
-box_counters: [3]int
+box_counters: [5]int
+show_options: bool
 
 update_gui_test :: proc()
 {
-  @(static)
-  prev_keys: [platform.Key_Kind]bool
-
-  @(static)
-  prev_mouse_btns: [platform.Mouse_Btn_Kind]bool
-
-  cursor_pos := platform.get_cursor_position()
-  window_size := platform.window_get_size(&user.window)
-
   ui.begin_tree(&global.gui_tree, {
     background_color = {0.1, 0.1, 0.1, 1.0},
-    window_size = window_size, 
-    cursor_pos = cursor_pos,
-    input_down = platform.any_mouse_btn_down(),
+    window_size = platform.window_get_size(&user.window), 
+    cursor_pos = platform.get_cursor_position(),
+    mouse_btn_down = {
+      .Left = platform.input.mouse_btns[.Left],
+      .Right = platform.input.mouse_btns[.Right],
+      .Middle = platform.input.mouse_btns[.Middle],
+    },
   })
 
-  ui.spacer({.Percent, 0.333}, {.Percent, 1.0})
-  
-  if ui.P(ui.box("Right"))
+  ui.layout_child_width(ui.pct(1.0))
+  ui.layout_child_height(ui.pct(1.0))
+  ui.layout_child_align(.Vertical)
+  ui.layout_child_justify({.Center, nil})
+
+  if platform.key_down(.Escape)
   {
-    ui.layout_size(.Percent, {0.333, 1.0})
-    ui.layout_child_align(.Vertical)
+    show_options = false
+  }
 
-    ui.spacer({.Percent, 1.0}, {.Percent, 0.35})
+  if !show_options
+  {
+    ui_main_menu()
+  }
+  else if show_options
+  {
+    ui_options_menu()
+  }
 
-    N : f32 : 3.0
-    for i in 0..<int(N) do if ui.P(ui.image("Box", sprite_id(.UI_Square), idx=i))
-    {
-      ui.layout_width(.Percent, 1)
-      ui.layout_height(.Percent, 0.1)
+  ui.spacer(ui.px(0), ui.pct(0.05))
 
-      if ui.is_hovered()
-      {
-        ui.layout_shade(0.9)
-
-        if ui.P(ui_tooltip(i, cursor_pos))
-        {
-          ui.layout_color({1, 0, 0, 1})
-        }
-      }
-
-      if ui.is_hovered() && platform.mouse_btn_down(.Left)
-      {
-        ui.layout_color({1, 1, 1, 1} * 0.8)
-      }
-
-      if ui.is_hovered() && platform.mouse_btn_down(.Left) && !prev_mouse_btns[.Left]
-      {
-        ui.current_box().counter += 1
-        box_counters[i] = ui.current_box().counter
-      }
-
-      if ui.current_box().counter % 2 == 0
-      {
-        ui.layout_color({f32(i+1)/(N+1), f32(i+1)/(N+1), f32(i+1)/(N+1), 1})
-      }
-      else
-      {
-        ui.layout_color({0, 1, 0, 1})
-      }
-    }
-
-    ui.spacer({.Percent, 1.0}, {.Percent, 0.35})
+  if (ui.P(ui.text("© 2026 Daniel Goldenberg")))
+  {
+    ui.layout_text_size(1)
   }
 
   ui.end_tree()
+}
 
-  prev_keys = platform.global_input.keys
-  prev_mouse_btns = platform.global_input.mouse_btns
+ui_main_menu :: proc()
+{
+  ui.spacer(ui.px(0), ui.pct(0.1))
+  
+  if (ui.P(ui.text("Untitled")))
+  {
+    ui.layout_text_size(8)
+  }
+
+  ui.spacer(ui.px(0), ui.pct(0.1))
+
+  if ui.P(ui.box("MainMenu"))
+  {
+    ui.layout_child_align(.Vertical)
+    ui.layout_child_justify({.Center, nil})
+    ui.layout_height(ui.fit_children())
+
+    for i in 0..<3
+    {
+      @(static)
+      names := [?]string{"Play", "Options", "Quit"}
+
+      button := ui.image(names[i], sprite_id(.UI_Square), idx=i)
+      if ui.P(button)
+      {
+        ui.layout_width(ui.pct(0.3))
+        ui.layout_height(ui.px(70))
+        ui.layout_child_justify({.Center, .Center})
+
+        if ui.P(ui.text(names[i]))
+        {
+          ui.layout_text_size(3)
+        }
+
+        if ui.hovered(button)
+        {
+          ui.layout_shade(1.2)
+        }
+        
+        if ui.just_pressed(button, .Left)
+        {
+          switch names[i]
+          {
+            case "Play":
+              user.screen = .Game
+
+            case "Options":
+              show_options = true
+
+            case "Quit":
+              user.window.should_close = true
+          }
+
+          platform.consume_mouse_btn(.Left)
+        }
+
+        ui.layout_color({0.2, 0.2, 0.2, 1.0})
+      }
+
+      ui.spacer(ui.px(0), ui.px(10))
+    }
+  }
+}
+
+ui_options_menu :: proc()
+{
+  frame_arena := &global.ui_frame_arena
+
+  ui.spacer(ui.px(0), ui.pct(0.05))
+  
+  if (ui.P(ui.text("Options")))
+  {
+    ui.layout_text_size(4)
+  }
+
+  ui.spacer(ui.px(0), ui.pct(0.05))
+
+  if ui.P(ui.box("OptionsMenu"))
+  {
+    ui.layout_child_align(.Vertical)
+    ui.layout_child_justify({.Center, nil})
+    ui.layout_height(ui.fit_children())
+
+    for i in 0..<5
+    {
+      @(static)
+      names := [?]string{"Vsync", "View Bobbing", "Auto-Jump", "Show Debug", "Allow Cheats"}
+
+      button := ui.image(names[i], sprite_id(.UI_Square), idx=i)
+      if ui.P(button)
+      {
+        ui.layout_width(ui.pct(0.4))
+        ui.layout_height(ui.px(60))
+        ui.layout_child_justify({.Center, .Center})
+        ui.layout_color({0.2, 0.2, 0.2, 1.0})
+
+        @(static)
+        states := [2]string{"OFF", "ON"}
+        @(static)
+        colors := [2][3]f32{{0.9, 0.1, 0.1}, {0.1, 0.9, 0.1}}
+
+        button_state := states[0 if box_counters[i] % 2 == 0 else 1]
+        button_color := colors[0 if box_counters[i] % 2 == 0 else 1]
+
+        option_label := ui.create_decorated_string({1, 1, 1}, frame_arena)
+        ui.decorated_string_push(&option_label, names[i])
+        ui.decorated_string_push(&option_label, ": ")
+        ui.decorated_string_push(&option_label, ui.dstr(button_state, color=button_color))
+        if ui.P(ui.text(option_label))
+        {
+          ui.layout_text_size(2)
+        }
+
+        if ui.hovered(button)
+        {
+          ui.layout_shade(1.2)
+          ui_tooltip(i, platform.get_cursor_position())
+        }
+        
+        if ui.just_pressed(button, .Left)
+        {
+          box_counters[i] += 1
+        }
+      }
+
+      ui.spacer(ui.px(0), ui.px(10))
+    }
+  }
+}
+
+ui_tooltip :: proc(i: int, cursor_pos: v2f32) -> ^ui.Box
+{
+  box := ui.box("Tooltip")
+  if ui.P(box)
+  {
+    ui.layout_props({.Floating})
+    ui.layout_offset(cursor_pos + {0, -40})
+    ui.layout_width(ui.fit_children())
+    ui.layout_height(ui.px(40))
+    ui.layout_color({0.4, 0.4, 0.4, 0.9})
+    ui.layout_child_justify({nil, .Center})
+
+    if ui.P(ui.text("This is a tooltip. (%i)", box_counters[i]))
+    {
+      ui.layout_text_size(2)
+    }
+  }
+
+  return box
+}
+
+@(private="file")
+sprite_id :: proc(sprite: Sprite_Name) -> int
+{
+  return cast(int) sprite
 }
 
 render_gui_test :: proc()
@@ -112,12 +238,19 @@ render_gui_test :: proc()
                 color=vmath.concat(box.color.rgb, 0),
                 tint={1, 1, 1, box.color.a})
 
-    if box.text != ""
+    if box.decorated_text.len != 0
+    {
+      draw_decorated_text(text=box.decorated_text, 
+                          pos=box.rect_pos, 
+                          size=box.text_size, 
+                          line_height=1)
+    }
+    else if box.text != ""
     {
       draw_text(text=box.text, 
                 pos=box.rect_pos, 
                 size=box.text_size, 
-                line_height=box.text_line_height,
+                line_height=1,
                 color=box.color)
     }
   }
@@ -125,35 +258,4 @@ render_gui_test :: proc()
   render.end_pass()
 
   mem.arena_clear(&global.ui_frame_arena)
-}
-
-ui_tooltip :: proc(i: int, cursor_pos: [2]f32) -> ^ui.Box
-{
-  box := ui.box("Tooltip")
-  if ui.P(box)  
-  {
-    ui.layout_props({.Floating})
-    ui.layout_offset(cursor_pos + {0, -50})
-    ui.layout_width(.Pixels, 150)
-    ui.layout_height(.Pixels, 50)
-    ui.layout_color({0.7, 0.7, 0.7, 1})
-
-    @(static)
-    roman_numerals := [?]string{"I", "II", "III"}
-
-    if ui.P(ui.text("Box %s: %i", roman_numerals[i], box_counters[i]))
-    {
-      ui.layout_text_size(2)
-      ui.layout_color({1, 1, 1, 0})
-      ui.layout_offset({10, 35})
-    }
-  }
-
-  return box
-}
-
-@(private="file")
-sprite_id :: proc(sprite: Sprite_Name) -> int
-{
-  return cast(int) sprite
 }

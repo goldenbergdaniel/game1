@@ -140,7 +140,7 @@ create_window :: proc(desc: Window_Desc, arena: ^mem.Arena) -> Window
 
 		when false
 		{
-			// log.infof("OpenGL Version: %s", gl.GetString(gl.VERSION))
+			// log.infof("[platform]: OpenGL version: %s", gl.GetString(gl.VERSION))
 			log.infof("[platform]: SDL version: %i\n", sdl.GetVersion())
 			log.infof("[platform]: DearImGui version: %s\n", imgui.GetVersion())
 		}
@@ -228,13 +228,13 @@ window_pump_events :: proc(window: ^Window)
     case .Quit:
       window.should_close = true
     case .Key_Down:
-      global_input.keys[event.key_kind] = true
+      input.keys[event.key_kind] = true
     case .Key_Up:
-      global_input.keys[event.key_kind] = false
+      input.keys[event.key_kind] = false
     case .Mouse_Btn_Down:
-      global_input.mouse_btns[event.mouse_btn_kind] = true
+      input.mouse_btns[event.mouse_btn_kind] = true
     case .Mouse_Btn_Up:
-      global_input.mouse_btns[event.mouse_btn_kind] = false
+      input.mouse_btns[event.mouse_btn_kind] = false
     }
   }
 }
@@ -251,11 +251,7 @@ window_init_imgui :: proc(window: ^Window)
 		window.imio_handle = imgui.GetIO()
 
 	case .Vulkan:
-		// imgui.CreateContext()
-		// imgui.StyleColorsDark()
-		// imgui_sdl.InitForVulkan(sdl_window)
-		// imgui_vk.Init(&{
-		// })
+
 	}
 }
 
@@ -275,12 +271,12 @@ get_cursor_position :: proc() -> [2]f32
 @(require_results)
 get_mouse_scroll :: proc() -> [2]f32
 {
-	return global_input.mouse_scroll
+	return input.mouse_scroll
 }
 
 reset_mouse_scroll :: proc()
 {
-	global_input.mouse_scroll = 0
+	input.mouse_scroll = 0
 }
 
 @(require_results)

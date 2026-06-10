@@ -17,6 +17,7 @@ Glyph :: struct
   height:  int,
   advance: [2]f32,
   bearing: [2]f32,
+  offset:  [2]f32,
   data:    []byte,
 }
 
@@ -27,11 +28,17 @@ Font :: struct
   height: int,
 }
 
+Font_Flag :: enum
+{
+  Hinting,
+}
+
 @(private)
 global: struct
 {
   glyph_table: [256]Glyph,
-  dpi:          uint,
+  font_height: f32,
+  dpi:         uint,
 }
 
 load_font :: proc
@@ -40,21 +47,35 @@ load_font :: proc
   load_font_from_bytes,
 }
 
-load_font_from_path :: proc(path: string, size: int, arena: ^mem.Arena) -> (Font, ft.Error)
-{
-  data, err := os.read_entire_file(path, mem.allocator(arena))
+load_font_from_path :: proc(
+  path: string, 
+  size: int, 
+  flags: bit_set[Font_Flag], 
+  arena: ^mem.Arena,
+) -> (
+  font: Font, 
+  err: ft.Error,
+){
+  data, read_err := os.read_entire_file(path, mem.allocator(arena))
   if err != nil
   {
     return {}, .Invalid_Argument
   }
   else
   {
-    return load_font_from_bytes(data, size, arena)
+    return load_font_from_bytes(data, size, flags, arena)
   }
 }
 
-load_font_from_bytes :: proc(bytes: []byte, size: int, arena: ^mem.Arena) -> (font: Font, err: ft.Error)
-{
+load_font_from_bytes :: proc(
+  bytes: []byte, 
+  size: int, 
+  flags: bit_set[Font_Flag], 
+  arena: ^mem.Arena,
+) -> (
+  font: Font, 
+  err: ft.Error,
+){
   library: ft.Library
   ft.init_freetype(&library) or_return
   defer ft.done_freetype(library)
@@ -65,6 +86,10 @@ load_font_from_bytes :: proc(bytes: []byte, size: int, arena: ^mem.Arena) -> (fo
 
   dpi := global.dpi != 0 ? cast(u32) global.dpi : 96
   ft.set_char_size(face, 0, cast(ft.F26Dot6) (size * 64), dpi, dpi) or_return
+
+  global.font_height += cast(f32) (face.size.metrics.ascender >> 6)
+  global.font_height -= cast(f32) (face.size.metrics.descender >> 6)
+  // fmt.println(global.font_height)
 
   scratch := mem.temp_begin(mem.get_scratch())
   defer mem.temp_end(scratch)
@@ -78,7 +103,10 @@ load_font_from_bytes :: proc(bytes: []byte, size: int, arena: ^mem.Arena) -> (fo
     char_idx := ft.get_char_index(face, u64(c))
     if char_idx != 0
     {
-      ft.load_glyph(face, char_idx, {.Render}) or_return
+      load_flags := ft.Load_Flags{.Render}
+      if .Hinting not_in flags do load_flags += {.No_Hinting, .No_Autohint}
+
+      ft.load_glyph(face, char_idx, load_flags) or_return
 
       glyph := Glyph{
         char = rune(c),
@@ -184,6 +212,25 @@ glyph_from_rune :: proc(r: rune) -> ^Glyph
   }
   
   return &global.glyph_table[0]
+}
+
+@(require_results)
+max_height_from_text :: proc(text: string) -> f32
+{
+  max_ascent, max_descent: f32
+
+  for r in text
+  {
+    glyph := glyph_from_rune(r)
+    
+    ascent := glyph.bearing.y
+    descent := f32(glyph.height) - glyph.bearing.y
+
+    max_ascent = ascent if ascent > max_ascent else max_ascent
+    max_descent = descent if descent > max_descent else max_descent
+  }
+
+  return max_ascent + max_descent
 }
 
 set_dpi :: proc(dpi: uint)

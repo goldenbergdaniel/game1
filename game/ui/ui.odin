@@ -1,10 +1,11 @@
 package ui
 
 import "core:fmt"
+import "core:log"
 import "core:strings"
 import "../basic/mem"
 
-@(thread_local, private)
+@(thread_local)
 global_tree: ^Tree
 
 
@@ -14,14 +15,14 @@ global_tree: ^Tree
 Tree :: struct
 {
   boxes:           []Box,
-  cache:           map[Box_ID]Retained_Box_Data,
+  cache:           map[Box_ID]Retained_Data,
   capacity:        int,
   count:           int,
   root:            ^Box,
   curr:            ^Box,
   cursor_pos:      [2]f32,
   last_cursor_pos: [2]f32,
-  input_down:      [enum{Curr, Prev}]bool,
+  mouse_btn_down:  [Mouse_Btn_Kind]bool,
   perm_arena:      ^mem.Arena,
   temp_arena:      ^mem.Arena,
 }
@@ -29,7 +30,7 @@ Tree :: struct
 tree_init :: proc(tree: ^Tree, cap: int, perm_arena, temp_arena: ^mem.Arena)
 {
   tree.boxes = make([]Box, cap, mem.allocator(perm_arena))
-  tree.cache = make(map[Box_ID]Retained_Box_Data, cap, mem.allocator(perm_arena))
+  tree.cache = make(map[Box_ID]Retained_Data, cap, mem.allocator(perm_arena))
   tree.capacity = cap
   tree.root = tree_alloc_box(tree)
   tree.curr = tree.root
@@ -86,6 +87,19 @@ tree_resolve_layout :: proc(tree: ^Tree)
         {
           box.computed_abs_dim[axis] = box.size[axis].value
         }
+        else if box.size[axis].kind == .Text_Content
+        {
+          text_size: [2]f32
+          for r in box.text
+          {
+            glyph := glyph_from_rune(r)
+            text_size[0] += glyph.advance.x * box.text_size
+          }
+          
+          text_size[1] += max_height_from_text(box.text) * box.text_size
+
+          box.computed_abs_dim[axis] = text_size[axis]
+        }
       }
     }
   }
@@ -97,9 +111,15 @@ tree_resolve_layout :: proc(tree: ^Tree)
     {
       for axis in 0..<2
       {
-        if box.size[axis].kind == .Percent && box.parent.size[axis].kind != .Sum_Of_Children
+        if box.size[axis].kind == .Percent_Of_Parent
         {
-          box.computed_abs_dim[axis] = box.parent.computed_abs_dim[axis] * box.size[axis].value
+          assert(box.parent != nil)
+          if box.parent.size[axis].kind != .Sum_Of_Children
+          {
+            box.computed_abs_dim[axis] = box.parent.computed_abs_dim[axis] * box.size[axis].value
+          }
+
+          // fmt.println("  Up:", box.id, box.computed_abs_dim[axis])
         }
       }
     }
@@ -110,7 +130,20 @@ tree_resolve_layout :: proc(tree: ^Tree)
     iter := make_iterator_postorder(tree.root, scratch)
     for box in iterate_postorder(&iter)
     {
+      for axis in 0..<2
+      {
+        if box.size[axis].kind == .Sum_Of_Children
+        {
+          for child := box.first; child != nil; child = child.next
+          {
+            if child.size[axis].kind == .Percent_Of_Parent do continue
+            if .Floating in child.props do continue
 
+            box.computed_abs_dim[axis] += child.computed_abs_dim[axis]
+            // fmt.println("Down:", child.id, box.computed_abs_dim[axis])
+          }
+        }
+      }
     }
   }
 
@@ -121,13 +154,27 @@ tree_resolve_layout :: proc(tree: ^Tree)
     {
       offset: [2]f32
 
+      if .Floating in box.props
+      {
+        box.computed_rel_pos = box.offset
+      }
+
       for child := box.first; child != nil; child = child.next
       {
+        if .Floating in child.props do continue
+
         offset += child.offset
 
         for axis in 0..<2
         {
-          child.computed_rel_pos[axis] = offset[axis]
+          switch box.child_justify[axis]
+          {
+          case .Left:
+            child.computed_rel_pos[axis] = offset[axis]
+          
+          case .Center:
+            child.computed_rel_pos[axis] = box.computed_abs_dim[axis]/2 - child.computed_abs_dim[axis]/2 + offset[axis]
+          }
         }
 
         offset[box.child_align] += child.computed_abs_dim[box.child_align]
@@ -161,20 +208,24 @@ tree_resolve_layout :: proc(tree: ^Tree)
 }
 
 @(private)
-tree_resolve_interaction :: proc(tree: ^Tree)
+tree_resolve_signals :: proc(tree: ^Tree)
 {
   iter := make_iterator_flat(tree)
   for box in iterate_flat(&iter)
   {
     cursor := tree.cursor_pos
 
-    box.interaction[.Prev] = box.interaction[.Curr]
-
     x_intersect := cursor.x > box.rect_pos.x && cursor.x < box.rect_pos.x + box.rect_dim.x
     y_intersect := cursor.y > box.rect_pos.y && cursor.y < box.rect_pos.y + box.rect_dim.y
+    intersects := x_intersect && y_intersect
 
-    box.interaction[.Curr].hovered = x_intersect && y_intersect
-    box.interaction[.Curr].pressed = box.interaction[.Curr].hovered && tree.input_down[.Curr]
+    box.signal[.Prev] = box.signal[.Curr]
+    box.signal[.Curr].flags = {}
+    
+    box.signal[.Curr].flags += intersects ? {.Hovered} : {}
+    box.signal[.Curr].flags += global_tree.mouse_btn_down[.Left] && intersects ? {.Left_Pressed} : {}
+    box.signal[.Curr].flags += global_tree.mouse_btn_down[.Right] && intersects ? {.Right_Pressed} : {}
+    box.signal[.Curr].flags += global_tree.mouse_btn_down[.Middle] && intersects ? {.Middle_Pressed} : {}
   }
 }
 
@@ -355,6 +406,7 @@ Box :: struct
   retain:              bool,
 
   text:                string,
+  decorated_text:      Decorated_String,
   sprite:              int,
 
   computed_rel_pos:    [2]f32,
@@ -362,32 +414,7 @@ Box :: struct
   rect_pos:            [2]f32,
   rect_dim:            [2]f32,
 
-  using retained_data: Retained_Box_Data,
-}
-
-@(private)
-Retained_Box_Data :: struct
-{
-  interaction: [enum{Curr, Prev}]Interaction,
-  counter:     int,
-}
-
-Layout :: struct
-{
-  props:            bit_set[Box_Prop],
-  offset:           [2]f32,
-  size:             [2]Size,
-  color:            [4]f32,
-  shade:            [3]f32,
-  child_align:      Alignment,
-  text_size:        f32,
-  text_line_height: f32,
-}
-
-Interaction :: struct
-{
-  hovered: bool,
-  pressed: bool,
+  using retained_data: Retained_Data,
 }
 
 Box_ID :: distinct string
@@ -396,6 +423,48 @@ Box_Prop :: enum
 {
   Floating,
   Dragable,
+}
+
+@(private)
+Retained_Data :: struct
+{
+  signal: [enum{Curr, Prev}]Signal,
+}
+
+Layout :: struct
+{
+  props:           bit_set[Box_Prop],
+  offset:          [2]f32,
+  offset_dir:      [2]enum{FWD, BWD},
+  size:            [2]Size,
+  color:           [4]f32,
+  shade:           [3]f32,
+  text_size:       f32,
+
+  child_size:      [2]Size,
+  child_align:     Alignment,
+  child_justify:   [2]Justify,
+  child_text_size: f32,
+}
+
+Mouse_Btn_Kind :: enum
+{
+  Left,
+  Right,
+  Middle,
+}
+
+Signal :: struct
+{
+  flags: bit_set[Signal_Flag],
+}
+
+Signal_Flag :: enum
+{
+  Left_Pressed,
+  Right_Pressed,
+  Middle_Pressed,
+  Hovered,
 }
 
 Size :: struct
@@ -407,10 +476,15 @@ Size :: struct
 Size_Kind :: enum
 {
   Pixels,
-  Percent,
+  Percent_Of_Parent,
   Sum_Of_Children,
   Text_Content,
 }
+
+px           :: proc(val: f32) -> Size { return {.Pixels, val} }
+pct          :: proc(val: f32) -> Size { return {.Percent_Of_Parent, val} }
+fit_children :: proc() -> Size { return {.Sum_Of_Children, 0}}
+fit_text     :: proc() -> Size { return {.Text_Content, 0} }
 
 Alignment :: enum
 {
@@ -418,7 +492,13 @@ Alignment :: enum
   Vertical,
 }
 
-current_box :: proc() -> ^Box
+Justify :: enum
+{
+  Left,
+  Center,
+}
+
+this :: #force_inline proc() -> ^Box
 {
   return global_tree.curr
 }
@@ -583,19 +663,20 @@ begin_tree :: proc(
     background_color: [4]f32,
     window_size:      [2]f32,
     cursor_pos:       [2]f32,
-    input_down:       bool,
+    mouse_btn_down:   [Mouse_Btn_Kind]bool,
   },
 ){
   tree_clear(tree)
   
   tree.cursor_pos = st.cursor_pos
-  tree.input_down[.Curr] = st.input_down
+  tree.mouse_btn_down = st.mouse_btn_down
   tree.root.name = "root"
-  tree.root.shade = 1
+  tree.root.shade = {1, 1, 1}
   tree.curr = tree.root
   global_tree = tree
 
-  layout_size(.Pixels, st.window_size)
+  layout_width(px(st.window_size.x))
+  layout_height(px(st.window_size.y))
   layout_color(st.background_color)
 }
 
@@ -605,7 +686,7 @@ end_tree :: proc()
   defer mem.temp_end(temp)
 
   tree_resolve_layout(global_tree)
-  tree_resolve_interaction(global_tree)
+  tree_resolve_signals(global_tree)
 
   iter := make_iterator_preorder(global_tree.root, temp)
   for box in iterate_preorder(&iter)
@@ -617,7 +698,6 @@ end_tree :: proc()
   }
 
   global_tree.last_cursor_pos = global_tree.cursor_pos
-  global_tree.input_down[.Prev] = global_tree.input_down[.Curr]
   global_tree = nil
 }
 
@@ -629,6 +709,8 @@ create_box :: proc(name: string, idx: Maybe(int), retained: bool) -> ^Box
   box.name = name
   box.idx = idx
   box.retain = retained
+  box.size[0] = pct(1)
+  box.size[1] = pct(1)
   box.shade = {1, 1, 1}
 
   box_generate_id(box)
@@ -636,10 +718,9 @@ create_box :: proc(name: string, idx: Maybe(int), retained: bool) -> ^Box
   if retained
   {
     box_fetch_retained_data(box)
-    // fmt.println(box.id, "Retaining.")
   }
 
-  // fmt.println("Geneterated", box.id, box.retain)
+  // fmt.println("Generated", box.id, box.retain)
   
   return box
 }
@@ -675,36 +756,77 @@ set_descendant_layout :: proc(layout: Layout)
   global_tree.curr.descendant_layout = layout
 }
 
-is_hovered :: proc() -> bool
+pressed :: proc(box: ^Box, btn: Mouse_Btn_Kind) -> bool
 {
-  assert(global_tree.curr != nil)
-  // global_tree.curr.retain = true
-  return global_tree.curr.interaction[.Curr].hovered
+  if btn == .Left
+  {
+    return .Left_Pressed in box.signal[.Curr].flags
+  }
+  else if btn == .Right
+  {
+    return .Right_Pressed in box.signal[.Curr].flags
+  }
+  else
+  {
+    return .Middle_Pressed in box.signal[.Curr].flags
+  }
 }
 
-layout_size :: proc(kind: Size_Kind, val: [2]f32)
+just_pressed :: proc(box: ^Box, btn: Mouse_Btn_Kind) -> bool
 {
-  assert(global_tree.curr != nil)
-  global_tree.curr.size[0] = Size{kind, val[0]}
-  global_tree.curr.size[1] = Size{kind, val[1]}
+  if btn == .Left
+  {
+    return .Left_Pressed in box.signal[.Curr].flags && .Left_Pressed not_in box.signal[.Prev].flags
+  }
+  else if btn == .Right
+  {
+    return .Right_Pressed in box.signal[.Curr].flags && .Right_Pressed not_in box.signal[.Prev].flags
+  }
+  else
+  {
+    return .Middle_Pressed in box.signal[.Curr].flags && .Middle_Pressed not_in box.signal[.Prev].flags
+  }
 }
 
-layout_width :: proc(kind: Size_Kind, val: f32)
+hovered :: proc(box: ^Box) -> bool
 {
-  assert(global_tree.curr != nil)
-  global_tree.curr.size.x = Size{kind, val}
+  return .Hovered in box.signal[.Curr].flags
 }
 
-layout_height :: proc(kind: Size_Kind, val: f32)
+layout_width :: proc(size: Size)
 {
   assert(global_tree.curr != nil)
-  global_tree.curr.size.y = Size{kind, val}
+  global_tree.curr.size.x = size
+}
+
+layout_child_width :: proc(size: Size)
+{
+  assert(global_tree.curr != nil)
+  global_tree.curr.child_size.x = size
+}
+
+layout_height :: proc(size: Size)
+{
+  assert(global_tree.curr != nil)
+  global_tree.curr.size.y = size
+}
+
+layout_child_height :: proc(size: Size)
+{
+  assert(global_tree.curr != nil)
+  global_tree.curr.child_size.y = size
 }
 
 layout_offset :: proc(off: [2]f32)
 {
   assert(global_tree.curr != nil)
   global_tree.curr.offset = off
+}
+
+layout_offset_dir :: proc(dir: [2]enum{FWD, BWD})
+{
+  assert(global_tree.curr != nil)
+  global_tree.curr.offset_dir = dir
 }
 
 layout_follow_cursor :: proc()
@@ -731,60 +853,26 @@ layout_props :: proc(props: bit_set[Box_Prop])
   global_tree.curr.props = props
 }
 
+layout_text_size :: proc(size: f32)
+{
+  assert(global_tree.curr != nil)
+  global_tree.curr.text_size = size
+}
+
+layout_child_text_size :: proc(size: f32)
+{
+  assert(global_tree.curr != nil)
+  global_tree.curr.child_text_size = size
+}
+
 layout_child_align :: proc(align: Alignment)
 {
   assert(global_tree.curr != nil)
   global_tree.curr.child_align = align
 }
 
-layout_text_size :: proc(size: f32)
+layout_child_justify :: proc(justify: [2]Justify)
 {
-  global_tree.curr.text_size = size
-}
-
-layout_text_line_height :: proc(height: f32)
-{
-  global_tree.curr.text_line_height = height
-}
-
-
-// Widgets ///////////////////////////////////////////////////////////////////////////////
-
-
-box :: proc(name: string, idx: Maybe(int) = nil) -> ^Box
-{
-  return create_box(name == "" ? "Box" : name, idx, true)
-}
-
-image :: proc(name: string, sprite: int, idx: Maybe(int) = nil) -> ^Box
-{
-  image := create_box(name, idx, true)
-  image.sprite = sprite
-  return image
-}
-
-spacer :: proc(width: Size, height: Size, idx: Maybe(int) = nil) -> ^Box
-{
-  spacer := create_box("Spacer", idx, false)
-  begin_box(spacer)
-  layout_width(width.kind, width.value)
-  layout_height(height.kind, height.value)
-  end_box()
-
-  return spacer
-}
-
-text :: proc(fmt_str: string, fmt_args: ..any, idx: Maybe(int) = nil) -> ^Box
-{
-  text := create_box("Text", idx, false)
-
-  begin_box(text)
-  layout_text_size(2)
-  layout_text_line_height(1)
-  layout_color({1, 1, 1, 0})
-  content := fmt.aprintf(fmt_str, ..fmt_args, allocator=mem.allocator(global_tree.temp_arena))
-  global_tree.curr.text = content
-  end_box()
-
-  return text
+  assert(global_tree.curr != nil)
+  global_tree.curr.child_justify = justify
 }
