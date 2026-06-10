@@ -581,43 +581,54 @@ game_update :: proc(gm: ^Game, dt: f32)
     clear(&collided_cache)
   }
 
-  // - Pickup decoration ---
+  // - Harvest decoration ---
   {
-    RANGE :: 10.0
+    RANGE :: 20.0
 
-    nearest_dist: f32 = max(f32)
-    nearest_en: ^Entity
+    closest_dist := max(f32)
 
     for &en in gm.entities do if .Collectable in en.props
     {
-      dist := vmath.distance_2f32(tt.global_pos(player), tt.global_pos(en))
-      if dist < RANGE
+      en_pos := tt.global_pos(en)
+      en_col := Circle{
+        origin = en_pos, 
+        radius = 2,
+      }
+
+      debug_circle(en_col.origin, en_col.radius)
+
+      dist := vmath.distance_2f32(tt.global_pos(player), en_pos)
+      if dist < RANGE && point_in_circle(cursor_pos, en_col)
       {
-        if dist < nearest_dist
+        if dist < closest_dist
         {
-          nearest_dist = dist
-          nearest_en = &en
+          gm.selected_entity = en.ref
+          closest_dist = dist
         }
+      }
+      else
+      {
+        en.props -= {.Highlighted}
+      }
+      
+      if dist > closest_dist
+      {
+        en.props -= {.Highlighted}
       }
     }
 
-    selected := entity_from_ref(gm.selected_entity)
-
-    if entity_is_valid(selected) && (nearest_en == nil || (nearest_en != nil && !entity_is_same(nearest_en^, selected^)))
+    if closest_dist >= RANGE
     {
-      // entity_stop_fade(selected, .Color)
-      selected.props -= {.Highlighted}
+      gm.selected_entity = {}
     }
 
-    if nearest_en != nil
+    selected := entity_from_ref(gm.selected_entity)
+    if entity_is_valid(selected)
     {
-      gm.selected_entity = nearest_en.ref
-      selected = nearest_en
-
-      if selected.fade[0].state != .Fade
+      selected.props += {.Highlighted}
+      if mouse_btn_just_down(.Left)
       {
-        // entity_start_fade(nearest_en, .Color, {.R, .G, .B}, {1, 1, 1, 0}, 0)
-        selected.props += {.Highlighted}
+        harvest_entity(selected)
       }
     }
   }
@@ -724,11 +735,11 @@ game_update :: proc(gm: ^Game, dt: f32)
 
     if .Highlighted in en.props
     {
-      en.tint.rgb = {1.2, 1.2, 1.2}
+      en.tint.rgb = 1.3
     }
     else
     {
-      en.tint.rgb = {1, 1, 1}
+      en.tint.rgb = 1
     }
 
     // - Distort ---
@@ -902,8 +913,8 @@ game_update :: proc(gm: ^Game, dt: f32)
     particle_update(&par, dt)
   }
 
-  gm.prev_keys = platform.global_input.keys
-  gm.prev_mouse_btns = platform.global_input.mouse_btns
+  gm.prev_keys = platform.input.keys
+  gm.prev_mouse_btns = platform.input.mouse_btns
 
   clear(&global.temp.noise_sources)
   free_finished_sounds()
@@ -1313,6 +1324,15 @@ set_active_zone :: proc(zone: Zone_Name, regen := false)
   }
 }
 
+harvest_entity :: proc(en: ^Entity)
+{
+  gm := get_active_game()
+  // gm.player_inventory.items[.Flower] += 1
+  item := roll_loot_table(en.loot_table)
+  spawn_item(item, tt.global_pos(en))
+  kill_entity(en)
+}
+
 
 // Entity ////////////////////////////////////////////////////////////////////////////////
 
@@ -1390,6 +1410,7 @@ Entity :: struct
     muzzle_timer:    Timer,
   },
   shot_point:        tt.Transform,
+  loot_table:        Loot_Table_Name,
 }
 
 Entity_Ref :: struct
@@ -1489,6 +1510,11 @@ Item_Kind :: enum
   Venison,
   Rabbit_Foot,
   Squirrel_Tail,
+  Chamomile,
+  Sunflower,
+  Lavender,
+  Brown_Mushroom,
+  Red_Mushroom,
 }
 
 @(rodata)
@@ -1650,7 +1676,7 @@ spawn_player :: proc() -> ^Entity
   player.animation.data = desc.animations
   player.col_layer = .Player
   player.collider = Circle{
-    radius = 6,
+    radius = 4,
   }
 
   entity_set_state(player, .Idle)
@@ -1686,7 +1712,7 @@ spawn_player :: proc() -> ^Entity
     entity_attach_child(player, weapon)
   }
 
-  entity_equip_weapon(player, .Revolver)
+  entity_equip_weapon(player, .Nil)
   entity_set_zone_change_op(player, .Move)
 
   gm.special_entities[.Player] = player
@@ -1845,7 +1871,8 @@ spawn_entity :: proc(name: Entity_Name, pos: v2f32, deferred := false, sprite :=
   setup_entity(en, deferred)
 
   en.sprite = res.entities[name].sprites[0]
-  en.props += res.entities[name].props
+  en.props = res.entities[name].props
+  en.loot_table = res.entities[name].loot_table
 
   if sprite != nil
   {
@@ -1856,7 +1883,6 @@ spawn_entity :: proc(name: Entity_Name, pos: v2f32, deferred := false, sprite :=
 
   return en
 }
-
 
 entity_attach_child :: proc(parent, child: ^Entity) -> (ok: bool)
 {
@@ -2415,7 +2441,7 @@ generate_clump :: proc(kinds: []Entity_Name, count, radius: i32)
   for _ in 0..<count
   {
     offset := rand.range_2i32({{-radius, radius}, {-radius, radius}})
-    spawn_entity(rand.choice_slice(kinds[:]), v2f32(origin + offset))
+    entity := spawn_entity(rand.choice_slice(kinds[:]), v2f32(origin + offset))
   }
 }
 
@@ -2484,7 +2510,7 @@ generate_wilderness :: proc()
   }
 
   unpause_sound_group(.Ambience)
-  play_sound(.Forest_Ambience, volume=0.25)
+  // play_sound(.Forest_Ambience, volume=0.25)
 }
 
 generate_shop :: proc()

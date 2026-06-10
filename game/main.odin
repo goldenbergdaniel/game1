@@ -59,6 +59,20 @@ main :: proc()
     os.exit(1)
   }
 
+
+  // text: dstr.Decorated_String
+  // text = dstr.create({0, 0, 0}, &user.perm_arena)
+  // dstr.push(&text, "Red", color={1, 0, 0})
+  // dstr.push(&text, " and ")
+  // dstr.push(&text, "bold", props={.Bold})
+  // dstr.push(&text, " text.")
+  // println(dstr.to_string(text, &user.perm_arena))
+  // dstr.clear(&text)
+  // dstr.push_list(&text, {dstr.L("Red", color={1, 0, 0}), " and ", dstr.L("bold ", props={.Bold}), "text."})
+  // println(dstr.to_string(text, &user.perm_arena))
+  // dstr.clear(&text)
+
+
   window_desc := platform.Window_Desc{
     title = "GAME",
     width = 1280,
@@ -70,7 +84,7 @@ main :: proc()
   user.window = platform.create_window(window_desc, &user.perm_arena)
   defer platform.destroy_window(&user.window)
 
-  user.screen = .Main_Menu
+  user.screen = .Game
 
   render.init_renderer(&user.window)
   init_resources(&user.perm_arena)
@@ -178,7 +192,7 @@ main :: proc()
       platform.imgui_end()
     }
 
-    prev_keys = platform.global_input.keys
+    prev_keys = platform.input.keys
     platform.window_draw(&user.window)
 
     if user.window.should_close

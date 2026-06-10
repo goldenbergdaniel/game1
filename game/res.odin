@@ -2,11 +2,9 @@
 package game
 
 import "base:runtime"
-import "core:fmt"
 import "core:image"
 import "core:image/tga"
 import "core:log"
-import "core:math"
 import "core:os"
 import "core:strings"
 import "core:reflect"
@@ -253,10 +251,11 @@ Entity_Name :: enum u64
 
 Entity_Desc :: struct
 {
-  sprites: [dynamic; 8]Sprite_Name,
-  props:   bit_set[Entity_Prop],
-  color:   v4f32,
-  tint:    v4f32,
+  sprites:    [dynamic; 8]Sprite_Name,
+  props:      bit_set[Entity_Prop],
+  color:      v4f32,
+  tint:       v4f32,
+  loot_table: Loot_Table_Name,
 }
 
 Creature_Desc :: struct #all_or_none
@@ -301,6 +300,11 @@ Loot_Table_Name :: enum
   Deer,
   Rabbit,
   Squirrel,
+  Chamomile,
+  Sunflower,
+  Lavender,
+  Brown_Mushroom,
+  Red_Mushroom,
 }
 
 Loot_Table_Entry :: struct #all_or_none
@@ -438,14 +442,14 @@ init_resources :: proc(arena: ^mem.Arena)
     ui.set_dpi(uint(platform.get_display_dpi(&user.window)))
 
     // NOTE(dg): Size for Jersey10 must be [14, 28, 42, 56, 70, 84, 98]
-    font, err := ui.load_font("res/fonts/Jersey10.ttf", 14, arena)
+    font, err := ui.load_font("res/fonts/Jersey10.ttf", 14, {}, arena)
     if err == nil
     {
       res.textures[.Glyph_Atlas] = render.create_texture(font.pixels, font.width, font.height, format=1)
     }
     else
     {
-      println("Error [freetype]:", err)
+      log.errorf("[ui]: Failed to read font (%v)\n", err)
     }
   }
 
@@ -462,23 +466,29 @@ init_resources :: proc(arena: ^mem.Arena)
         sprites = {.Grass},
       },
       .Lavender = {
+        props = {.Collectable},
         sprites = {.Lavender},
+        loot_table = .Lavender,
       },
       .Chamomile = {
         sprites = {.Chamomile},
         props = {.Collectable},
+        loot_table = .Chamomile,
       },
       .Sunflower = {
         sprites = {.Sunflower},
         props = {.Collectable},
+        loot_table = .Sunflower,
       },
       .Brown_Mushroom = {
         sprites = {.Brown_Mushroom},
         props = {.Collectable},
+        loot_table = .Brown_Mushroom,
       },
       .Red_Mushroom = {
         sprites = {.Red_Mushroom},
         props = {.Collectable},
+        loot_table = .Red_Mushroom,
       },
       .Stump = {
         sprites = {.Stump},
@@ -762,6 +772,41 @@ init_resources :: proc(arena: ^mem.Arena)
         },
         value = 1,
       },
+      .Chamomile = {
+        name = "Chamomile",
+        animations = #partial {
+          .Idle = .Chamomile, 
+        },
+        value = 1,
+      },
+      .Sunflower = {
+        name = "Sunflower",
+        animations = #partial {
+          .Idle = .Sunflower, 
+        },
+        value = 1,
+      },
+      .Lavender = {
+        name = "Lavender",
+        animations = #partial {
+          .Idle = .Lavender, 
+        },
+        value = 1,
+      },
+      .Brown_Mushroom = {
+        name = "Brown Mushroom",
+        animations = #partial {
+          .Idle = .Brown_Mushroom, 
+        },
+        value = 1,
+      },
+      .Red_Mushroom = {
+        name = "Red Mushroom",
+        animations = #partial {
+          .Idle = .Red_Mushroom, 
+        },
+        value = 1,
+      },
     }
   }
 
@@ -779,6 +824,21 @@ init_resources :: proc(arena: ^mem.Arena)
       },
       .Squirrel = {
         {item = .Squirrel_Tail, rate = 1.0},
+      },
+      .Chamomile = {
+        {item = .Chamomile, rate = 1.0},
+      },
+      .Sunflower = {
+        {item = .Sunflower, rate = 1.0},
+      },
+      .Lavender = {
+        {item = .Lavender, rate = 1.0},
+      },
+      .Brown_Mushroom = {
+        {item = .Brown_Mushroom, rate = 1.0},
+      },
+      .Red_Mushroom = {
+        {item = .Red_Mushroom, rate = 1.0},
       },
     }
 
