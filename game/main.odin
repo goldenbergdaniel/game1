@@ -11,8 +11,8 @@ import "basic/mem"
 import "platform"
 import "render"
 
-VIEWPORT_WIDTH  :: 240.0
-VIEWPORT_HEIGHT :: 135.0
+VIEWPORT_WIDTH  :: 240.0 // 192.0 or 240.0
+VIEWPORT_HEIGHT :: 135.0 // 108.0 or 135.0
 TIME_STEP       :: 1.0 / 40
 
 User :: struct
@@ -51,27 +51,12 @@ main :: proc()
   }
 
   arena_err: mem.Allocator_Error
-
   arena_err = mem.arena_init_static(&user.perm_arena)
   if arena_err != nil
   {
     log.fatalf("[game]: Failed to allocate static arena! (%v)\n", arena_err)
     os.exit(1)
   }
-
-
-  // text: dstr.Decorated_String
-  // text = dstr.create({0, 0, 0}, &user.perm_arena)
-  // dstr.push(&text, "Red", color={1, 0, 0})
-  // dstr.push(&text, " and ")
-  // dstr.push(&text, "bold", props={.Bold})
-  // dstr.push(&text, " text.")
-  // println(dstr.to_string(text, &user.perm_arena))
-  // dstr.clear(&text)
-  // dstr.push_list(&text, {dstr.L("Red", color={1, 0, 0}), " and ", dstr.L("bold ", props={.Bold}), "text."})
-  // println(dstr.to_string(text, &user.perm_arena))
-  // dstr.clear(&text)
-
 
   window_desc := platform.Window_Desc{
     title = "GAME",
@@ -80,7 +65,6 @@ main :: proc()
     props = {.Vsync, .Resizeable},
     renderer = .OpenGL,
   }
-
   user.window = platform.create_window(window_desc, &user.perm_arena)
   defer platform.destroy_window(&user.window)
 

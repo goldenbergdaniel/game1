@@ -12,8 +12,7 @@ Circle :: struct
 
 Polygon :: struct
 {
-  vertices: [8]v2f32,
-  number:   u8,
+  vertices: [dynamic; 8]v2f32,
 }
 
 Collider :: union
@@ -30,13 +29,13 @@ circle_circle_overlap :: proc(a, b: Circle) -> bool
 polygon_polygon_overlap :: proc(a, b: Polygon) -> bool
 {
   // - Collider A ---
-  for i in 0..<a.number
+  for i in 0..<len(a.vertices)
   {
-    j := (i + 1) % a.number
+    j := (i + 1) % len(a.vertices)
     proj_axis := vmath.normal(a.vertices[i], a.vertices[j])
     
     min_pa, max_pa := max(f32), min(f32)
-    for k in 0..<a.number
+    for k in 0..<len(a.vertices)
     {
       p := vmath.dot(a.vertices[k], proj_axis)
       min_pa = min(min_pa, p)
@@ -44,7 +43,7 @@ polygon_polygon_overlap :: proc(a, b: Polygon) -> bool
     }
 
     min_pb, max_pb := max(f32), min(f32)
-    for k in 0..<b.number
+    for k in 0..<len(b.vertices)
     {
       p := vmath.dot(b.vertices[k], proj_axis)
       min_pb = min(min_pb, p)
@@ -55,13 +54,13 @@ polygon_polygon_overlap :: proc(a, b: Polygon) -> bool
   }
 
   // - Collider B ---
-  for i in 0..<b.number
+  for i in 0..<len(b.vertices)
   {
-    j := (i + 1) % b.number
+    j := (i + 1) % len(b.vertices)
     proj_axis := vmath.normal(b.vertices[i], b.vertices[j])
     
     min_pa, max_pa := max(f32), min(f32)
-    for k in 0..<a.number
+    for k in 0..<len(a.vertices)
     {
       p := vmath.dot(a.vertices[k], proj_axis)
       min_pa = min(min_pa, p)
@@ -69,7 +68,7 @@ polygon_polygon_overlap :: proc(a, b: Polygon) -> bool
     }
 
     min_pb, max_pb := max(f32), min(f32)
-    for k in 0..<b.number
+    for k in 0..<len(b.vertices)
     {
       p := vmath.dot(b.vertices[k], proj_axis)
       min_pb = min(min_pb, p)
@@ -84,9 +83,9 @@ polygon_polygon_overlap :: proc(a, b: Polygon) -> bool
 
 circle_polygon_overlap :: proc(circle: Circle, polygon: Polygon) -> bool
 {
-  for i in 0..<polygon.number
+  for i in 0..<len(polygon.vertices)
   {
-    j := (i + 1) % polygon.number
+    j := (i + 1) % len(polygon.vertices)
     vi, vj := polygon.vertices[i], polygon.vertices[i]
 
     edge := vj - vi
@@ -110,7 +109,7 @@ circle_polygon_overlap :: proc(circle: Circle, polygon: Polygon) -> bool
     if dist_to_circle <= circle.radius do return true
 
     verticies := polygon.vertices
-    if point_in_polygon(circle.origin, verticies[:polygon.number]) do return true
+    if point_in_polygon(circle.origin, verticies[:len(polygon.vertices)]) do return true
   }
 
   return false

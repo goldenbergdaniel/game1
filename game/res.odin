@@ -15,24 +15,19 @@ import "ui"
 
 Resources :: struct
 {
-  actions:      [Action_Name]platform.Input_Source,
-  shaders:      [Shader_Name]render.Shader,
-  textures:     [Texture_Name]render.Texture,
-  sprites:      [Sprite_Name]Sprite,
-  sounds:       [Sound_Name]Sound,
-  animations:   [Animation_Name]Animation_Desc,
-  entities:     [Entity_Name]Entity_Desc,
-  zones:        [Zone_Name]Zone_Desc,
-  particles:    [Particle_Name]Particle_Desc,
-  creatures:    [Creature_Kind]Creature_Desc,
-  weapons:      [Weapon_Kind]Weapon_Desc,
-  items:        [Item_Kind]Item_Desc,
-  loot_tables:  [Loot_Table_Name][dynamic]Loot_Table_Entry,
-  player:       struct
-  {
-    animations: [Animation_State]Sprite_Or_Animation,
-    speed:      f32,
-  },
+  actions:     [Action_Name]platform.Input_Source,
+  shaders:     [Shader_Name]render.Shader,
+  textures:    [Texture_Name]render.Texture,
+  sprites:     [Sprite_Name]Sprite,
+  sounds:      [Sound_Name]Sound,
+  animations:  [Animation_Name]Animation_Desc,
+  entities:    [Entity_Name]Entity_Desc,
+  zones:       [Zone_Name]Zone_Desc,
+  particles:   [Particle_Name]Particle_Desc,
+  creatures:   [Entity_Name]Creature_Desc,
+  weapons:     [Weapon_Kind]Weapon_Desc,
+  items:       [Item_Kind]Item_Desc,
+  loot_tables: [Loot_Table_Name][dynamic]Loot_Table_Entry,
 }
 
 Action_Name :: enum
@@ -83,6 +78,15 @@ Sprite_Name :: enum
   Player_Sneak_3,
   Player_Sneak_4,
   Player_Sneak_5,
+
+  Zombie_Idle_1,
+  Zombie_Idle_2,
+  Zombie_Walk_1,
+  Zombie_Walk_2,
+  Zombie_Walk_3,
+  Zombie_Walk_4,
+  Zombie_Walk_5,
+  Zombie_Corpse,
 
   Revolver,
   Rifle,
@@ -174,6 +178,8 @@ Animation_Name :: enum
   Nil,
   Player_Walk,
   Player_Sneak_Walk,
+  Zombie_Idle,
+  Zombie_Walk,
   Deer_Idle,
   Deer_Walk,
   Rabbit_Idle,
@@ -240,6 +246,15 @@ Entity_Name :: enum u64
 {
   Nil,
 
+  Player,
+  Item,
+  Bullet,
+
+  Zombie,
+  Deer,
+  Rabbit,
+  Squirrel,
+
   Grass,
   Chamomile,
   Sunflower,
@@ -251,17 +266,19 @@ Entity_Name :: enum u64
 
 Entity_Desc :: struct
 {
-  sprites:    [dynamic; 8]Sprite_Name,
-  props:      bit_set[Entity_Prop],
-  color:      v4f32,
-  tint:       v4f32,
-  loot_table: Loot_Table_Name,
+  animations:     [Animation_State]Sprite_Or_Animation,
+  sprites:        [dynamic; 8]Sprite_Name,
+  props:          bit_set[Entity_Prop],
+  kind:           Entity_Kind,
+  color:          v4f32,
+  tint:           v4f32,
+  collider:       Collider,
+  loot_table:     Loot_Table_Name,
+  movement_speed: f32,
 }
 
-Creature_Desc :: struct #all_or_none
+Creature_Desc :: struct
 {
-  animations:      [Animation_State]Sprite_Or_Animation,
-  collider:        Circle,
   corpse:          Sprite_Name,
   blood_pool:      Animation_Name,
   wander_range:    Range(i32),
@@ -270,6 +287,7 @@ Creature_Desc :: struct #all_or_none
   reaction_time:   f32,
   health:          i32,
   speed:           f32,
+  view_dist:       f32,
   loot_table:      Loot_Table_Name,
 }
 
@@ -385,6 +403,14 @@ init_resources :: proc(arena: ^mem.Arena)
     res.sprites[.Player_Sneak_4  ].pivot = {2.5, 13.0, 0}
     res.sprites[.Player_Sneak_5  ].pivot = {2.5, 13.0, 0}
 
+    res.sprites[.Zombie_Idle_1   ].pivot = {2.5, 13.0, 0}
+    res.sprites[.Zombie_Idle_2   ].pivot = {2.5, 12.0, 0}
+    res.sprites[.Zombie_Walk_1   ].pivot = {2.5, 13.0, 0}
+    res.sprites[.Zombie_Walk_2   ].pivot = {2.5, 12.0, 0}
+    res.sprites[.Zombie_Walk_3   ].pivot = {2.5, 13.0, 0}
+    res.sprites[.Zombie_Walk_4   ].pivot = {2.5, 13.0, 0}
+    res.sprites[.Zombie_Walk_5   ].pivot = {2.5, 13.0, 0}
+
     res.sprites[.Revolver        ].pivot = {0.0, 3.0, 0}
     res.sprites[.Rifle           ].pivot = {4.0, 3.0, 0}
     res.sprites[.Muzzle_Flash    ].pivot = {0.0, 1.5, 0}
@@ -453,49 +479,6 @@ init_resources :: proc(arena: ^mem.Arena)
     }
   }
 
-  // - Entities ---
-  {
-    for &en in res.entities
-    {
-      en.tint = {1, 1, 1, 1}
-    }
-
-    res.entities = {
-      .Nil = {},
-      .Grass = {
-        sprites = {.Grass},
-      },
-      .Lavender = {
-        props = {.Collectable},
-        sprites = {.Lavender},
-        loot_table = .Lavender,
-      },
-      .Chamomile = {
-        sprites = {.Chamomile},
-        props = {.Collectable},
-        loot_table = .Chamomile,
-      },
-      .Sunflower = {
-        sprites = {.Sunflower},
-        props = {.Collectable},
-        loot_table = .Sunflower,
-      },
-      .Brown_Mushroom = {
-        sprites = {.Brown_Mushroom},
-        props = {.Collectable},
-        loot_table = .Brown_Mushroom,
-      },
-      .Red_Mushroom = {
-        sprites = {.Red_Mushroom},
-        props = {.Collectable},
-        loot_table = .Red_Mushroom,
-      },
-      .Stump = {
-        sprites = {.Stump},
-      },
-    }
-  }
-
   // - Zones ---
   {
     res.zones = {
@@ -537,6 +520,21 @@ init_resources :: proc(arena: ^mem.Arena)
           {sprite=.Player_Sneak_3, duration=0.08},
           {sprite=.Player_Sneak_4, duration=0.08},
           {sprite=.Player_Sneak_5, duration=0.08},
+        },
+      },
+      .Zombie_Idle = {
+        frames = {
+          {sprite=.Zombie_Idle_1, duration=0.5},
+          {sprite=.Zombie_Idle_2, duration=0.5},
+        },
+      },
+      .Zombie_Walk = {
+        frames = {
+          {sprite=.Zombie_Walk_1, duration=0.2},
+          {sprite=.Zombie_Walk_2, duration=0.2},
+          {sprite=.Zombie_Walk_3, duration=0.2},
+          {sprite=.Zombie_Walk_4, duration=0.2},
+          {sprite=.Zombie_Walk_5, duration=0.2},
         },
       },
       .Deer_Idle = {
@@ -633,30 +631,51 @@ init_resources :: proc(arena: ^mem.Arena)
         lifetime_var = 0.05,
         scl = {0.3, 0.3},
         scl_var = 0.2,
-        vel = {96, 96},
+        vel = {48, 48},
         vel_dt = {0, 256},
       },
     }
   }
 
-  // - Player ---
+  // - Entities ---
   {
-    res.player = {
-      animations = #partial {
-        .Idle = .Player_Idle_1,
-        .Walk = .Player_Walk,
-        .Sneak_Idle = .Player_Sneak_1,
-        .Sneak_Walk = .Player_Sneak_Walk,
-      },
-      speed = 50,
+    for &en in res.entities
+    {
+      en.tint = {1, 1, 1, 1}
     }
-  }
 
-  // - Creatures ---
-  {
-    res.creatures = {
+    res.entities = {
       .Nil = {},
+
+      .Player = {
+        animations = #partial {
+          .Idle = .Player_Idle_1,
+          .Walk = .Player_Walk,
+          .Sneak_Idle = .Player_Sneak_1,
+          .Sneak_Walk = .Player_Sneak_Walk,
+        },
+        collider = Circle{
+          radius = 4,
+        },
+        movement_speed = 50,
+      },
+
+      .Item = {
+        collider = Circle{
+          radius = 4,
+        },
+      },
+
+      .Bullet = {
+        kind = .Projectile, 
+        collider = Circle{
+          radius = 3,
+        },
+      },
+
       .Deer = {
+        kind = .Creature,
+        props = {.Flee_Noise},
         animations = #partial {
           .Idle = .Deer_Idle,
           .Walk = .Deer_Walk,
@@ -665,6 +684,118 @@ init_resources :: proc(arena: ^mem.Arena)
           origin = {0, -5},
           radius = 6,
         },
+      },
+      .Rabbit = {
+        kind = .Creature,
+        props = {.Flee_Noise},
+        animations = #partial {
+          .Idle = .Rabbit_Idle,
+          .Walk = .Rabbit_Walk,
+        },
+        collider = Circle{
+          origin = {0, -2},
+          radius = 4,
+        },
+      },
+      .Squirrel = {
+        kind = .Creature,
+        props = {.Flee_Noise},
+        animations = #partial {
+          .Idle = .Squirrel_Idle,
+          .Walk = .Squirrel_Walk,
+        },
+        collider = Circle{
+          origin = {0, -2},
+          radius = 4,
+        },
+      },
+      .Zombie = {
+        kind = .Creature,
+        props = {.Hostile},
+        animations = #partial {
+          .Idle = .Zombie_Idle,
+          .Walk = .Zombie_Walk,
+        },
+        collider = Circle{
+          origin = {0, -5},
+          radius = 5,
+        },
+      },
+
+      .Grass = {
+        sprites = {.Grass},
+      },
+      .Lavender = {
+        props = {.Collectable},
+        sprites = {.Lavender},
+        collider = Circle{
+          origin = {0, -2},
+          radius = 4,
+        },
+        loot_table = .Lavender,
+      },
+      .Chamomile = {
+        sprites = {.Chamomile},
+        props = {.Collectable},
+        collider = Circle{
+          origin = {0, -2},
+          radius = 4,
+        },
+        loot_table = .Chamomile,
+      },
+      .Sunflower = {
+        sprites = {.Sunflower},
+        props = {.Collectable},
+        collider = Circle{
+          origin = {0, -2},
+          radius = 4,
+        },
+        loot_table = .Sunflower,
+      },
+      .Brown_Mushroom = {
+        sprites = {.Brown_Mushroom},
+        props = {.Collectable},
+        collider = Circle{
+          origin = {0, -2},
+          radius = 4,
+        },
+        loot_table = .Brown_Mushroom,
+      },
+      .Red_Mushroom = {
+        sprites = {.Red_Mushroom},
+        props = {.Collectable},
+        collider = Circle{
+          origin = {0, -2},
+          radius = 4,
+        },
+        loot_table = .Red_Mushroom,
+      },
+      .Stump = {
+        sprites = {.Stump},
+        collider = Circle{
+          origin = {0, -2},
+          radius = 4,
+        },
+      },
+    }
+  }
+
+  // - Creatures ---
+  {
+    res.creatures = #partial {
+      .Nil = {},
+      .Zombie = {
+        corpse = .Zombie_Corpse,
+        blood_pool = .Blood_Pool_Expand_L,
+        wander_range = {50, 100},
+        noise_threshold = 30,
+        reaction_time = 0.2,
+        health = 10,
+        speed = 15,
+        view_dist = 300,
+        loot_table = .Nil,
+      },
+      .Deer = {
         corpse = .Deer_Corpse,
         blood_pool = .Blood_Pool_Expand_L,
         wander_range = {10, 50},
@@ -676,14 +807,6 @@ init_resources :: proc(arena: ^mem.Arena)
         loot_table = .Deer,
       },
       .Rabbit = {
-        animations = #partial {
-          .Idle = .Rabbit_Idle,
-          .Walk = .Rabbit_Walk,
-        },
-        collider = Circle{
-          origin = {0, -2},
-          radius = 4,
-        },
         corpse = .Rabbit_Corpse,
         blood_pool = .Blood_Pool_Expand_M,
         wander_range = {10, 50},
@@ -695,14 +818,6 @@ init_resources :: proc(arena: ^mem.Arena)
         loot_table = .Rabbit,
       },
       .Squirrel = {
-        animations = #partial {
-          .Idle = .Squirrel_Idle,
-          .Walk = .Squirrel_Walk,
-        },
-        collider = Circle{
-          origin = {0, -2},
-          radius = 4,
-        },
         corpse = .Squirrel_Corpse,
         blood_pool = .Blood_Pool_Expand_M,
         wander_range = {10, 50},

@@ -57,7 +57,7 @@ gl_draw :: proc()
   renderer.uniforms.projection = cast(m4x4f32) renderer.pass.projection
   renderer.uniforms.camera = cast(m4x4f32) renderer.pass.camera
 
-  gl.Viewport(expand_values(([4]i32)(renderer.pass.viewport)))
+  gl.Viewport(**([4]i32)(renderer.pass.viewport))
 
   gl.NamedBufferSubData(renderer.ssbo, 0, renderer.vertices_count * size_of(Vertex), &renderer.vertices[0])
   gl.NamedBufferSubData(renderer.ibo, 0, renderer.indices_count * size_of(u16), &renderer.indices[0])
@@ -68,7 +68,7 @@ gl_draw :: proc()
   gl.UniformBlockBinding(program, 0, 0)
   gl.Uniform1i(renderer.pass.shader.uniforms.tex, 0)
   gl.Uniform1i(renderer.pass.shader.uniforms.fnt, 1)
-  gl.Uniform4f(renderer.pass.shader.uniforms.light, expand_values(renderer.pass.light_color))
+  gl.Uniform4f(renderer.pass.shader.uniforms.light, **renderer.pass.light_color)
 
   gl.DrawElements(gl.TRIANGLES, i32(renderer.indices_count), gl.UNSIGNED_SHORT, nil)
 
