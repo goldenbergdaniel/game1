@@ -93,6 +93,7 @@ Game :: struct
   player_inventory:   struct
   {
     items:            [Item_Kind]int,
+    blood:            int,
   },
   light_color:        v4f32,
   selected_entity:    Entity_Ref,
@@ -191,14 +192,11 @@ game_start :: proc(gm: ^Game)
 
   set_active_zone(gm.active_zone, true)
 
-  for _ in 0..<1
-  {
-    spawn_creature(.Deer, {170, 180})
-    spawn_creature(.Rabbit, {200, 200})
-    spawn_creature(.Squirrel, {230, 190})
-    // spawn_creature(.Zombie, {100, 100})
-    spawn_creature(.Squirrel, {50, 50})
-  }
+  spawn_creature(.Deer, {170, 180})
+  spawn_creature(.Rabbit, {200, 200})
+  spawn_creature(.Squirrel, {230, 190})
+  spawn_creature(.Zombie, {100, 100})
+  spawn_creature(.Squirrel, {50, 50})
 
   play_sound(.Minecraft, volume=global.audio.music_volume)
 
@@ -330,6 +328,7 @@ game_update :: proc(gm: ^Game, dt: f32)
   }
 
   // - Player movement (:move, :movement) ---
+  if .Harvesting not_in player.props
   {
     EQUIPPED_MULT  :: 0.7
     BACKWARD_MULT  :: 0.7
@@ -380,11 +379,7 @@ game_update :: proc(gm: ^Game, dt: f32)
       player.input_dir.y = 0
     }
 
-    if key_down(.Space)
-    {
-      entity_play_animation(player, .Harvest_Blood, looping=false)
-    }
-    else if player.input_dir.x != 0 || player.input_dir.y != 0
+    if player.input_dir.x != 0 || player.input_dir.y != 0
     {
       speed_mult: f32 = 1
       speed_mult *= backward ? BACKWARD_MULT : 1
@@ -415,6 +410,10 @@ game_update :: proc(gm: ^Game, dt: f32)
 
     entity_flip_to_target(player, cursor_pos)
     set_audio_listener_pos(tt.global_pos(player))
+  }
+  else
+  {
+    player.vel = {}
   }
 
   // - Creature ---
@@ -731,7 +730,7 @@ game_update :: proc(gm: ^Game, dt: f32)
     }
   }
 
-  // - Animate entities (:animate, :animation) ---
+  // - Animate entities (:animation, :animate) ---
   for &en in gm.entities do if en.flags.update
   {
     // - Update animation state ---
@@ -774,33 +773,6 @@ game_update :: proc(gm: ^Game, dt: f32)
         hold_off.y += 1 if .Sneaking in player.props else 0
         tt.local(weapon).pos = hold_off
       }
-    }
-
-    if .Flash_Color in en.props
-    {
-      if timer_timeout(&en.flash_color_timer)
-      {
-        en.color = {0, 0, 0, 0}
-        en.props -= {.Flash_Color}
-      }
-      else
-      {
-        en.color = en.flash_color
-      }
-    }
-
-    if .Rotate_Over_Time in en.props
-    {
-      tt.local(en).rot += 0.25 * math.PI * dt
-    }
-
-    if .Highlighted in en.props
-    {
-      en.tint.rgb = 1.3
-    }
-    else
-    {
-      en.tint.rgb = 1
     }
 
     // - Distort ---
@@ -965,6 +937,33 @@ game_update :: proc(gm: ^Game, dt: f32)
           }
         }
       }
+    }
+
+    if .Flash_Color in en.props
+    {
+      if timer_timeout(&en.flash_color_timer)
+      {
+        en.color = {0, 0, 0, 0}
+        en.props -= {.Flash_Color}
+      }
+      else
+      {
+        en.color = en.flash_color
+      }
+    }
+
+    if .Rotate_Over_Time in en.props
+    {
+      tt.local(en).rot += 0.25 * math.PI * dt
+    }
+
+    if .Highlighted in en.props
+    {
+      en.tint.rgb = 1.3
+    }
+    else
+    {
+      en.tint.rgb = 1
     }
   }
 
@@ -1945,11 +1944,11 @@ entity_child_at :: proc(en: ^Entity, idx: int) -> (res: ^Entity, ok: bool)
 }
 
 entity_play_animation :: proc(
-  en:      ^Entity,
-  anim:    Animation_State,
+  en: ^Entity,
+  anim: Animation_State,
   looping: bool,
   reverse: bool = false,
-  speed:   f32 = 1.0,
+  speed: f32 = 1.0,
 ){
   en.animation.next_state = anim
   en.animation.looping = looping
@@ -1957,10 +1956,38 @@ entity_play_animation :: proc(
   en.animation.speed = speed
 }
 
+entity_animation_last_frame :: proc(en: ^Entity) -> u16
+{
+  anim, ok := en.animation.data[en.animation.state].(Animation_Name)
+  if ok
+  {
+    return cast(u16) len(res.animations[anim].frames) - 1
+  }
+  else
+  {
+    return 0
+  }
+}
+
+entity_animation_at_end :: proc(en: ^Entity) -> bool
+{
+  return (!en.animation.reverse && en.animation.frame_idx == entity_animation_last_frame(en)) ||
+         (en.animation.reverse && en.animation.frame_idx == 0)
+}
+
+animation_cb_stub :: proc(_: ^Entity, _: int) {}
+
+animation_cb_harvest_blood :: proc(en: ^Entity, frame: int)
+{
+  println("Harvest blood:", en.name, frame)
+}
+
 entity_resolve_collision_stub :: proc(_, _: ^Entity, _: enum{Enter, Stay, Exit}) {}
 
 entity_resolve_collision_player :: proc(this, other: ^Entity, action: enum{Enter, Stay, Exit})
 {
+  gm := get_active_game()
+
   if other.name == .Blood_Pool_M || other.name == .Blood_Pool_L
   {
     switch action
@@ -1969,7 +1996,23 @@ entity_resolve_collision_player :: proc(this, other: ^Entity, action: enum{Enter
       printf("%s enters blood pool.\n", this.name)
 
     case .Stay:
-      printf("%s stays in blood pool.\n", this.name)
+      if key_down(.Space)
+      {
+        this.props += {.Harvesting}
+        entity_holster_weapon(this, true)
+        entity_play_animation(this, .Harvest_Blood, false)
+        if entity_animation_at_end(this) && this.animation.state == this.animation.next_state
+        {
+          this.props -= {.Harvesting}
+          gm.player_inventory.blood += 5
+          kill_entity(other)
+          entity_play_animation(this, .Idle, true)
+        }
+      }
+      else if key_just_up(.Space)
+      {
+        entity_play_animation(this, .Idle, true)
+      }
 
     case .Exit:
       printf("%s exits blood pool.\n", this.name)
@@ -2024,25 +2067,6 @@ entity_resolve_collision_item :: proc(this, other: ^Entity, action: enum{Enter, 
   gm := get_active_game()
   gm.player_inventory.items[this.item_kind] += 1
   kill_entity(this)
-}
-
-entity_animation_last_frame :: proc(en: ^Entity) -> u16
-{
-  anim, ok := en.animation.data[en.animation.state].(Animation_Name)
-  if ok
-  {
-    return cast(u16) len(res.animations[anim].frames) - 1
-  }
-  else
-  {
-    return 0
-  }
-}
-
-entity_animation_at_end :: proc(en: ^Entity) -> bool
-{
-  return (!en.animation.reverse && en.animation.frame_idx == entity_animation_last_frame(en)) ||
-         (en.animation.reverse && en.animation.frame_idx == 0)
 }
 
 entity_flip_vec :: proc(en: ^Entity) -> v2f32

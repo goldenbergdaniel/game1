@@ -277,6 +277,7 @@ Animation_Desc :: struct
     sprite:   Sprite_Name,
     duration: f32,
   },
+  callback:   proc(en: ^Entity, frame: int),
 }
 
 Particle_Desc :: struct
@@ -568,6 +569,7 @@ init_resources :: proc(arena: ^mem.Arena)
           {sprite=.Player_Harvest_Blood_7, duration=0.3},
           {sprite=.Player_Harvest_Blood_8, duration=0.3},
         },
+        callback = animation_cb_harvest_blood,
       },
 
       .Blood_Pool_Expand_M = {
@@ -660,6 +662,11 @@ init_resources :: proc(arena: ^mem.Arena)
           {sprite=.Zombie_Melee_2, duration=0.5},
         },
       },
+    }
+
+    for &anim in res.animations do if anim.callback == nil
+    {
+      anim.callback = animation_cb_stub
     }
   }
 
