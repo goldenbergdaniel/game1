@@ -11,8 +11,8 @@ import "basic/mem"
 import "platform"
 import "render"
 
-VIEWPORT_WIDTH  :: 240.0 // 192.0 or 240.0
-VIEWPORT_HEIGHT :: 135.0 // 108.0 or 135.0
+VIEWPORT_WIDTH  :: 192.0 // 192.0 or 240.0
+VIEWPORT_HEIGHT :: 108.0 // 108.0 or 135.0
 TIME_STEP       :: 1.0 / 40
 
 User :: struct

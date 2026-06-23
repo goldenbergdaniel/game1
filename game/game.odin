@@ -196,7 +196,8 @@ game_start :: proc(gm: ^Game)
     spawn_creature(.Deer, {170, 180})
     spawn_creature(.Rabbit, {200, 200})
     spawn_creature(.Squirrel, {230, 190})
-    spawn_creature(.Zombie, {100, 100})
+    // spawn_creature(.Zombie, {100, 100})
+    spawn_creature(.Squirrel, {50, 50})
   }
 
   play_sound(.Minecraft, volume=global.audio.music_volume)
@@ -379,7 +380,11 @@ game_update :: proc(gm: ^Game, dt: f32)
       player.input_dir.y = 0
     }
 
-    if player.input_dir.x != 0 || player.input_dir.y != 0
+    if key_down(.Space)
+    {
+      entity_play_animation(player, .Harvest_Blood, looping=false)
+    }
+    else if player.input_dir.x != 0 || player.input_dir.y != 0
     {
       speed_mult: f32 = 1
       speed_mult *= backward ? BACKWARD_MULT : 1
@@ -392,7 +397,7 @@ game_update :: proc(gm: ^Game, dt: f32)
       noise: f32 = sneaking ? SNEAKING_NOISE : WALKING_NOISE
       emit_noise(noise, tt.global_pos(player))
 
-      player.movement_speed = res.entities[.Player].movement_speed * speed_mult
+      player.movement_speed = res.creatures[.Player].speed * speed_mult
       if player.vel.x != 0 && player.vel.y != 0
       {
         player.vel = vmath.normalize(player.input_dir) * player.movement_speed
@@ -565,44 +570,70 @@ game_update :: proc(gm: ^Game, dt: f32)
   {
     for &en in gm.entities do if en.flags.update && en.collider != nil
     {
-      // println("Name:", en.name)
       entity_collider_update(&en, dt)
     }
 
-    Collision :: struct{a, b: u32}
+    Collision :: struct{a, b: u32, stale: bool}
 
     @(static)
     collided_cache: [dynamic]Collision
-    collided_cache.allocator = mem.allocator(&global.frame_arena)
+    collided_cache.allocator = mem.allocator(&user.perm_arena)
 
-    in_collided_cache :: proc(a, b: Entity_Ref) -> bool
+    lookup_cache :: proc(a, b: Entity_Ref) -> (int, bool)
     {
-      for col in collided_cache
+      for col, i in collided_cache
       {
-        if col.a == a.id && col.b == b.id do return true
+        if (col.a == a.id && col.b == b.id)
+        {
+          return i, true
+        }
       }
 
-      return false
+      return -1, false
+    }
+
+    // - Set stale flag ---
+    for &col, i in collided_cache
+    {
+      col.stale = true
     }
 
     for &en_a in gm.entities do if en_a.flags.update && en_a.collider != nil
     {
+      // - Entity collision ---
       for &en_b in gm.entities do if en_b.flags.update && en_b.collider != nil
       {
         if entity_is_same(en_a, en_b) do continue
 
-        if en_b.col_layer in COLLISION_MATRIX[en_a.col_layer]
+        if en_b.collision_layer in COLLISION_MATRIX[en_a.collision_layer]
         {
-          if !in_collided_cache(en_a.ref, en_b.ref) && collider_overlap(en_a.collider, en_b.collider)
+          if collider_overlap(en_a.collider, en_b.collider)
           {
-            append(&collided_cache, Collision{en_a.ref.id, en_b.ref.id})
-
-            en_a->resolve_collision(&en_b)
-            en_b->resolve_collision(&en_a)
+            col_idx, col_in_cache := lookup_cache(en_a.ref, en_b.ref)
+            if !col_in_cache
+            {
+              append(&collided_cache, Collision{en_a.ref.id, en_b.ref.id, false})
+              en_a->resolve_collision(&en_b, .Enter)
+            }
+            else
+            {
+              collided_cache[col_idx].stale = false
+              en_a->resolve_collision(&en_b, .Stay)
+            }
+          }
+          else
+          {
+            col_idx, col_in_cache := lookup_cache(en_a.ref, en_b.ref)
+            if col_in_cache
+            {
+              unordered_remove(&collided_cache, col_idx)
+              en_a->resolve_collision(&en_b, .Exit)
+            }
           }
         }
       }
 
+      // - Cursor collision ---
       if circle, ok := en_a.collider.(Circle); ok
       {
         if point_in_circle(cursor_pos, circle)
@@ -615,7 +646,14 @@ game_update :: proc(gm: ^Game, dt: f32)
       }
     }
 
-    clear(&collided_cache)
+    // - Evict stale cache ---
+    for col, i in collided_cache
+    {
+      if col.stale
+      {
+        unordered_remove(&collided_cache, i)
+      }
+    }
   }
 
   // - Harvest decoration ---
@@ -627,15 +665,9 @@ game_update :: proc(gm: ^Game, dt: f32)
     for &en in gm.entities do if .Collectable in en.props
     {
       en_pos := tt.global_pos(en)
-      en_col := Circle{
-        origin = en_pos, 
-        radius = 3,
-      }
-
-      debug_circle(en_col.origin, en_col.radius)
 
       dist := vmath.distance_2f32(tt.global_pos(player), en_pos)
-      if dist < RANGE && point_in_circle(cursor_pos, en_col)
+      if dist < RANGE && point_in_shape(cursor_pos, en.collider)
       {
         if dist < closest_dist
         {
@@ -1376,9 +1408,9 @@ Entity :: struct
   tint:              v4f32,
   color:             v4f32,
   sprite:            Sprite_Name,
-  collider:          Collider,
-  col_layer:         Collision_Layer,
-  resolve_collision: proc(this, other: ^Entity),
+  collider:          Shape,
+  collision_layer:   Collision_Layer,
+  resolve_collision: proc(this, other: ^Entity, action: enum{Enter, Stay, Exit}),
   z_index:           i16,
   z_layer:           enum{Base, Enemy, Player, Projectile},
   attack_timer:      Timer,
@@ -1447,6 +1479,7 @@ Entity_Prop :: enum
   Sneaking,
   Flee_Noise,
   Hostile,
+  Harvesting,
 }
 
 Entity_State :: enum
@@ -1499,7 +1532,7 @@ Collision_Layer :: enum
 
 Entity_Kind :: enum
 {
-  Nil,
+  Other,
   Creature,
   Projectile,
 }
@@ -1529,7 +1562,7 @@ NIL_ENTITY: Entity
 
 @(rodata)
 COLLISION_MATRIX: [Collision_Layer]bit_set[Collision_Layer] = {
-  .Nil               = {.Nil},
+  .Nil               = {},
   .Player            = {.Item},
   .Player_Projectile = {.Enemy},
   .Enemy             = {.Player_Projectile},
@@ -1639,7 +1672,6 @@ defer_entity_spawn :: proc(en: ^Entity)
 
 kill_entity :: proc(en: ^Entity, kill_children := true)
 {
-  en.flags.update = false
   en.props += {.Marked_For_Death}
 
   if kill_children
@@ -1647,7 +1679,6 @@ kill_entity :: proc(en: ^Entity, kill_children := true)
     for child_ref in en.children
     {
       child := entity_from_ref(child_ref) or_continue
-      child.flags.update = false
       child.props += {.Marked_For_Death}
     }
   }
@@ -1680,10 +1711,11 @@ spawn_player :: proc() -> ^Entity
   player.name = .Player
   player.z_layer = .Player
   player.props += {.Interpolate}
-  player.movement_speed = desc.movement_speed
+  player.movement_speed = res.creatures[.Player].speed
   player.animation.data = desc.animations
-  player.col_layer = .Player
+  player.collision_layer = .Player
   player.collider = desc.collider
+  player.resolve_collision = entity_resolve_collision_player
 
   spawn_shadow(player, .Shadow_1, {0, -0.5})
 
@@ -1724,6 +1756,35 @@ spawn_player :: proc() -> ^Entity
   return player
 }
 
+spawn_entity :: proc(
+  name: Entity_Name, 
+  pos: v2f32, 
+  sprite := Sprite_Name.Nil,
+  deferred := false, 
+) -> (
+  ^Entity,
+){
+  gm := get_active_game()
+
+  en := alloc_entity(gm)
+  setup_entity(en, deferred)
+
+  en.name = name
+  en.props = res.entities[name].props
+  en.animation.data = res.entities[name].animations
+  en.collider = res.entities[name].collider
+  en.loot_table = res.entities[name].loot_table
+
+  if sprite != .Nil
+  {
+    en.sprite = sprite
+  }
+
+  tt.local(en).pos = pos
+
+  return en
+}
+
 spawn_creature :: proc(name: Entity_Name, pos: v2f32, deferred := false) -> ^Entity
 {
   gm := get_active_game()
@@ -1737,7 +1798,7 @@ spawn_creature :: proc(name: Entity_Name, pos: v2f32, deferred := false) -> ^Ent
   creature.kind = desc.kind
   creature.props += {.Interpolate} + desc.props
   creature.z_layer = .Enemy
-  creature.col_layer = .Enemy
+  creature.collision_layer = .Enemy
   creature.resolve_collision = entity_resolve_collision_creature
   creature.health = res.creatures[name].health
   creature.animation.data = desc.animations
@@ -1781,7 +1842,7 @@ spawn_projectile :: proc(name: Entity_Name, pos: v2f32, deferred := false) -> ^E
   projectile.props += {.Interpolate, .Kill_After_Time}
   projectile.z_layer = .Projectile
   projectile.animation.data[.Idle] = .Bullet
-  projectile.col_layer = .Player_Projectile
+  projectile.collision_layer = .Player_Projectile
   projectile.resolve_collision = entity_resolve_collision_projectile
   projectile.collider = res.entities[name].collider
 
@@ -1803,7 +1864,7 @@ spawn_item :: proc(kind: Item_Kind, pos: v2f32, deferred := false) -> ^Entity
   item.item_kind = kind
   item.props += {.Interpolate}
   item.z_index = 100
-  item.col_layer = .Item
+  item.collision_layer = .Item
   item.animation.data = desc.animations
   item.resolve_collision = entity_resolve_collision_item
   item.collider = res.entities[.Item].collider
@@ -1821,23 +1882,18 @@ spawn_corpse :: proc(owner: ^Entity, deferred := false) -> ^Entity
   corpse := alloc_entity(gm)
   setup_entity(corpse, deferred)
 
-  creature_desc := &res.creatures[owner.name]
-
   corpse.props += {.Interpolate}
   corpse.props += owner.props & {.Flip_H}
-  corpse.animation.data[.Idle] = creature_desc.corpse
+  corpse.animation.data[.Idle] = res.creatures[owner.name].corpse
 
   tt.local(corpse).pos = tt.global_pos(owner) + {0, 0}
 
   // - Blood pool ---
   {
-    blood_pool := alloc_entity(gm)
-    setup_entity(blood_pool, deferred)
-
+    blood_pool := spawn_entity(res.creatures[owner.name].blood_pool, {0, 0}, deferred=deferred)
     blood_pool.props += {.Interpolate}
     blood_pool.z_index = -1
-    blood_pool.animation.data[.Idle] = .Blood_Pool_1
-    blood_pool.animation.data[.Expand] = creature_desc.blood_pool
+    blood_pool.collision_layer = .Item
 
     entity_play_animation(blood_pool, .Expand, looping=false)
 
@@ -1866,29 +1922,6 @@ spawn_shadow :: proc(owner: ^Entity, sprite: Sprite_Name, offet: v2f32, deferred
   entity_attach_child(owner, shadow)
 
   return shadow
-}
-
-spawn_entity :: proc(name: Entity_Name, pos: v2f32, deferred := false, sprite := Sprite_Name.Nil) -> ^Entity
-{
-  gm := get_active_game()
-
-  en := alloc_entity(gm)
-  setup_entity(en, deferred)
-
-  en.name = name
-  en.sprite = res.entities[name].sprites[0]
-  en.props = res.entities[name].props
-  en.loot_table = res.entities[name].loot_table
-  en.collider = res.entities[name].collider
-
-  if sprite != nil
-  {
-    en.sprite = sprite
-  }
-
-  tt.local(en).pos = pos
-
-  return en
 }
 
 entity_attach_child :: proc(parent, child: ^Entity) -> (ok: bool)
@@ -1924,48 +1957,69 @@ entity_play_animation :: proc(
   en.animation.speed = speed
 }
 
-entity_resolve_collision_stub :: proc(this, other: ^Entity) {}
+entity_resolve_collision_stub :: proc(_, _: ^Entity, _: enum{Enter, Stay, Exit}) {}
 
-entity_resolve_collision_creature :: proc(this, other: ^Entity)
+entity_resolve_collision_player :: proc(this, other: ^Entity, action: enum{Enter, Stay, Exit})
 {
-  assert(this.kind == .Creature)
-
-  this.health -= 1
-
-  if this.health == 0
+  if other.name == .Blood_Pool_M || other.name == .Blood_Pool_L
   {
-    kill_entity(this)
-
-    item_kind := roll_loot_table(res.creatures[this.name].loot_table)
-    if item_kind != .Nil
+    switch action
     {
-      spawn_item(item_kind, tt.global_pos(this))
+    case .Enter:
+      printf("%s enters blood pool.\n", this.name)
+
+    case .Stay:
+      printf("%s stays in blood pool.\n", this.name)
+
+    case .Exit:
+      printf("%s exits blood pool.\n", this.name)
     }
-
-    corpse := spawn_corpse(this)
-    corpse.props += {.Flash_Color}
-    corpse.flash_color = {1, 1, 1, 0}
-    timer_start(&corpse.flash_color_timer, 0.05)
-  }
-
-  spawn_particles(.Hurt_Blood, tt.global_pos(this))
-
-  this.props += {.Flash_Color}
-  this.flash_color = {1, 1, 1, 0}
-  timer_start(&this.flash_color_timer, 0.05)
-
-  if .Flee_Noise in this.props
-  {
-    entity_set_state(this, .Flee)
   }
 }
 
-entity_resolve_collision_projectile :: proc(this, other: ^Entity)
+entity_resolve_collision_creature :: proc(this, other: ^Entity, action: enum{Enter, Stay, Exit})
+{
+  assert(this.kind == .Creature)
+
+  if action == .Enter
+  {
+    this.health -= 1
+
+    if this.health == 0
+    {
+      kill_entity(this)
+
+      item_kind := roll_loot_table(res.creatures[this.name].loot_table)
+      if item_kind != .Nil
+      {
+        spawn_item(item_kind, tt.global_pos(this))
+      }
+
+      corpse := spawn_corpse(this)
+      corpse.props += {.Flash_Color}
+      corpse.flash_color = {1, 1, 1, 0}
+      timer_start(&corpse.flash_color_timer, 0.05)
+    }
+
+    spawn_particles(.Hurt_Blood, tt.global_pos(this))
+
+    this.props += {.Flash_Color}
+    this.flash_color = {1, 1, 1, 0}
+    timer_start(&this.flash_color_timer, 0.05)
+
+    if .Flee_Noise in this.props
+    {
+      entity_set_state(this, .Flee)
+    }
+  }
+}
+
+entity_resolve_collision_projectile :: proc(this, other: ^Entity, action: enum{Enter, Stay, Exit})
 {
   kill_entity(this)
 }
 
-entity_resolve_collision_item :: proc(this, other: ^Entity)
+entity_resolve_collision_item :: proc(this, other: ^Entity, action: enum{Enter, Stay, Exit})
 {
   gm := get_active_game()
   gm.player_inventory.items[this.item_kind] += 1
@@ -2043,15 +2097,6 @@ entity_xform :: proc(en: ^Entity) -> m3f32
 
 entity_collider_update :: proc(en: ^Entity, dt: f32)
 {
-  // NOTE(dg): This is a stub.
-  @(static)
-  collider_map: [Sprite_Name]struct
-  {
-    origin:       [2]f32,
-    vertices:     [6][2]f32,
-    vertex_count: u8,
-  }
-
   switch &collider in en.collider
   {
   case Circle:
@@ -2254,7 +2299,7 @@ entity_state_wander :: proc(en: ^Entity, ctx: ^Entity_State_Context)
 
   case .Move:
     entity_play_animation(en, .Walk, looping=true)
-    debug_circle(wander.point, 4)
+    debug_circle(wander.point, 1, color={0, 0, 1, 0})
 
     arrived := entity_move_to_point(en, wander.point, creature_desc.speed*ctx.dt)
     if arrived

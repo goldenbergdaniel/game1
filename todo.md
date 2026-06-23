@@ -90,9 +90,7 @@
 -inventory
 -map decorations (trees, bushes, grass, mushrooms)
 -sort sprites by y
--fix edge bleeding
 -day/night cycle
--town
 
 
 # - IDEAS -

@@ -15,7 +15,7 @@ Polygon :: struct
   vertices: [dynamic; 8]v2f32,
 }
 
-Collider :: union
+Shape :: union
 {
   Circle,
   Polygon,
@@ -108,8 +108,21 @@ circle_polygon_overlap :: proc(circle: Circle, polygon: Polygon) -> bool
     dist_to_circle := vmath.distance(edge_point, circle.origin)
     if dist_to_circle <= circle.radius do return true
 
-    verticies := polygon.vertices
-    if point_in_polygon(circle.origin, verticies[:len(polygon.vertices)]) do return true
+    if point_in_polygon(circle.origin, polygon) do return true
+  }
+
+  return false
+}
+
+point_in_shape :: proc(point: v2f32, shape: Shape) -> bool
+{
+  switch v in shape
+  {
+  case Circle:
+    return point_in_circle(point, v)
+    
+  case Polygon:
+    return point_in_polygon(point, v)
   }
 
   return false
@@ -126,15 +139,15 @@ point_in_bounds :: proc(point: v2f32, bounds: [2]Range(f32)) -> bool
          (point.y > bounds.y.min && point.y < bounds.y.max)
 }
 
-point_in_polygon :: proc(point: v2f32, polygon: []v2f32) -> bool
+point_in_polygon :: proc(point: v2f32, polygon: Polygon) -> bool
 {
   inside: bool
-  n := len(polygon)
+  n := len(polygon.vertices)
 
   for i in 0..<n
   {
     j := (i + 1) % n
-    vi, vj := polygon[i], polygon[j]
+    vi, vj := polygon.vertices[i], polygon.vertices[j]
 
     // Check if point is between y-coords of edge and to the left of the edge
     if (vi.y > point.y) != (vj.y > point.y) &&
@@ -147,7 +160,7 @@ point_in_polygon :: proc(point: v2f32, polygon: []v2f32) -> bool
   return inside
 }
 
-collider_overlap :: proc(a, b: Collider) -> bool
+collider_overlap :: proc(a, b: Shape) -> bool
 {
   switch va in a
   {
