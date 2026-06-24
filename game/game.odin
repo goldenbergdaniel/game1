@@ -368,23 +368,14 @@ game_update :: proc(gm: ^Game, dt: f32)
 
     if player.input_dir.x != 0 || player.input_dir.y != 0
     {
-      speed_mult: f32 = 1
-      speed_mult *= backward ? BACKWARD_MULT : 1
-      speed_mult *= sneaking ? SNEAKING_MULT : 1
-      speed_mult *= !gm.weapon.holstered ? EQUIPPED_MULT : 1
+      speed_mult: f32 = 1.0
+      speed_mult *= backward ? BACKWARD_MULT : 1.0
+      speed_mult *= sneaking ? SNEAKING_MULT : 1.0
+      speed_mult *= !gm.weapon.holstered ? EQUIPPED_MULT : 1.0
 
-      state: Entity_State
-      if sneaking
-      {
-        state = .Sneak
-      }
-      else
-      {
-        state = .Walk
-      }
+      player.speed_mult = speed_mult * (backward ? -1 : 1)
 
-      // entity_play_animation(player, anim, speed=speed_mult, looping=true, reverse=backward)
-      entity_set_state(player, state)
+      entity_set_state(player, .Walk)
 
       noise: f32 = sneaking ? SNEAKING_NOISE : WALKING_NOISE
       emit_noise(noise, tt.global_pos(player))
@@ -401,8 +392,8 @@ game_update :: proc(gm: ^Game, dt: f32)
     }
     else
     {
-      state: Entity_State = sneaking ? .Sneak : .Idle
-      entity_set_state(player, state)
+      player.speed_mult = 0
+      entity_set_state(player, .Idle)
     }
 
     entity_flip_to_target(player, cursor_pos)
@@ -788,7 +779,7 @@ game_update :: proc(gm: ^Game, dt: f32)
       {
         hold_off := res.weapons[gm.weapon.kind].hold_off
         hold_off *= entity_flip_vec(player)
-        hold_off.y += 1 if .Sneaking in player.props else 0
+        hold_off.y += 0 if .Sneaking in player.props else 0
         tt.local(weapon).pos = hold_off
       }
     }
@@ -1423,6 +1414,7 @@ Entity :: struct
   movement_speed:    f32,
   health:            i32,
   damage:            i32,
+  speed_mult:        f32, // NOTE(dg): I need to figure out what the hell is going on
   tint:              v4f32,
   color:             v4f32,
   sprite:            Sprite_Name,
@@ -1503,7 +1495,6 @@ Entity_State :: enum
 {
   Idle,
   Walk,
-  Sneak,
   Harvest,
   Bob,
   Expand,
@@ -1998,13 +1989,6 @@ entity_animation_at_end :: proc(en: ^Entity) -> bool
          (en.animation.reverse && en.animation.frame_idx == 0)
 }
 
-animation_cb_stub :: proc(_: ^Entity, _: int) {}
-
-animation_cb_harvest_blood :: proc(en: ^Entity, frame: int)
-{
-
-}
-
 entity_resolve_collision_stub :: proc(_, _: ^Entity, _: enum{Enter, Stay, Exit}) {}
 
 entity_resolve_collision_player :: proc(this, other: ^Entity, action: enum{Enter, Stay, Exit})
@@ -2301,7 +2285,6 @@ entity_set_state :: proc(en: ^Entity, st: Entity_State, reset := false)
   {
   case .Idle:   en.update_state  = entity_state_idle
   case .Walk:   en.update_state  = entity_state_walk
-  case .Sneak:  en.update_state  = entity_state_sneak
   case .Harvest: en.update_state = entity_state_harvest
   case .Bob:    en.update_state  = entity_state_bob
   case .Expand:
@@ -2320,15 +2303,23 @@ entity_state_idle :: proc(this: ^Entity, ctx: ^Entity_State_Context)
   anim: Animation_State
   if this.name == .Player
   {
+    handedness := res.weapons[gm.weapon.kind].handedness
     if .Sneaking in this.props
     {
-      anim = .Sneak_Idle
+      if !gm.weapon.holstered
+      {
+        anim = handedness == .One_Handed ? .Sneak_Idle_One_Handed : .Sneak_Idle_Two_Handed
+      }
+      else
+      {
+        anim = .Sneak_Idle_Unarmed
+      }
     }
     else
     {
       if !gm.weapon.holstered
       {
-        anim = res.weapons[gm.weapon.kind].handedness == .One_Handed ? .Idle_One_Handed : .Idle_Two_Handed
+        anim = handedness == .One_Handed ? .Idle_One_Handed : .Idle_Two_Handed
       }
       else
       {
@@ -2351,15 +2342,23 @@ entity_state_walk :: proc(this: ^Entity, ctx: ^Entity_State_Context)
   anim: Animation_State
   if this.name == .Player
   {
+    handedness := res.weapons[gm.weapon.kind].handedness
     if .Sneaking in this.props
     {
-      anim = .Sneak_Walk
+      if !gm.weapon.holstered
+      {
+        anim = handedness == .One_Handed ? .Sneak_Walk_One_Handed : .Sneak_Walk_Two_Handed
+      }
+      else
+      {
+        anim = .Sneak_Walk_Unarmed
+      }
     }
     else
     {
       if !gm.weapon.holstered
       {
-        anim = res.weapons[gm.weapon.kind].handedness == .One_Handed ? .Walk_One_Handed : .Walk_Two_Handed
+        anim = handedness == .One_Handed ? .Walk_One_Handed : .Walk_Two_Handed
       }
       else
       {
@@ -2368,12 +2367,7 @@ entity_state_walk :: proc(this: ^Entity, ctx: ^Entity_State_Context)
     }
   }
   
-  entity_play_animation(this, anim, looping=true)
-}
-
-entity_state_sneak :: proc(this: ^Entity, ctx: ^Entity_State_Context)
-{
-
+  entity_play_animation(this, anim, looping=true, reverse=(this.speed_mult < 0), speed=abs(this.speed_mult))
 }
 
 entity_state_harvest :: proc(this: ^Entity, ctx: ^Entity_State_Context)

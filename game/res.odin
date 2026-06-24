@@ -87,11 +87,21 @@ Sprite_Name :: enum
   Player_Walk_Two_Handed_3,
   Player_Walk_Two_Handed_4,
   Player_Walk_Two_Handed_5,
-  Player_Sneak_1,
-  Player_Sneak_2,
-  Player_Sneak_3,
-  Player_Sneak_4,
-  Player_Sneak_5,
+  Player_Sneak_Unarmed_1,
+  Player_Sneak_Unarmed_2,
+  Player_Sneak_Unarmed_3,
+  Player_Sneak_Unarmed_4,
+  Player_Sneak_Unarmed_5,
+  Player_Sneak_One_Handed_1,
+  Player_Sneak_One_Handed_2,
+  Player_Sneak_One_Handed_3,
+  Player_Sneak_One_Handed_4,
+  Player_Sneak_One_Handed_5,
+  Player_Sneak_Two_Handed_1,
+  Player_Sneak_Two_Handed_2,
+  Player_Sneak_Two_Handed_3,
+  Player_Sneak_Two_Handed_4,
+  Player_Sneak_Two_Handed_5,
   Player_Harvest_Blood_1,
   Player_Harvest_Blood_2,
   Player_Harvest_Blood_3,
@@ -207,7 +217,9 @@ Animation_Name :: enum
   Player_Walk_Unarmed,
   Player_Walk_One_Handed,
   Player_Walk_Two_Handed,
-  Player_Sneak_Walk,
+  Player_Sneak_Walk_Unarmed,
+  Player_Sneak_Walk_One_Handed,
+  Player_Sneak_Walk_Two_Handed,
   Player_Harvest_Blood,
 
   Zombie_Idle,
@@ -237,8 +249,12 @@ Animation_State :: enum
   Walk_Unarmed,
   Walk_One_Handed,
   Walk_Two_Handed,
-  Sneak_Walk,
-  Sneak_Idle,
+  Sneak_Idle_Unarmed,
+  Sneak_Idle_One_Handed,
+  Sneak_Idle_Two_Handed,
+  Sneak_Walk_Unarmed,
+  Sneak_Walk_One_Handed,
+  Sneak_Walk_Two_Handed,
   Harvest_Blood,
   Expand,
 }
@@ -301,7 +317,6 @@ Animation_Desc :: struct
     sprite:   Sprite_Name,
     duration: f32,
   },
-  callback:   proc(en: ^Entity, frame: int),
 }
 
 Particle_Desc :: struct
@@ -436,40 +451,50 @@ init_resources :: proc(arena: ^mem.Arena)
     res.sprites[.Blood_Pool_5].pivot = {7.0, 5.0, 0}
     res.sprites[.Blood_Pool_6].pivot = {8.0, 6.0, 0}
 
-    res.sprites[.Player_Idle_Unarmed_1   ].pivot = {2.5, 14.0, 0}
-    res.sprites[.Player_Idle_Unarmed_2   ].pivot = {2.5, 14.0, 0}
-    res.sprites[.Player_Idle_One_Handed_1].pivot = {2.5, 14.0, 0}
-    res.sprites[.Player_Idle_One_Handed_2].pivot = {2.5, 14.0, 0}
-    res.sprites[.Player_Walk_Unarmed_1   ].pivot = {2.5, 14.0, 0}
-    res.sprites[.Player_Idle_Two_Handed_1].pivot = {2.5, 14.0, 0}
-    res.sprites[.Player_Idle_Two_Handed_2].pivot = {2.5, 14.0, 0}
-    res.sprites[.Player_Walk_Unarmed_2   ].pivot = {2.5, 13.0, 0}
-    res.sprites[.Player_Walk_Unarmed_3   ].pivot = {2.5, 14.0, 0}
-    res.sprites[.Player_Walk_Unarmed_4   ].pivot = {2.5, 14.0, 0}
-    res.sprites[.Player_Walk_Unarmed_5   ].pivot = {2.5, 14.0, 0}
-    res.sprites[.Player_Walk_One_Handed_1].pivot = {2.5, 14.0, 0}
-    res.sprites[.Player_Walk_One_Handed_2].pivot = {2.5, 13.0, 0}
-    res.sprites[.Player_Walk_One_Handed_3].pivot = {2.5, 14.0, 0}
-    res.sprites[.Player_Walk_One_Handed_4].pivot = {2.5, 14.0, 0}
-    res.sprites[.Player_Walk_One_Handed_5].pivot = {2.5, 14.0, 0}
-    res.sprites[.Player_Walk_Two_Handed_1].pivot = {2.5, 14.0, 0}
-    res.sprites[.Player_Walk_Two_Handed_2].pivot = {2.5, 13.0, 0}
-    res.sprites[.Player_Walk_Two_Handed_3].pivot = {2.5, 14.0, 0}
-    res.sprites[.Player_Walk_Two_Handed_4].pivot = {2.5, 14.0, 0}
-    res.sprites[.Player_Walk_Two_Handed_5].pivot = {2.5, 14.0, 0}
-    res.sprites[.Player_Sneak_1          ].pivot = {2.5, 12.0, 0}
-    res.sprites[.Player_Sneak_2          ].pivot = {2.5, 13.0, 0}
-    res.sprites[.Player_Sneak_3          ].pivot = {2.5, 13.0, 0}
-    res.sprites[.Player_Sneak_4          ].pivot = {2.5, 13.0, 0}
-    res.sprites[.Player_Sneak_5          ].pivot = {2.5, 13.0, 0}
-    res.sprites[.Player_Harvest_Blood_1  ].pivot = {2.5, 13.0, 0}
-    res.sprites[.Player_Harvest_Blood_2  ].pivot = {2.5, 12.0, 0}
-    res.sprites[.Player_Harvest_Blood_3  ].pivot = {2.5, 12.0, 0}
-    res.sprites[.Player_Harvest_Blood_4  ].pivot = {2.5, 12.0, 0}
-    res.sprites[.Player_Harvest_Blood_5  ].pivot = {2.5, 12.0, 0}
-    res.sprites[.Player_Harvest_Blood_6  ].pivot = {2.5, 12.0, 0}
-    res.sprites[.Player_Harvest_Blood_7  ].pivot = {2.5, 13.0, 0}
-    res.sprites[.Player_Harvest_Blood_8  ].pivot = {2.5, 13.0, 0}
+    res.sprites[.Player_Idle_Unarmed_1    ].pivot = {2.5, 14.0, 0}
+    res.sprites[.Player_Idle_Unarmed_2    ].pivot = {2.5, 14.0, 0}
+    res.sprites[.Player_Idle_One_Handed_1 ].pivot = {2.5, 14.0, 0}
+    res.sprites[.Player_Idle_One_Handed_2 ].pivot = {2.5, 14.0, 0}
+    res.sprites[.Player_Walk_Unarmed_1    ].pivot = {2.5, 14.0, 0}
+    res.sprites[.Player_Idle_Two_Handed_1 ].pivot = {2.5, 14.0, 0}
+    res.sprites[.Player_Idle_Two_Handed_2 ].pivot = {2.5, 14.0, 0}
+    res.sprites[.Player_Walk_Unarmed_2    ].pivot = {2.5, 13.0, 0}
+    res.sprites[.Player_Walk_Unarmed_3    ].pivot = {2.5, 14.0, 0}
+    res.sprites[.Player_Walk_Unarmed_4    ].pivot = {2.5, 14.0, 0}
+    res.sprites[.Player_Walk_Unarmed_5    ].pivot = {2.5, 14.0, 0}
+    res.sprites[.Player_Walk_One_Handed_1 ].pivot = {2.5, 14.0, 0}
+    res.sprites[.Player_Walk_One_Handed_2 ].pivot = {2.5, 13.0, 0}
+    res.sprites[.Player_Walk_One_Handed_3 ].pivot = {2.5, 14.0, 0}
+    res.sprites[.Player_Walk_One_Handed_4 ].pivot = {2.5, 14.0, 0}
+    res.sprites[.Player_Walk_One_Handed_5 ].pivot = {2.5, 14.0, 0}
+    res.sprites[.Player_Walk_Two_Handed_1 ].pivot = {2.5, 14.0, 0}
+    res.sprites[.Player_Walk_Two_Handed_2 ].pivot = {2.5, 13.0, 0}
+    res.sprites[.Player_Walk_Two_Handed_3 ].pivot = {2.5, 14.0, 0}
+    res.sprites[.Player_Walk_Two_Handed_4 ].pivot = {2.5, 14.0, 0}
+    res.sprites[.Player_Walk_Two_Handed_5 ].pivot = {2.5, 14.0, 0}
+    res.sprites[.Player_Sneak_Unarmed_1   ].pivot = {2.5, 13.0, 0}
+    res.sprites[.Player_Sneak_Unarmed_2   ].pivot = {2.5, 14.0, 0}
+    res.sprites[.Player_Sneak_Unarmed_3   ].pivot = {2.5, 14.0, 0}
+    res.sprites[.Player_Sneak_Unarmed_4   ].pivot = {2.5, 14.0, 0}
+    res.sprites[.Player_Sneak_Unarmed_5   ].pivot = {2.5, 13.0, 0}
+    res.sprites[.Player_Sneak_One_Handed_1].pivot = {2.5, 13.0, 0}
+    res.sprites[.Player_Sneak_One_Handed_2].pivot = {2.5, 14.0, 0}
+    res.sprites[.Player_Sneak_One_Handed_3].pivot = {2.5, 14.0, 0}
+    res.sprites[.Player_Sneak_One_Handed_4].pivot = {2.5, 14.0, 0}
+    res.sprites[.Player_Sneak_One_Handed_5].pivot = {2.5, 13.0, 0}
+    res.sprites[.Player_Sneak_Two_Handed_1].pivot = {2.5, 13.0, 0}
+    res.sprites[.Player_Sneak_Two_Handed_2].pivot = {2.5, 14.0, 0}
+    res.sprites[.Player_Sneak_Two_Handed_3].pivot = {2.5, 14.0, 0}
+    res.sprites[.Player_Sneak_Two_Handed_4].pivot = {2.5, 14.0, 0}
+    res.sprites[.Player_Sneak_Two_Handed_5].pivot = {2.5, 13.0, 0}
+    res.sprites[.Player_Harvest_Blood_1   ].pivot = {2.5, 13.0, 0}
+    res.sprites[.Player_Harvest_Blood_2   ].pivot = {2.5, 12.0, 0}
+    res.sprites[.Player_Harvest_Blood_3   ].pivot = {2.5, 12.0, 0}
+    res.sprites[.Player_Harvest_Blood_4   ].pivot = {2.5, 12.0, 0}
+    res.sprites[.Player_Harvest_Blood_5   ].pivot = {2.5, 12.0, 0}
+    res.sprites[.Player_Harvest_Blood_6   ].pivot = {2.5, 12.0, 0}
+    res.sprites[.Player_Harvest_Blood_7   ].pivot = {2.5, 13.0, 0}
+    res.sprites[.Player_Harvest_Blood_8   ].pivot = {2.5, 13.0, 0}
 
     res.sprites[.Zombie_Idle_1].pivot = {2.5, 13.0, 0}
     res.sprites[.Zombie_Idle_2].pivot = {2.5, 12.0, 0}
@@ -618,13 +643,31 @@ init_resources :: proc(arena: ^mem.Arena)
           {sprite=.Player_Walk_Two_Handed_5, duration=0.08},
         },
       },
-      .Player_Sneak_Walk = {
+      .Player_Sneak_Walk_Unarmed = {
         frames = {
-          {sprite=.Player_Sneak_1, duration=0.08},
-          {sprite=.Player_Sneak_2, duration=0.08},
-          {sprite=.Player_Sneak_3, duration=0.08},
-          {sprite=.Player_Sneak_4, duration=0.08},
-          {sprite=.Player_Sneak_5, duration=0.08},
+          {sprite=.Player_Sneak_Unarmed_1, duration=0.08},
+          {sprite=.Player_Sneak_Unarmed_2, duration=0.08},
+          {sprite=.Player_Sneak_Unarmed_3, duration=0.08},
+          {sprite=.Player_Sneak_Unarmed_4, duration=0.08},
+          {sprite=.Player_Sneak_Unarmed_5, duration=0.08},
+        },
+      },
+      .Player_Sneak_Walk_One_Handed = {
+        frames = {
+          {sprite=.Player_Sneak_One_Handed_1, duration=0.08},
+          {sprite=.Player_Sneak_One_Handed_2, duration=0.08},
+          {sprite=.Player_Sneak_One_Handed_3, duration=0.08},
+          {sprite=.Player_Sneak_One_Handed_4, duration=0.08},
+          {sprite=.Player_Sneak_One_Handed_5, duration=0.08},
+        },
+      },
+      .Player_Sneak_Walk_Two_Handed = {
+        frames = {
+          {sprite=.Player_Sneak_Two_Handed_1, duration=0.08},
+          {sprite=.Player_Sneak_Two_Handed_2, duration=0.08},
+          {sprite=.Player_Sneak_Two_Handed_3, duration=0.08},
+          {sprite=.Player_Sneak_Two_Handed_4, duration=0.08},
+          {sprite=.Player_Sneak_Two_Handed_5, duration=0.08},
         },
       },
       .Player_Harvest_Blood = {
@@ -638,7 +681,6 @@ init_resources :: proc(arena: ^mem.Arena)
           {sprite=.Player_Harvest_Blood_7, duration=0.3},
           {sprite=.Player_Harvest_Blood_8, duration=0.3},
         },
-        callback = animation_cb_harvest_blood,
       },
 
       .Blood_Pool_Expand_M = {
@@ -732,11 +774,6 @@ init_resources :: proc(arena: ^mem.Arena)
         },
       },
     }
-
-    for &anim in res.animations do if anim.callback == nil
-    {
-      anim.callback = animation_cb_stub
-    }
   }
 
   // - Entities ---
@@ -757,8 +794,12 @@ init_resources :: proc(arena: ^mem.Arena)
           .Walk_Unarmed = .Player_Walk_Unarmed,
           .Walk_One_Handed = .Player_Walk_One_Handed,
           .Walk_Two_Handed = .Player_Walk_Two_Handed,
-          .Sneak_Idle = .Player_Sneak_1,
-          .Sneak_Walk = .Player_Sneak_Walk,
+          .Sneak_Idle_Unarmed = .Player_Sneak_Unarmed_1,
+          .Sneak_Idle_One_Handed = .Player_Sneak_One_Handed_1,
+          .Sneak_Idle_Two_Handed = .Player_Sneak_Two_Handed_1,
+          .Sneak_Walk_Unarmed = .Player_Sneak_Walk_Unarmed,
+          .Sneak_Walk_One_Handed = .Player_Sneak_Walk_One_Handed,
+          .Sneak_Walk_Two_Handed = .Player_Sneak_Walk_Two_Handed,
           .Harvest_Blood = .Player_Harvest_Blood,
         },
         collider = Circle{
