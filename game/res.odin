@@ -1001,7 +1001,7 @@ init_resources :: proc(arena: ^mem.Arena)
       .Nil = {},
       .Revolver = {
         sprite = .Revolver,
-        hold_off = {2.5, -6},
+        hold_off = {3.0, -6},
         holster_off = {-2.5, -6},
         holster_rot = rad_from_deg(f32(90.0)),
         shot_pos = {6.0, -1.5},

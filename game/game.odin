@@ -2229,21 +2229,20 @@ entity_harvest_blood :: proc(en, blood_pool: ^Entity)
   
   if key_down(.Space)
   {
-    entity_set_state(en, .Harvest)
     entity_holster_weapon(en, true)
+    entity_play_animation(en, .Harvest_Blood, false)
+    entity_set_state(en, .Harvest)
     
     if entity_animation_at_end(en) && en.animation.state == en.animation.next_state
     {
-      entity_set_state(en, .Idle)
       gm.player_inventory.blood += 5
       kill_entity(blood_pool)
-      entity_play_animation(en, .Idle, true)
+      entity_set_state(en, .Idle)
     }
   }
   else if key_just_up(.Space)
   {
     entity_set_state(en, .Idle)
-    entity_play_animation(en, .Idle, true)
   }
 }
 
@@ -2285,7 +2284,7 @@ entity_set_state :: proc(en: ^Entity, st: Entity_State, reset := false)
   {
   case .Idle:   en.update_state  = entity_state_idle
   case .Walk:   en.update_state  = entity_state_walk
-  case .Harvest: en.update_state = entity_state_harvest
+  case .Harvest:
   case .Bob:    en.update_state  = entity_state_bob
   case .Expand:
   case .Wander: en.update_state  = entity_state_wander
@@ -2368,11 +2367,6 @@ entity_state_walk :: proc(this: ^Entity, ctx: ^Entity_State_Context)
   }
   
   entity_play_animation(this, anim, looping=true, reverse=(this.speed_mult < 0), speed=abs(this.speed_mult))
-}
-
-entity_state_harvest :: proc(this: ^Entity, ctx: ^Entity_State_Context)
-{
-  entity_play_animation(this, .Harvest_Blood, false)
 }
 
 entity_state_wander :: proc(en: ^Entity, ctx: ^Entity_State_Context)
