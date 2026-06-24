@@ -195,7 +195,7 @@ game_start :: proc(gm: ^Game)
   spawn_creature(.Deer, {170, 180})
   spawn_creature(.Rabbit, {200, 200})
   spawn_creature(.Squirrel, {230, 190})
-  spawn_creature(.Zombie, {100, 100})
+  // spawn_creature(.Zombie, {100, 100})
   spawn_creature(.Squirrel, {50, 50})
 
   play_sound(.Minecraft, volume=global.audio.music_volume)
@@ -315,7 +315,7 @@ game_update :: proc(gm: ^Game, dt: f32)
   }
 
   // - Player movement (:move, :movement) ---
-  if .Harvesting not_in player.props
+  if player.state != .Harvest
   {
     EQUIPPED_MULT  :: 0.7
     BACKWARD_MULT  :: 0.7
@@ -373,8 +373,18 @@ game_update :: proc(gm: ^Game, dt: f32)
       speed_mult *= sneaking ? SNEAKING_MULT : 1
       speed_mult *= !gm.weapon.holstered ? EQUIPPED_MULT : 1
 
-      anim: Animation_State = sneaking ? .Sneak_Walk : .Walk
-      entity_play_animation(player, anim, speed=speed_mult, looping=true, reverse=backward)
+      state: Entity_State
+      if sneaking
+      {
+        state = .Sneak
+      }
+      else
+      {
+        state = .Walk
+      }
+
+      // entity_play_animation(player, anim, speed=speed_mult, looping=true, reverse=backward)
+      entity_set_state(player, state)
 
       noise: f32 = sneaking ? SNEAKING_NOISE : WALKING_NOISE
       emit_noise(noise, tt.global_pos(player))
@@ -391,8 +401,8 @@ game_update :: proc(gm: ^Game, dt: f32)
     }
     else
     {
-      anim: Animation_State = sneaking ? .Sneak_Idle : .Idle
-      entity_play_animation(player, anim, looping=true)
+      state: Entity_State = sneaking ? .Sneak : .Idle
+      entity_set_state(player, state)
     }
 
     entity_flip_to_target(player, cursor_pos)
@@ -610,11 +620,11 @@ game_update :: proc(gm: ^Game, dt: f32)
         entity_holster_weapon(player, false)
       }
     }
-    
+
     weapon, _ := entity_child_at(player, 1)
     weapon_desc := &res.weapons[gm.weapon.kind]
 
-    debug_circle(tt.global_pos(player) + weapon_desc.hold_off, 1, {1, 0, 0, 0})
+    // debug_circle(tt.global_pos(player) + weapon_desc.hold_off, 1, {1, 0, 0, 0})
 
     // - Rotate equipped weapon ---
     if player.equipped.weapon_kind != .Nil
@@ -625,20 +635,27 @@ game_update :: proc(gm: ^Game, dt: f32)
 
       diff := vmath.normalize(cursor_pos - pivot)
       angle := math.atan2(diff.y, diff.x)
+      
+      BOUND :: 0.5
 
       if .Flip_H in player.props
       {
+        weapon.props += {.Flip_V}
+
         if angle < 0
         {
           angle += 2 * math.PI
         }
 
-        weapon.props += {.Flip_V}
+        angle = clamp(angle, math.PI/2 + BOUND, 3*math.PI/2 - BOUND)
       }
       else
       {
         weapon.props -= {.Flip_V}
+        angle = clamp(angle, -math.PI/2 + BOUND, math.PI/2 - BOUND)
       }
+
+      // println("Angle:", angle)
 
       tt.local(weapon).rot = angle
     }
@@ -748,9 +765,8 @@ game_update :: proc(gm: ^Game, dt: f32)
 
     // - Equipped weapon ---
     {
-      weapon, _ := entity_child_at(player, 1)
-
-      if gm.weapon.holstered
+      weapon, weapon_exists := entity_child_at(player, 1)
+      if weapon_exists && gm.weapon.holstered
       {
         holster_off := res.weapons[gm.weapon.kind].holster_off
         holster_off *= entity_flip_vec(player)
@@ -1481,12 +1497,14 @@ Entity_Prop :: enum
   Sneaking,
   Flee_Noise,
   Hostile,
-  Harvesting,
 }
 
 Entity_State :: enum
 {
   Idle,
+  Walk,
+  Sneak,
+  Harvest,
   Bob,
   Expand,
   Wander,
@@ -1719,6 +1737,8 @@ spawn_player :: proc() -> ^Entity
   player.collider = desc.collider
   player.resolve_collision = entity_resolve_collision_player
 
+  entity_play_animation(player, .Idle_Unarmed, looping=true)
+
   spawn_shadow(player, .Shadow_1, {0, -0.5})
 
   // - Weapon ---
@@ -1813,7 +1833,7 @@ spawn_creature :: proc(name: Entity_Name, pos: v2f32, deferred := false) -> ^Ent
   case .Nil:
   
   case .Zombie:
-    entity_set_state(creature, .Pursue)
+    entity_set_state(creature, .Wander)
     spawn_shadow(creature, .Shadow_1, {0, -0.5})
 
   case .Deer:
@@ -1982,7 +2002,7 @@ animation_cb_stub :: proc(_: ^Entity, _: int) {}
 
 animation_cb_harvest_blood :: proc(en: ^Entity, frame: int)
 {
-  println("Harvest blood:", en.name, frame)
+
 }
 
 entity_resolve_collision_stub :: proc(_, _: ^Entity, _: enum{Enter, Stay, Exit}) {}
@@ -1996,29 +2016,12 @@ entity_resolve_collision_player :: proc(this, other: ^Entity, action: enum{Enter
     switch action
     {
     case .Enter:
-      printf("%s enters blood pool.\n", this.name)
 
     case .Stay:
-      if key_down(.Space)
-      {
-        this.props += {.Harvesting}
-        entity_holster_weapon(this, true)
-        entity_play_animation(this, .Harvest_Blood, false)
-        if entity_animation_at_end(this) && this.animation.state == this.animation.next_state
-        {
-          this.props -= {.Harvesting}
-          gm.player_inventory.blood += 5
-          kill_entity(other)
-          entity_play_animation(this, .Idle, true)
-        }
-      }
-      else if key_just_up(.Space)
-      {
-        entity_play_animation(this, .Idle, true)
-      }
+      entity_harvest_blood(this, other)
 
     case .Exit:
-      printf("%s exits blood pool.\n", this.name)
+
     }
   }
 }
@@ -2236,6 +2239,30 @@ entity_holster_weapon :: proc(en: ^Entity, holster: bool)
   }
 }
 
+entity_harvest_blood :: proc(en, blood_pool: ^Entity)
+{
+  gm := get_active_game()
+  
+  if key_down(.Space)
+  {
+    entity_set_state(en, .Harvest)
+    entity_holster_weapon(en, true)
+    
+    if entity_animation_at_end(en) && en.animation.state == en.animation.next_state
+    {
+      entity_set_state(en, .Idle)
+      gm.player_inventory.blood += 5
+      kill_entity(blood_pool)
+      entity_play_animation(en, .Idle, true)
+    }
+  }
+  else if key_just_up(.Space)
+  {
+    entity_set_state(en, .Idle)
+    entity_play_animation(en, .Idle, true)
+  }
+}
+
 entity_set_zone_change_op :: proc(en: ^Entity, op: type_of(Entity{}.flags.zone_change_op))
 {
   scratch := mem.temp_begin(mem.get_scratch())
@@ -2272,12 +2299,15 @@ entity_set_state :: proc(en: ^Entity, st: Entity_State, reset := false)
 
   switch en.state
   {
-  case .Idle:   en.update_state = entity_state_idle
-  case .Bob:    en.update_state = entity_state_bob
+  case .Idle:   en.update_state  = entity_state_idle
+  case .Walk:   en.update_state  = entity_state_walk
+  case .Sneak:  en.update_state  = entity_state_sneak
+  case .Harvest: en.update_state = entity_state_harvest
+  case .Bob:    en.update_state  = entity_state_bob
   case .Expand:
-  case .Wander: en.update_state = entity_state_wander
-  case .Flee:   en.update_state = entity_state_flee
-  case .Pursue: en.update_state = entity_state_pursue
+  case .Wander: en.update_state  = entity_state_wander
+  case .Flee:   en.update_state  = entity_state_flee
+  case .Pursue: en.update_state  = entity_state_pursue
   }
 }
 
@@ -2285,7 +2315,70 @@ entity_state_stub :: proc(this: ^Entity, ctx: ^Entity_State_Context) {}
 
 entity_state_idle :: proc(this: ^Entity, ctx: ^Entity_State_Context)
 {
-  entity_play_animation(this, .Idle, looping=true)
+  gm := get_active_game()
+
+  anim: Animation_State
+  if this.name == .Player
+  {
+    if .Sneaking in this.props
+    {
+      anim = .Sneak_Idle
+    }
+    else
+    {
+      if !gm.weapon.holstered
+      {
+        anim = res.weapons[gm.weapon.kind].handedness == .One_Handed ? .Idle_One_Handed : .Idle_Two_Handed
+      }
+      else
+      {
+        anim = .Idle_Unarmed
+      }
+    }
+  }
+  else
+  {
+    anim = .Idle
+  }
+  
+  entity_play_animation(this, anim, looping=true)
+}
+
+entity_state_walk :: proc(this: ^Entity, ctx: ^Entity_State_Context)
+{
+  gm := get_active_game()
+
+  anim: Animation_State
+  if this.name == .Player
+  {
+    if .Sneaking in this.props
+    {
+      anim = .Sneak_Walk
+    }
+    else
+    {
+      if !gm.weapon.holstered
+      {
+        anim = res.weapons[gm.weapon.kind].handedness == .One_Handed ? .Walk_One_Handed : .Walk_Two_Handed
+      }
+      else
+      {
+        anim = .Walk_Unarmed
+      }
+    }
+  }
+  
+  entity_play_animation(this, anim, looping=true)
+}
+
+entity_state_sneak :: proc(this: ^Entity, ctx: ^Entity_State_Context)
+{
+
+}
+
+entity_state_harvest :: proc(this: ^Entity, ctx: ^Entity_State_Context)
+{
+  entity_play_animation(this, .Harvest_Blood, false)
 }
 
 entity_state_wander :: proc(en: ^Entity, ctx: ^Entity_State_Context)
