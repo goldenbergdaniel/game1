@@ -11,7 +11,26 @@ box :: proc(name: string, idx: Maybe(int) = nil) -> ^Box
 image :: proc(name: string, sprite: int, idx: Maybe(int) = nil) -> ^Box
 {
   image := create_box(name, idx, true)
+  image.color.a = 1
   image.sprite = sprite
+  return image
+}
+
+animated_image :: proc(
+  name: string, 
+  anim: ^Animation_Desc, 
+  looping: bool, 
+  reverse: bool = false, 
+  speed: f32 = 1.0, 
+  idx: Maybe(int) = nil
+) -> ^Box
+{
+  image := create_box(name, idx, true)
+  image.color.a = 1
+  image.animation.data = anim
+  image.animation.looping = looping
+  image.animation.reverse = reverse
+  image.animation.speed = speed
   return image
 }
 

@@ -407,7 +407,6 @@ Box :: struct
 
   text:                string,
   decorated_text:      Decorated_String,
-  sprite:              int,
 
   computed_rel_pos:    [2]f32,
   computed_abs_dim:    [2]f32,
@@ -428,7 +427,17 @@ Box_Prop :: enum
 @(private)
 Retained_Data :: struct
 {
-  signal: [enum{Curr, Prev}]Signal,
+  signal:     [enum{Curr, Prev}]Signal,
+  sprite:     int,
+  animation:  struct
+  {
+    data:     ^Animation_Desc,
+    speed:    f32,
+    duration: f32,
+    frame:    u16,
+    reverse:  bool,
+    looping:  bool,
+  },
 }
 
 Layout :: struct
@@ -496,6 +505,15 @@ Justify :: enum
 {
   Left,
   Center,
+}
+
+Animation_Desc :: struct
+{
+  frames:     [dynamic]struct
+  {
+    sprite:   int,
+    duration: f32,
+  },
 }
 
 this :: #force_inline proc() -> ^Box
@@ -652,6 +670,25 @@ box_fetch_retained_data :: proc(box: ^Box)
   }
 }
 
+@(private)
+box_animation_last_frame :: proc(box: ^Box) -> u16
+{
+  if box.animation.data != nil
+  {
+    return cast(u16) len(box.animation.data.frames) - 1
+  }
+  else
+  {
+    return 0
+  }
+}
+
+@(private)
+box_animation_at_end :: proc(box: ^Box) -> bool
+{
+  return (!box.animation.reverse && box.animation.frame == box_animation_last_frame(box)) ||
+         (box.animation.reverse && box.animation.frame == 0)
+}
 
 // Layout ////////////////////////////////////////////////////////////////////////////////
 
@@ -680,7 +717,7 @@ begin_tree :: proc(
   layout_color(st.background_color)
 }
 
-end_tree :: proc()
+end_tree :: proc(dt: f32)
 {
   temp := mem.temp_begin(mem.get_scratch())
   defer mem.temp_end(temp)
@@ -691,6 +728,47 @@ end_tree :: proc()
   iter := make_iterator_preorder(global_tree.root, temp)
   for box in iterate_preorder(&iter)
   {
+    if desc := box.animation.data; desc != nil
+    {
+      if len(desc.frames) <= 0 do continue
+
+      box.animation.duration -= dt
+      if box.animation.duration <= 0
+      {
+        box.sprite = desc.frames[box.animation.frame].sprite
+        box.animation.duration = desc.frames[box.animation.frame].duration * (1/box.animation.speed)
+
+        if box.animation.reverse
+        {
+          if box_animation_at_end(box)
+          {
+            if box.animation.looping
+            {
+              box.animation.frame = box_animation_last_frame(box)
+            }
+          }
+          else
+          {
+            box.animation.frame -= 1
+          }
+        }
+        else
+        {
+          if box_animation_at_end(box)
+          {
+            if box.animation.looping
+            {
+              box.animation.frame = 0
+            }
+          }
+          else
+          {
+            box.animation.frame += 1
+          }
+        }
+      }
+    }
+
     if box.retain
     {
       box_cache_retained_data(box)

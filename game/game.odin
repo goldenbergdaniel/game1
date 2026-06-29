@@ -81,7 +81,7 @@ Game :: struct
   debug_entities_pos: int,
   particles:          [MAX_PARTICLES]Particle,
   particles_pos:      int,
-  special_entities:   [enum{Player}]^Entity,
+  special_entities:   [enum{Player, Debug}]^Entity,
   tiles:              [MAX_ZONE_TILES]Tile,
   active_zone:        Zone_Name,
   weapon:             struct
@@ -182,6 +182,8 @@ game_start :: proc(gm: ^Game)
 
   game_load(gm, "res/data/debug.dat")
 
+  global.debug.silence_noise = true
+
   gm.t_mult = 1
   gm.camera.scl = {1, 1}
   // gm.light_color = {1.0, 1.0, 1.0, 1.0}
@@ -203,7 +205,15 @@ game_start :: proc(gm: ^Game)
   spawn_entity(.Stump, {300, 100})
   spawn_entity(.Stump, {100, 300})
 
-  global.debug.silence_noise = true
+  when false
+  {
+    heart := alloc_entity(gm)
+    setup_entity(heart, false)
+    heart.animation.state = .Idle
+    heart.animation.data[.Idle] = Animation_Name.Heart_Healthy
+    entity_play_animation(heart, .Idle, true)
+    gm.special_entities[.Debug] = heart
+  }
 
   set_active_game(nil)
 }
@@ -216,6 +226,8 @@ game_quit :: proc(gm: ^Game)
 game_update :: proc(gm: ^Game, dt: f32)
 {
   set_active_game(gm)
+
+  // println(gm.special_entities[.Debug].animation.frame_idx)
 
   gm.started = true
 

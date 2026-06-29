@@ -13,7 +13,7 @@ import "render"
 
 VIEWPORT_WIDTH  :: 192.0 // 192.0 or 240.0
 VIEWPORT_HEIGHT :: 108.0 // 108.0 or 135.0
-TIME_STEP       :: 1.0 / 40
+TIME_STEP       :: 1.0 / 60
 
 User :: struct
 {
@@ -130,6 +130,8 @@ main :: proc()
     frame_time := curr_time - elapsed_time
     elapsed_time = curr_time
 
+    update_gui_test(f32(frame_time))
+
     if user.screen == .Game
     {
       accumulator += frame_time
@@ -144,10 +146,6 @@ main :: proc()
         curr_game.t += TIME_STEP * curr_game.t_mult
       }
     }
-    else if user.screen == .Main_Menu
-    {
-      update_gui_test()
-    }
 
     update_end_tick = time.tick_now()
 
@@ -156,7 +154,7 @@ main :: proc()
     switch user.screen
     {
     case .Main_Menu:
-      render_gui_test()
+      render_gui(&global.gui_tree)
 
     case .Game:
       alpha := accumulator / TIME_STEP
@@ -165,6 +163,8 @@ main :: proc()
       {
         game_render(&res_game)
       }
+
+      render_gui(&global.gui_tree)
     }
 
     render_end_tick = time.tick_now()

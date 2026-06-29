@@ -1,3 +1,4 @@
+#+feature dynamic-literals
 package game
 
 import "basic/mem"
@@ -9,7 +10,7 @@ import "ui"
 box_counters: [5]int
 show_options: bool
 
-update_gui_test :: proc()
+update_gui_test :: proc(dt: f32)
 {
   ui.begin_tree(&global.gui_tree, {
     background_color = {0.1, 0.1, 0.1, 1.0},
@@ -22,33 +23,44 @@ update_gui_test :: proc()
     },
   })
 
-  ui.layout_child_width(ui.pct(1.0))
-  ui.layout_child_height(ui.pct(1.0))
-  ui.layout_child_align(.Vertical)
-  ui.layout_child_justify({.Center, nil})
-
   if platform.key_down(.Escape)
   {
     show_options = false
   }
-
-  if !show_options
+  
+  if user.screen == .Main_Menu
   {
-    ui_main_menu()
+    ui.layout_child_width(ui.pct(1.0))
+    ui.layout_child_height(ui.pct(1.0))
+    ui.layout_child_align(.Vertical)
+    ui.layout_child_justify({.Center, nil})
+
+    if !show_options
+    {
+      ui_main_menu()
+    }
+    else if show_options
+    {
+      ui_options_menu()
+    }
+
+    ui.spacer(ui.px(0), ui.pct(0.05))
+
+    if (ui.P(ui.text("© 2026 Daniel Goldenberg")))
+    {
+      ui.layout_text_size(1)
+    }
   }
-  else if show_options
+  else if user.screen == .Game
   {
-    ui_options_menu()
+    ui.layout_child_width(ui.pct(1.0))
+    ui.layout_child_height(ui.pct(1.0))
+    ui.layout_color({0, 0, 0, 0})
+
+    ui_hud()
   }
 
-  ui.spacer(ui.px(0), ui.pct(0.05))
-
-  if (ui.P(ui.text("© 2026 Daniel Goldenberg")))
-  {
-    ui.layout_text_size(1)
-  }
-
-  ui.end_tree()
+  ui.end_tree(dt)
 }
 
 ui_main_menu :: proc()
@@ -181,6 +193,20 @@ ui_options_menu :: proc()
   }
 }
 
+heart_critical: ui.Animation_Desc
+
+ui_hud :: proc()
+{
+  heart_critical = transmute(ui.Animation_Desc) res.animations[.Heart_Healthy]
+
+  if ui.P(ui.animated_image("Health", &heart_critical, looping=true))
+  {
+    ui.layout_offset({96, 96})
+    ui.layout_width(ui.px(160))
+    ui.layout_height(ui.px(160))
+  }
+}
+
 ui_tooltip :: proc(i: int, cursor_pos: v2f32) -> ^ui.Box
 {
   box := ui.box("Tooltip")
@@ -208,7 +234,7 @@ sprite_id :: proc(sprite: Sprite_Name) -> int
   return cast(int) sprite
 }
 
-render_gui_test :: proc()
+render_gui :: proc(tree: ^ui.Tree)
 {
   window_size := platform.window_get_size(&user.window)
 
@@ -220,10 +246,10 @@ render_gui_test :: proc()
     camera = vmath.translation_3x3f({0, 0}),
     projection = vmath.orthographic(0, window_size.x, 0, window_size.y),
     viewport = {0, 0, window_size.x, window_size.y},
-    clear_color = {0, 0, 0, 1},
+    clear_color = {0, 0, 0, 0},
   })
 
-  iter := ui.make_iterator_preorder(global.gui_tree.root, scratch)
+  iter := ui.make_iterator_preorder(tree.root, scratch)
   for box in ui.iterate_preorder(&iter)
   {
     sprite := cast(Sprite_Name) box.sprite

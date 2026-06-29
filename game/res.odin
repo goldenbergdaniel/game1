@@ -53,7 +53,7 @@ Shader_Name :: enum
   Sprite,
 }
 
-Sprite_Name :: enum
+Sprite_Name :: enum int
 {
   Nil,
 
@@ -179,6 +179,32 @@ Sprite_Name :: enum
   Red_Mushroom,
   Stump,
 
+  Heart_Healthy_1,
+  Heart_Healthy_2,
+  Heart_Healthy_3,
+  Heart_Healthy_4,
+  Heart_Healthy_5,
+  Heart_Healthy_6,
+  Heart_Bruised_1,
+  Heart_Bruised_2,
+  Heart_Bruised_3,
+  Heart_Bruised_4,
+  Heart_Bruised_5,
+  Heart_Bruised_6,
+  Heart_Damaged_1,
+  Heart_Damaged_2,
+  Heart_Damaged_3,
+  Heart_Damaged_4,
+  Heart_Damaged_5,
+  Heart_Damaged_6,
+  Heart_Critical_1,
+  Heart_Critical_2,
+  Heart_Critical_3,
+  Heart_Critical_4,
+  Heart_Critical_5,
+  Heart_Critical_6,
+  Heart_Dead,
+
   Tile_Dirt,
   Tile_Grass_1,
   Tile_Grass_2,
@@ -237,6 +263,11 @@ Animation_Name :: enum
 
   Blood_Pool_Expand_M,
   Blood_Pool_Expand_L,
+
+  Heart_Healthy,
+  Heart_Bruised,
+  Heart_Damaged,
+  Heart_Critical,
 }
 
 Animation_State :: enum
@@ -472,11 +503,11 @@ init_resources :: proc(arena: ^mem.Arena)
     res.sprites[.Player_Walk_Two_Handed_3 ].pivot = {2.5, 14.0, 0}
     res.sprites[.Player_Walk_Two_Handed_4 ].pivot = {2.5, 14.0, 0}
     res.sprites[.Player_Walk_Two_Handed_5 ].pivot = {2.5, 14.0, 0}
-    res.sprites[.Player_Sneak_Unarmed_1   ].pivot = {2.5, 13.0, 0}
-    res.sprites[.Player_Sneak_Unarmed_2   ].pivot = {2.5, 14.0, 0}
-    res.sprites[.Player_Sneak_Unarmed_3   ].pivot = {2.5, 14.0, 0}
-    res.sprites[.Player_Sneak_Unarmed_4   ].pivot = {2.5, 14.0, 0}
-    res.sprites[.Player_Sneak_Unarmed_5   ].pivot = {2.5, 13.0, 0}
+    res.sprites[.Player_Sneak_Unarmed_1   ].pivot = {2.5, 12.0, 0}
+    res.sprites[.Player_Sneak_Unarmed_2   ].pivot = {2.5, 13.0, 0}
+    res.sprites[.Player_Sneak_Unarmed_3   ].pivot = {2.5, 13.0, 0}
+    res.sprites[.Player_Sneak_Unarmed_4   ].pivot = {2.5, 13.0, 0}
+    res.sprites[.Player_Sneak_Unarmed_5   ].pivot = {2.5, 12.0, 0}
     res.sprites[.Player_Sneak_One_Handed_1].pivot = {2.5, 13.0, 0}
     res.sprites[.Player_Sneak_One_Handed_2].pivot = {2.5, 14.0, 0}
     res.sprites[.Player_Sneak_One_Handed_3].pivot = {2.5, 14.0, 0}
@@ -645,29 +676,29 @@ init_resources :: proc(arena: ^mem.Arena)
       },
       .Player_Sneak_Walk_Unarmed = {
         frames = {
-          {sprite=.Player_Sneak_Unarmed_1, duration=0.08},
           {sprite=.Player_Sneak_Unarmed_2, duration=0.08},
           {sprite=.Player_Sneak_Unarmed_3, duration=0.08},
           {sprite=.Player_Sneak_Unarmed_4, duration=0.08},
           {sprite=.Player_Sneak_Unarmed_5, duration=0.08},
+          {sprite=.Player_Sneak_Unarmed_1, duration=0.08},
         },
       },
       .Player_Sneak_Walk_One_Handed = {
         frames = {
-          {sprite=.Player_Sneak_One_Handed_1, duration=0.08},
           {sprite=.Player_Sneak_One_Handed_2, duration=0.08},
           {sprite=.Player_Sneak_One_Handed_3, duration=0.08},
           {sprite=.Player_Sneak_One_Handed_4, duration=0.08},
           {sprite=.Player_Sneak_One_Handed_5, duration=0.08},
+          {sprite=.Player_Sneak_One_Handed_1, duration=0.08},
         },
       },
       .Player_Sneak_Walk_Two_Handed = {
         frames = {
-          {sprite=.Player_Sneak_Two_Handed_1, duration=0.08},
           {sprite=.Player_Sneak_Two_Handed_2, duration=0.08},
           {sprite=.Player_Sneak_Two_Handed_3, duration=0.08},
           {sprite=.Player_Sneak_Two_Handed_4, duration=0.08},
           {sprite=.Player_Sneak_Two_Handed_5, duration=0.08},
+          {sprite=.Player_Sneak_Two_Handed_1, duration=0.08},
         },
       },
       .Player_Harvest_Blood = {
@@ -771,6 +802,63 @@ init_resources :: proc(arena: ^mem.Arena)
         frames = {
           {sprite=.Zombie_Melee_1, duration=0.5},
           {sprite=.Zombie_Melee_2, duration=0.5},
+        },
+      },
+  
+      .Heart_Healthy = {
+        frames = {
+          {sprite=.Heart_Healthy_1, duration=0.26},
+          {sprite=.Heart_Healthy_2, duration=0.13},
+          {sprite=.Heart_Healthy_3, duration=0.13},
+          {sprite=.Heart_Healthy_4, duration=0.13},
+          {sprite=.Heart_Healthy_5, duration=0.13},
+          {sprite=.Heart_Healthy_6, duration=0.26},
+          {sprite=.Heart_Healthy_5, duration=0.13},
+          {sprite=.Heart_Healthy_4, duration=0.13},
+          {sprite=.Heart_Healthy_3, duration=0.13},
+          {sprite=.Heart_Healthy_2, duration=0.13},
+        },
+      },
+      .Heart_Bruised = {
+        frames = {
+          {sprite=.Heart_Bruised_1, duration=0.20},
+          {sprite=.Heart_Bruised_2, duration=0.10},
+          {sprite=.Heart_Bruised_3, duration=0.10},
+          {sprite=.Heart_Bruised_4, duration=0.10},
+          {sprite=.Heart_Bruised_5, duration=0.10},
+          {sprite=.Heart_Bruised_6, duration=0.20},
+          {sprite=.Heart_Bruised_5, duration=0.10},
+          {sprite=.Heart_Bruised_4, duration=0.10},
+          {sprite=.Heart_Bruised_3, duration=0.10},
+          {sprite=.Heart_Bruised_2, duration=0.10},
+        },
+      },
+      .Heart_Damaged = {
+        frames = {
+          {sprite=.Heart_Damaged_1, duration=0.14},
+          {sprite=.Heart_Damaged_2, duration=0.07},
+          {sprite=.Heart_Damaged_3, duration=0.07},
+          {sprite=.Heart_Damaged_4, duration=0.07},
+          {sprite=.Heart_Damaged_5, duration=0.07},
+          {sprite=.Heart_Damaged_6, duration=0.14},
+          {sprite=.Heart_Damaged_5, duration=0.07},
+          {sprite=.Heart_Damaged_4, duration=0.07},
+          {sprite=.Heart_Damaged_3, duration=0.07},
+          {sprite=.Heart_Damaged_2, duration=0.07},
+        },
+      },
+      .Heart_Critical = {
+        frames = {
+          {sprite=.Heart_Critical_1, duration=0.10},
+          {sprite=.Heart_Critical_2, duration=0.05},
+          {sprite=.Heart_Critical_3, duration=0.05},
+          {sprite=.Heart_Critical_4, duration=0.05},
+          {sprite=.Heart_Critical_5, duration=0.05},
+          {sprite=.Heart_Critical_6, duration=0.10},
+          {sprite=.Heart_Critical_5, duration=0.05},
+          {sprite=.Heart_Critical_4, duration=0.05},
+          {sprite=.Heart_Critical_3, duration=0.05},
+          {sprite=.Heart_Critical_2, duration=0.05},
         },
       },
     }
