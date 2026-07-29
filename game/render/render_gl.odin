@@ -66,9 +66,21 @@ gl_draw :: proc()
   program := renderer.shaders[renderer.pass.shader.id]
   gl.UseProgram(program)
   gl.UniformBlockBinding(program, 0, 0)
-  gl.Uniform1i(renderer.pass.shader.uniforms.tex, 0)
-  gl.Uniform1i(renderer.pass.shader.uniforms.fnt, 1)
-  gl.Uniform4f(renderer.pass.shader.uniforms.light, **renderer.pass.light_color)
+
+  if "u_tex" in renderer.pass.shader.uniforms
+  {
+    gl.Uniform1i(renderer.pass.shader.uniforms["u_tex"], 0)
+  }
+
+  if "u_fnt" in renderer.pass.shader.uniforms
+  {
+    gl.Uniform1i(renderer.pass.shader.uniforms["u_fnt"], 1)
+  }
+
+  if "u_light" in renderer.pass.shader.uniforms
+  {
+    gl.Uniform4f(renderer.pass.shader.uniforms["u_light"], **renderer.pass.light_color)
+  }
 
   gl.DrawElements(gl.TRIANGLES, i32(renderer.indices_count), gl.UNSIGNED_SHORT, nil)
 
@@ -76,7 +88,7 @@ gl_draw :: proc()
   renderer.indices_count = 0
 }
 
-gl_create_shader :: proc(vsrc, fsrc: string) -> Shader
+gl_create_shader :: proc(vsrc, fsrc: string, uniforms: []cstring) -> Shader
 {
   assert(renderer.shaders_count < MAX_SHADERS)
 
@@ -137,34 +149,13 @@ gl_create_shader :: proc(vsrc, fsrc: string) -> Shader
   result.id = cast(u32) renderer.shaders_count
   renderer.shaders_count += 1
 
-  tex_loc := gl.GetUniformLocation(program, "u_tex")
-  if tex_loc != -1
+  for uniform in uniforms
   {
-    result.uniforms.tex = tex_loc
-  }
-  else
-  {
-    log.warn("[render_gl]: Shader uniform 'u_tex' not found!")
-  }
-
-  fnt_loc := gl.GetUniformLocation(program, "u_fnt")
-  if fnt_loc != -1
-  {
-    result.uniforms.fnt = fnt_loc
-  }
-  else
-  {
-    log.warn("[render_gl]: Shader uniform 'u_fnt' not found!")
-  }
-
-  light_loc := gl.GetUniformLocation(program, "u_light")
-  if light_loc != -1
-  {
-    result.uniforms.light = light_loc
-  }
-  else
-  {
-    log.warn("[render_gl]: Shader uniform 'u_light' not found!")
+    result.uniforms[uniform] = gl.GetUniformLocation(program, uniform)
+    if result.uniforms[uniform] == -1
+    {
+      log.warnf("[render_gl]: Shader uniform '%s' not found!\n", uniform)
+    }
   }
 
   return result

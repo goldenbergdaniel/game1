@@ -24,7 +24,7 @@ Vertex :: struct
 Shader :: struct
 {
   id:       u32,
-  uniforms: struct{tex, fnt, light: i32},
+  uniforms: map[cstring]i32,
 }
 
 Texture :: struct
@@ -82,9 +82,9 @@ init_renderer :: #force_inline proc(window: ^platform.Window)
   renderer.initialized = true
 }
 
-create_shader :: #force_inline proc(vsrc, fsrc: string) -> Shader
+create_shader :: #force_inline proc(vsrc, fsrc: string, uniforms: []cstring) -> Shader
 {
-  /**/ when BACKEND == "opengl" do return gl_create_shader(vsrc, fsrc)
+  /**/ when BACKEND == "opengl" do return gl_create_shader(vsrc, fsrc, uniforms)
   else                          do panic("Fatal [render]: Invalid backend selected!")
 }
 

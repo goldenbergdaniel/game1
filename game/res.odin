@@ -15,19 +15,19 @@ import "ui"
 
 Resources :: struct
 {
-  actions:     [Action_Name]platform.Input_Source,
-  shaders:     [Shader_Name]render.Shader,
-  textures:    [Texture_Name]render.Texture,
-  sprites:     [Sprite_Name]Sprite,
-  sounds:      [Sound_Name]Sound,
-  animations:  [Animation_Name]Animation_Desc,
-  entities:    [Entity_Name]Entity_Desc,
-  zones:       [Zone_Name]Zone_Desc,
-  particles:   [Particle_Name]Particle_Desc,
-  creatures:   [Entity_Name]Creature_Desc,
-  weapons:     [Weapon_Kind]Weapon_Desc,
-  items:       [Item_Kind]Item_Desc,
-  loot_tables: [Loot_Table_Name][dynamic]Loot_Table_Entry,
+  actions:       [Action_Name]platform.Input_Source,
+  shaders:       [Shader_Name]render.Shader,
+  textures:      [Texture_Name]render.Texture,
+  sprites:       [Sprite_Name]Sprite,
+  sounds:        [Sound_Name]Sound,
+  animations:    [Animation_Name]Animation_Desc,
+  entities:      [Entity_Name]Entity_Desc,
+  zones:         [Zone_Name]Zone_Desc,
+  particles:     [Particle_Name]Particle_Desc,
+  creatures:     [Entity_Name]Creature_Desc,
+  weapons:       [Weapon_Kind]Weapon_Desc,
+  items:         [Item_Kind]Item_Desc,
+  loot_tables:   [Loot_Table_Name][dynamic]Loot_Table_Entry,
 }
 
 Action_Name :: enum
@@ -51,6 +51,7 @@ Texture_Name :: enum
 Shader_Name :: enum
 {
   Sprite,
+  UI,
 }
 
 Sprite_Name :: enum int
@@ -386,6 +387,8 @@ Creature_Desc :: struct
 {
   corpse:          Sprite_Name,
   blood_pool:      Entity_Name,
+  shadow:          Sprite_Name,
+  shadow_offset:   v2f32,
   wander_range:    Range(i32),
   flee_range:      Range(i32),
   noise_threshold: f32,
@@ -447,7 +450,12 @@ init_resources :: proc(arena: ^mem.Arena)
   // - Shaders ---
   {
     res.shaders[.Sprite] = render.create_shader(#load("../res/shaders/sprite.vert.glsl"),
-                                                #load("../res/shaders/sprite.frag.glsl"))
+                                                #load("../res/shaders/sprite.frag.glsl"),
+                                                {"u_tex", "u_fnt", "u_light"})
+
+    res.shaders[.UI] = render.create_shader(#load("../res/shaders/ui.vert.glsl"),
+                                            #load("../res/shaders/ui.frag.glsl"),
+                                            {"u_tex", "u_fnt"})
   }
 
   // - Sprites ---
@@ -555,19 +563,19 @@ init_resources :: proc(arena: ^mem.Arena)
     res.sprites[.Rabbit_Idle_3].pivot = {4.0, 7.0, 0}
     res.sprites[.Rabbit_Idle_4].pivot = {4.0, 7.0, 0}
     res.sprites[.Rabbit_Walk_1].pivot = {4.0, 9.0, 0}
-    res.sprites[.Rabbit_Walk_2].pivot = {5.0, 9.0, 0}
-    res.sprites[.Rabbit_Walk_3].pivot = {5.0, 10.0, 0}
+    res.sprites[.Rabbit_Walk_2].pivot = {4.0, 9.0, 0}
+    res.sprites[.Rabbit_Walk_3].pivot = {4.0, 10.0, 0}
     res.sprites[.Rabbit_Walk_4].pivot = {4.0, 10.0, 0}
     res.sprites[.Rabbit_Corpse].pivot = {5.5, 4.0, 0}
 
-    res.sprites[.Squirrel_Idle_1].pivot = {6.0, 7.0, 0}
-    res.sprites[.Squirrel_Idle_2].pivot = {6.0, 7.0, 0}
-    res.sprites[.Squirrel_Idle_3].pivot = {6.0, 6.0, 0}
-    res.sprites[.Squirrel_Idle_4].pivot = {6.0, 7.0, 0}
-    res.sprites[.Squirrel_Walk_1].pivot = {4.0, 9.0, 0}
-    res.sprites[.Squirrel_Walk_2].pivot = {5.0, 9.0, 0}
-    res.sprites[.Squirrel_Walk_3].pivot = {5.0, 10.0, 0}
-    res.sprites[.Squirrel_Walk_4].pivot = {4.0, 10.0, 0}
+    res.sprites[.Squirrel_Idle_1].pivot = {5.5, 7.0, 0}
+    res.sprites[.Squirrel_Idle_2].pivot = {5.5, 7.0, 0}
+    res.sprites[.Squirrel_Idle_3].pivot = {5.5, 6.0, 0}
+    res.sprites[.Squirrel_Idle_4].pivot = {5.5, 7.0, 0}
+    res.sprites[.Squirrel_Walk_1].pivot = {3.5, 8.0, 0}
+    res.sprites[.Squirrel_Walk_2].pivot = {3.5, 8.0, 0}
+    res.sprites[.Squirrel_Walk_3].pivot = {3.5, 7.0, 0}
+    res.sprites[.Squirrel_Walk_4].pivot = {3.5, 8.0, 0}
     res.sprites[.Squirrel_Corpse].pivot = {6.5, 4.0, 0}
 
     for &sprite in res.sprites
@@ -791,11 +799,11 @@ init_resources :: proc(arena: ^mem.Arena)
       },
       .Zombie_Walk = {
         frames = {
-          {sprite=.Zombie_Walk_1, duration=0.1},
-          {sprite=.Zombie_Walk_2, duration=0.1},
-          {sprite=.Zombie_Walk_3, duration=0.1},
-          {sprite=.Zombie_Walk_4, duration=0.1},
-          {sprite=.Zombie_Walk_5, duration=0.1},
+          {sprite=.Zombie_Walk_1, duration=0.2},
+          {sprite=.Zombie_Walk_2, duration=0.2},
+          {sprite=.Zombie_Walk_3, duration=0.2},
+          {sprite=.Zombie_Walk_4, duration=0.2},
+          {sprite=.Zombie_Walk_5, duration=0.2},
         },
       },
       .Zombie_Melee = {
@@ -807,54 +815,54 @@ init_resources :: proc(arena: ^mem.Arena)
   
       .Heart_Healthy = {
         frames = {
-          {sprite=.Heart_Healthy_1, duration=0.26},
-          {sprite=.Heart_Healthy_2, duration=0.13},
-          {sprite=.Heart_Healthy_3, duration=0.13},
-          {sprite=.Heart_Healthy_4, duration=0.13},
-          {sprite=.Heart_Healthy_5, duration=0.13},
-          {sprite=.Heart_Healthy_6, duration=0.26},
-          {sprite=.Heart_Healthy_5, duration=0.13},
-          {sprite=.Heart_Healthy_4, duration=0.13},
-          {sprite=.Heart_Healthy_3, duration=0.13},
-          {sprite=.Heart_Healthy_2, duration=0.13},
+          {sprite=.Heart_Healthy_1, duration=0.14},
+          {sprite=.Heart_Healthy_2, duration=0.14},
+          {sprite=.Heart_Healthy_3, duration=0.14},
+          {sprite=.Heart_Healthy_4, duration=0.14},
+          {sprite=.Heart_Healthy_5, duration=0.14},
+          {sprite=.Heart_Healthy_6, duration=0.14},
+          {sprite=.Heart_Healthy_5, duration=0.14},
+          {sprite=.Heart_Healthy_4, duration=0.14},
+          {sprite=.Heart_Healthy_3, duration=0.14},
+          {sprite=.Heart_Healthy_2, duration=0.14},
         },
       },
       .Heart_Bruised = {
         frames = {
-          {sprite=.Heart_Bruised_1, duration=0.20},
-          {sprite=.Heart_Bruised_2, duration=0.10},
-          {sprite=.Heart_Bruised_3, duration=0.10},
-          {sprite=.Heart_Bruised_4, duration=0.10},
-          {sprite=.Heart_Bruised_5, duration=0.10},
-          {sprite=.Heart_Bruised_6, duration=0.20},
-          {sprite=.Heart_Bruised_5, duration=0.10},
-          {sprite=.Heart_Bruised_4, duration=0.10},
-          {sprite=.Heart_Bruised_3, duration=0.10},
-          {sprite=.Heart_Bruised_2, duration=0.10},
+          {sprite=.Heart_Bruised_1, duration=0.11},
+          {sprite=.Heart_Bruised_2, duration=0.11},
+          {sprite=.Heart_Bruised_3, duration=0.11},
+          {sprite=.Heart_Bruised_4, duration=0.11},
+          {sprite=.Heart_Bruised_5, duration=0.11},
+          {sprite=.Heart_Bruised_6, duration=0.11},
+          {sprite=.Heart_Bruised_5, duration=0.11},
+          {sprite=.Heart_Bruised_4, duration=0.11},
+          {sprite=.Heart_Bruised_3, duration=0.11},
+          {sprite=.Heart_Bruised_2, duration=0.11},
         },
       },
       .Heart_Damaged = {
         frames = {
-          {sprite=.Heart_Damaged_1, duration=0.14},
-          {sprite=.Heart_Damaged_2, duration=0.07},
-          {sprite=.Heart_Damaged_3, duration=0.07},
-          {sprite=.Heart_Damaged_4, duration=0.07},
-          {sprite=.Heart_Damaged_5, duration=0.07},
-          {sprite=.Heart_Damaged_6, duration=0.14},
-          {sprite=.Heart_Damaged_5, duration=0.07},
-          {sprite=.Heart_Damaged_4, duration=0.07},
-          {sprite=.Heart_Damaged_3, duration=0.07},
-          {sprite=.Heart_Damaged_2, duration=0.07},
+          {sprite=.Heart_Damaged_1, duration=0.08},
+          {sprite=.Heart_Damaged_2, duration=0.08},
+          {sprite=.Heart_Damaged_3, duration=0.08},
+          {sprite=.Heart_Damaged_4, duration=0.08},
+          {sprite=.Heart_Damaged_5, duration=0.08},
+          {sprite=.Heart_Damaged_6, duration=0.08},
+          {sprite=.Heart_Damaged_5, duration=0.08},
+          {sprite=.Heart_Damaged_4, duration=0.08},
+          {sprite=.Heart_Damaged_3, duration=0.08},
+          {sprite=.Heart_Damaged_2, duration=0.08},
         },
       },
       .Heart_Critical = {
         frames = {
-          {sprite=.Heart_Critical_1, duration=0.10},
+          {sprite=.Heart_Critical_1, duration=0.05},
           {sprite=.Heart_Critical_2, duration=0.05},
           {sprite=.Heart_Critical_3, duration=0.05},
           {sprite=.Heart_Critical_4, duration=0.05},
           {sprite=.Heart_Critical_5, duration=0.05},
-          {sprite=.Heart_Critical_6, duration=0.10},
+          {sprite=.Heart_Critical_6, duration=0.05},
           {sprite=.Heart_Critical_5, duration=0.05},
           {sprite=.Heart_Critical_4, duration=0.05},
           {sprite=.Heart_Critical_3, duration=0.05},
@@ -875,11 +883,12 @@ init_resources :: proc(arena: ^mem.Arena)
       .Nil = {},
 
       .Player = {
+        props = {.Flip_To_Target},
         animations = #partial {
           .Idle_Unarmed = .Player_Idle_Unarmed,
           .Idle_One_Handed = .Player_Idle_One_Handed,
           .Idle_Two_Handed = .Player_Idle_Two_Handed,
-          .Walk_Unarmed = .Player_Walk_Unarmed,
+          .Walk_Unarmed = .Player_Walk_Unarmed, 
           .Walk_One_Handed = .Player_Walk_One_Handed,
           .Walk_Two_Handed = .Player_Walk_Two_Handed,
           .Sneak_Idle_Unarmed = .Player_Sneak_Unarmed_1,
@@ -966,7 +975,7 @@ init_resources :: proc(arena: ^mem.Arena)
       },
       .Zombie = {
         kind = .Creature,
-        props = {.Hostile},
+        props = {.Hostile, .Flip_To_Movement, .Flip_To_Target},
         animations = #partial {
           .Idle = .Zombie_Idle,
           .Walk = .Zombie_Walk,
@@ -1072,6 +1081,8 @@ init_resources :: proc(arena: ^mem.Arena)
       .Squirrel = {
         corpse = .Squirrel_Corpse,
         blood_pool = .Blood_Pool_M,
+        shadow = .Shadow_1,
+        shadow_offset = {},
         wander_range = {10, 50},
         flee_range = {50, 100},
         noise_threshold = 35,
