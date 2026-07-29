@@ -1,18 +1,35 @@
-#+feature dynamic-literals
+#+private file
 package game
 
+import "core:math"
 import "basic/mem"
 import vmath "basic/vmath"
 import "platform"
 import "render"
 import "ui"
 
-box_counters: [5]int
+box_counters: [10]int
 show_options: bool
 
-update_gui_test :: proc(dt: f32)
+Options :: struct
 {
-  ui.begin_tree(&global.gui_tree, {
+  music_volume: f32,
+  sfx_volume:   f32,
+}
+
+options: Options
+
+@(private="package")
+gui_init :: proc(tree: ^ui.Tree)
+{
+  options.music_volume = 1.0
+  options.sfx_volume = 1.0
+}
+
+@(private="package")
+gui_update :: proc(tree: ^ui.Tree, dt: f32)
+{
+  ui.begin_tree(tree, {
     background_color = {0.1, 0.1, 0.1, 1.0},
     window_size = platform.window_get_size(&user.window), 
     cursor_pos = platform.get_cursor_position(),
@@ -61,6 +78,59 @@ update_gui_test :: proc(dt: f32)
   }
 
   ui.end_tree(dt)
+}
+
+@(private="package")
+gui_render :: proc(tree: ^ui.Tree)
+{
+  window_size := platform.window_get_size(&user.window)
+
+  scratch := mem.temp_begin(mem.get_scratch())
+  defer mem.temp_end(scratch)
+  
+  render.begin_pass({
+    shader = &res.shaders[.UI],
+    camera = vmath.translation_3x3f({0, 0}),
+    projection = vmath.orthographic(0, window_size.x, 0, window_size.y),
+    viewport = {0, 0, window_size.x, window_size.y},
+    clear_color = {0, 0, 0, 0},
+  })
+
+  iter := ui.make_iterator_preorder(tree.root, scratch)
+  for box in ui.iterate_preorder(&iter)
+  {
+    sprite := cast(Sprite_Name) box.sprite
+    if sprite == nil
+    {
+      sprite = .UI_Square
+    }
+
+    draw_sprite(sprite=sprite,
+                pos=box.rect_pos,
+                scl=box.rect_dim/16,
+                color=vmath.concat(box.color.rgb, 0),
+                tint={1, 1, 1, box.color.a})
+
+    if box.decorated_text.len != 0
+    {
+      draw_decorated_text(text=box.decorated_text, 
+                          pos=box.rect_pos, 
+                          size=box.text_size, 
+                          line_height=1)
+    }
+    else if box.text != ""
+    {
+      draw_text(text=box.text, 
+                pos=box.rect_pos, 
+                size=box.text_size, 
+                line_height=1,
+                color=box.color)
+    }
+  }
+
+  render.end_pass()
+
+  mem.arena_clear(&global.ui_frame_arena)
 }
 
 ui_main_menu :: proc()
@@ -146,18 +216,18 @@ ui_options_menu :: proc()
     ui.layout_child_justify({.Center, nil})
     ui.layout_height(ui.fit_children())
 
-    for i in 0..<5
-    {
-      @(static)
-      names := [?]string{"Vsync", "View Bobbing", "Auto-Jump", "Show Debug", "Allow Cheats"}
+    @(static)
+    names := [?]string{"Vsync", "View Bobbing", "Show Debug", "Allow Cheats"}
 
+    for i in 0..<len(names)
+    {
       button := ui.image(names[i], sprite_id(.UI_Square), idx=i)
       if ui.P(button)
       {
         ui.layout_width(ui.pct(0.4))
         ui.layout_height(ui.px(60))
-        ui.layout_child_justify({.Center, .Center})
         ui.layout_color({0.2, 0.2, 0.2, 1.0})
+        ui.layout_child_justify({.Center, .Center})
 
         @(static)
         states := [2]string{"OFF", "ON"}
@@ -179,7 +249,7 @@ ui_options_menu :: proc()
         if ui.hovered(button)
         {
           ui.layout_shade(1.2)
-          ui_tooltip(i, platform.get_cursor_position())
+          ui_tooltip("This is a tooltip. (%i)", box_counters[i])
         }
         
         if ui.just_pressed(button, .Left)
@@ -190,6 +260,10 @@ ui_options_menu :: proc()
 
       ui.spacer(ui.px(0), ui.px(10))
     }
+
+    ui_slider("Music", &options.music_volume, true)
+    ui.spacer(ui.px(0), ui.px(10))
+    ui_slider("SFX", &options.sfx_volume, true)
   }
 }
 
@@ -198,7 +272,6 @@ heart_critical: ui.Animation_Desc
 ui_hud :: proc()
 {
   heart_critical = transmute(ui.Animation_Desc) res.animations[.Heart_Healthy]
-
   if ui.P(ui.animated_image("Health", &heart_critical, looping=true))
   {
     ui.layout_offset({96, 96})
@@ -207,19 +280,63 @@ ui_hud :: proc()
   }
 }
 
-ui_tooltip :: proc(i: int, cursor_pos: v2f32) -> ^ui.Box
+ui_slider :: proc(label: string, value: ^f32, discrete: bool)
+{
+  assert(value != nil)
+
+  cursor_pos := platform.get_cursor_position()
+
+  outer := ui.box("OuterSlider", idx=int(uintptr(value)))
+  if ui.P(outer)
+  {
+    ui.layout_width(ui.pct(0.4))
+    ui.layout_height(ui.px(60))
+    ui.layout_color({0.2, 0.2, 0.2, 1.0})
+    ui.layout_child_align(.None)
+
+    if ui.pressed(outer, .Left)
+    {
+      value^ = (cursor_pos.x - outer.rect_pos.x) / outer.rect_dim.x
+      value^ = clamp(value^, 0, 1)
+      if discrete
+      {
+        value ^= math.round(value^ * 100.0) / 100.0
+      }
+    }
+
+    if ui.P(ui.box("InnerSlider"))
+    {
+      ui.layout_width(ui.pct(value^))
+      ui.layout_height(ui.pct(1.0))
+      ui.layout_color({0.4, 0.4, 0.8, 1.0})
+    }
+
+    if ui.P(ui.box("SliderText"))
+    {
+      ui.layout_child_justify({.Center, .Center})
+      ui.text(label)
+    }
+    
+    if ui.hovered(outer)
+    {
+      ui_tooltip("%.2f", value^)
+    }
+  }
+}
+
+ui_tooltip :: proc(fmt_str: string, fmt_args: ..any) -> ^ui.Box
 {
   box := ui.box("Tooltip")
   if ui.P(box)
   {
     ui.layout_props({.Floating})
-    ui.layout_offset(cursor_pos + {0, -40})
+    ui.layout_offset(platform.get_cursor_position() + {0, -40})
     ui.layout_width(ui.fit_children())
     ui.layout_height(ui.px(40))
     ui.layout_color({0.4, 0.4, 0.4, 0.9})
     ui.layout_child_justify({nil, .Center})
 
-    if ui.P(ui.text("This is a tooltip. (%i)", box_counters[i]))
+    if ui.P(ui.text(fmt_str, ..fmt_args))
     {
       ui.layout_text_size(2)
     }
@@ -232,56 +349,4 @@ ui_tooltip :: proc(i: int, cursor_pos: v2f32) -> ^ui.Box
 sprite_id :: proc(sprite: Sprite_Name) -> int
 {
   return cast(int) sprite
-}
-
-render_gui :: proc(tree: ^ui.Tree)
-{
-  window_size := platform.window_get_size(&user.window)
-
-  scratch := mem.temp_begin(mem.get_scratch())
-  defer mem.temp_end(scratch)
-  
-  render.begin_pass({
-    shader = &res.shaders[.Sprite],
-    camera = vmath.translation_3x3f({0, 0}),
-    projection = vmath.orthographic(0, window_size.x, 0, window_size.y),
-    viewport = {0, 0, window_size.x, window_size.y},
-    clear_color = {0, 0, 0, 0},
-  })
-
-  iter := ui.make_iterator_preorder(tree.root, scratch)
-  for box in ui.iterate_preorder(&iter)
-  {
-    sprite := cast(Sprite_Name) box.sprite
-    if sprite == nil
-    {
-      sprite = .UI_Square
-    }
-
-    draw_sprite(sprite=sprite,
-                pos=box.rect_pos,
-                scl=box.rect_dim/16,
-                color=vmath.concat(box.color.rgb, 0),
-                tint={1, 1, 1, box.color.a})
-
-    if box.decorated_text.len != 0
-    {
-      draw_decorated_text(text=box.decorated_text, 
-                          pos=box.rect_pos, 
-                          size=box.text_size, 
-                          line_height=1)
-    }
-    else if box.text != ""
-    {
-      draw_text(text=box.text, 
-                pos=box.rect_pos, 
-                size=box.text_size, 
-                line_height=1,
-                color=box.color)
-    }
-  }
-
-  render.end_pass()
-
-  mem.arena_clear(&global.ui_frame_arena)
 }

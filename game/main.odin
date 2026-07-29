@@ -10,10 +10,11 @@ import "basic"
 import "basic/mem"
 import "platform"
 import "render"
+import "ui"
 
 VIEWPORT_WIDTH  :: 192.0 // 192.0 or 240.0
 VIEWPORT_HEIGHT :: 108.0 // 108.0 or 135.0
-TIME_STEP       :: 1.0 / 60
+TIME_STEP       :: 1.0 / 40
 
 User :: struct
 {
@@ -22,6 +23,7 @@ User :: struct
   viewport:   v4f32,
   screen:     Screen,
   show_dbgui: bool,
+  gui_tree:   ui.Tree,
 }
 
 Screen :: enum
@@ -68,7 +70,7 @@ main :: proc()
   user.window = platform.create_window(window_desc, &user.perm_arena)
   defer platform.destroy_window(&user.window)
 
-  user.screen = .Game
+  user.screen = .Main_Menu
 
   render.init_renderer(&user.window)
   init_resources(&user.perm_arena)
@@ -80,6 +82,10 @@ main :: proc()
 
   game_init(&curr_game)
   game_start(&curr_game)
+
+  ui.tree_init(&user.gui_tree, 1024, &user.perm_arena, &global.ui_frame_arena)
+
+  gui_init(&user.gui_tree)
 
   elapsed_time, accumulator: f64
   start_tick := time.tick_now()
@@ -129,8 +135,7 @@ main :: proc()
     curr_time := time.duration_seconds(time.tick_since(start_tick))
     frame_time := curr_time - elapsed_time
     elapsed_time = curr_time
-
-    update_gui_test(f32(frame_time))
+    gui_update(&user.gui_tree, f32(frame_time))
 
     if user.screen == .Game
     {
@@ -154,7 +159,7 @@ main :: proc()
     switch user.screen
     {
     case .Main_Menu:
-      render_gui(&global.gui_tree)
+      gui_render(&user.gui_tree)
 
     case .Game:
       alpha := accumulator / TIME_STEP
@@ -164,7 +169,7 @@ main :: proc()
         game_render(&res_game)
       }
 
-      render_gui(&global.gui_tree)
+      gui_render(&user.gui_tree)
     }
 
     render_end_tick = time.tick_now()

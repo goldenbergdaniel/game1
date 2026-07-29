@@ -177,7 +177,10 @@ tree_resolve_layout :: proc(tree: ^Tree)
           }
         }
 
-        offset[box.child_align] += child.computed_abs_dim[box.child_align]
+        if box.child_align != .None
+        {
+          offset[box.child_align] += child.computed_abs_dim[box.child_align]
+        }
       }
     }
   }
@@ -410,8 +413,6 @@ Box :: struct
 
   computed_rel_pos:    [2]f32,
   computed_abs_dim:    [2]f32,
-  rect_pos:            [2]f32,
-  rect_dim:            [2]f32,
 
   using retained_data: Retained_Data,
 }
@@ -427,6 +428,8 @@ Box_Prop :: enum
 @(private)
 Retained_Data :: struct
 {
+  rect_pos:   [2]f32,
+  rect_dim:   [2]f32,
   signal:     [enum{Curr, Prev}]Signal,
   sprite:     int,
   animation:  struct
@@ -499,6 +502,7 @@ Alignment :: enum
 {
   Horizontal,
   Vertical,
+  None,
 }
 
 Justify :: enum
