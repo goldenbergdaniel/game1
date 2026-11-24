@@ -22,7 +22,7 @@ animated_image :: proc(
   looping: bool, 
   reverse: bool = false, 
   speed: f32 = 1.0, 
-  idx: Maybe(int) = nil
+  idx: Maybe(int) = nil,
 ) -> ^Box
 {
   image := create_box(name, idx, true)

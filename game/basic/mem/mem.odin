@@ -89,13 +89,9 @@ default_allocator :: #force_inline proc() -> Allocator
 	return runtime.default_allocator()
 }
 
+
 // Arena /////////////////////////////////////////////////////////////////////////////////
 
-// Arena :: struct
-// {
-//   #subtype arena: virtual.Arena,
-//   #subtype alloc: runtime.Allocator,
-// }
 
 arena_init_buffer  :: virtual.arena_init_buffer
 arena_init_growing :: virtual.arena_init_growing
@@ -120,15 +116,9 @@ get_scratch :: proc(conflict: ^Arena = nil) -> ^Arena
 	return result
 }
 
-// arena_init :: proc(arena: ^Arena, type: enum{Buffer, Growing, Static}) -> Allocator_Error
-// {
-//   _ = virtual.arena_init_static(arena)
-//   arena.alloc.data = arena
-//   arena.alloc.procedure = virtual.arena_allocator_proc
-// }
-
 
 // Heap //////////////////////////////////////////////////////////////////////////////////
+
 
 heap_init 							 :: tlsf.init
 heap_init_from_allocator :: tlsf.init_from_allocator

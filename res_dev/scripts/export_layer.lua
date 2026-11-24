@@ -31,7 +31,7 @@ if not spr then return print('No active sprite') end
 local local_path, title, extension = spr.filename:match("^(.+[/\\])(.-)(%.[^.]*)$")
 
 -- Construct export path by prefixing the current .aseprite file path
-local export_path = local_path .. "../res/textures/"
+local export_path = local_path .. "/dg/dev/game1/res/textures/"
 local_path = export_path
 
 local sprite_name = app.fs.fileTitle(app.activeSprite.filename)

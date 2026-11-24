@@ -5,7 +5,6 @@ import "core:math"
 import "basic/mem"
 import vmath "basic/vmath"
 import "platform"
-import "render"
 import "ui"
 
 box_counters: [10]int
@@ -80,59 +79,6 @@ gui_update :: proc(tree: ^ui.Tree, dt: f32)
   ui.end_tree(dt)
 }
 
-@(private="package")
-gui_render :: proc(tree: ^ui.Tree)
-{
-  window_size := platform.window_get_size(&user.window)
-
-  scratch := mem.temp_begin(mem.get_scratch())
-  defer mem.temp_end(scratch)
-  
-  render.begin_pass({
-    shader = &res.shaders[.UI],
-    camera = vmath.translation_3x3f({0, 0}),
-    projection = vmath.orthographic(0, window_size.x, 0, window_size.y),
-    viewport = {0, 0, window_size.x, window_size.y},
-    clear_color = {0, 0, 0, 0},
-  })
-
-  iter := ui.make_iterator_preorder(tree.root, scratch)
-  for box in ui.iterate_preorder(&iter)
-  {
-    sprite := cast(Sprite_Name) box.sprite
-    if sprite == nil
-    {
-      sprite = .UI_Square
-    }
-
-    draw_sprite(sprite=sprite,
-                pos=box.rect_pos,
-                scl=box.rect_dim/16,
-                color=vmath.concat(box.color.rgb, 0),
-                tint={1, 1, 1, box.color.a})
-
-    if box.decorated_text.len != 0
-    {
-      draw_decorated_text(text=box.decorated_text, 
-                          pos=box.rect_pos, 
-                          size=box.text_size, 
-                          line_height=1)
-    }
-    else if box.text != ""
-    {
-      draw_text(text=box.text, 
-                pos=box.rect_pos, 
-                size=box.text_size, 
-                line_height=1,
-                color=box.color)
-    }
-  }
-
-  render.end_pass()
-
-  mem.arena_clear(&global.ui_frame_arena)
-}
-
 ui_main_menu :: proc()
 {
   ui.spacer(ui.px(0), ui.pct(0.1))
@@ -155,7 +101,7 @@ ui_main_menu :: proc()
       @(static)
       names := [?]string{"Play", "Options", "Quit"}
 
-      button := ui.image(names[i], sprite_id(.UI_Square), idx=i)
+      button := ui.image(names[i], sprite_id(.UI_Rect), idx=i)
       if ui.P(button)
       {
         ui.layout_width(ui.pct(0.3))
@@ -199,7 +145,7 @@ ui_main_menu :: proc()
 
 ui_options_menu :: proc()
 {
-  frame_arena := &global.ui_frame_arena
+  temp_arena := &global.gui_temp_arena
 
   ui.spacer(ui.px(0), ui.pct(0.05))
   
@@ -221,7 +167,7 @@ ui_options_menu :: proc()
 
     for i in 0..<len(names)
     {
-      button := ui.image(names[i], sprite_id(.UI_Square), idx=i)
+      button := ui.image(names[i], sprite_id(.UI_Rect), idx=i)
       if ui.P(button)
       {
         ui.layout_width(ui.pct(0.4))
@@ -237,7 +183,7 @@ ui_options_menu :: proc()
         button_state := states[0 if box_counters[i] % 2 == 0 else 1]
         button_color := colors[0 if box_counters[i] % 2 == 0 else 1]
 
-        option_label := ui.create_decorated_string({1, 1, 1}, frame_arena)
+        option_label := ui.create_decorated_string({1, 1, 1}, temp_arena)
         ui.decorated_string_push(&option_label, names[i])
         ui.decorated_string_push(&option_label, ": ")
         ui.decorated_string_push(&option_label, ui.dstr(button_state, color=button_color))

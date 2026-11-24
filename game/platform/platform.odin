@@ -114,16 +114,11 @@ create_window :: proc(desc: Window_Desc, arena: ^mem.Arena) -> Window
 	{
 		#partial switch prop
 		{
-		case .Always_On_Top:
-			window_flags += {.ALWAYS_ON_TOP}
-		case .Borderless:
-			window_flags += {.BORDERLESS}
-		case .Fullscreen:
-			window_flags += {.FULLSCREEN}
-		case .Maximized:
-			window_flags += {.MAXIMIZED}
-		case .Resizeable:
-			window_flags += {.RESIZABLE}
+		case .Always_On_Top: window_flags += {.ALWAYS_ON_TOP}
+		case .Borderless:    window_flags += {.BORDERLESS}
+		case .Fullscreen:		 window_flags += {.FULLSCREEN}
+		case .Maximized:		 window_flags += {.MAXIMIZED}
+		case .Resizeable:		 window_flags += {.RESIZABLE}
 		}
 	}
 
@@ -135,14 +130,17 @@ create_window :: proc(desc: Window_Desc, arena: ^mem.Arena) -> Window
 		gl_ctx := sdl.GL_CreateContext(sdl_window)
 		sdl.GL_MakeCurrent(sdl_window, gl_ctx)
 
-		vsync: i32 = .Vsync in desc.props ? 1 : 0
-		sdl.GL_SetSwapInterval(vsync)
+		swap_mode: i32 = .Vsync in desc.props ? -1 : 0
+		if !sdl.GL_SetSwapInterval(swap_mode) && swap_mode == -1
+		{
+			log.warn("[platform]: Adaptive vsync is not available. Falling back to regular vsync.\n")
+			sdl.GL_SetSwapInterval(1)
+		}
 
 		when false
 		{
-			// log.infof("[platform]: OpenGL version: %s", gl.GetString(gl.VERSION))
 			log.infof("[platform]: SDL version: %i\n", sdl.GetVersion())
-			log.infof("[platform]: DearImGui version: %s\n", imgui.GetVersion())
+			log.infof("[platform]: Dear ImGui version: %s\n", imgui.GetVersion())
 		}
 
 		result.render_ctx.gl.ctx = gl_ctx
@@ -176,11 +174,25 @@ window_toggle_fullscreen :: proc(window: ^Window)
 	sdl.SetWindowFullscreen(window.handle, bool(!fs))
 }
 
+@(require_results)
 window_get_size :: proc(window: ^Window) -> [2]f32
 {
 	result: [2]i32
 
 	sdl.GetWindowSize(auto_cast window.handle, &result.x, &result.y)
+
+	return {
+		cast(f32) result.x,
+		cast(f32) result.y,
+	}
+}
+
+@(require_results)
+window_get_size_in_pixels :: proc(window: ^Window) -> [2]f32
+{
+	result: [2]i32
+
+	sdl.GetWindowSizeInPixels(auto_cast window.handle, &result.x, &result.y)
 
 	return {
 		cast(f32) result.x,
@@ -300,6 +312,8 @@ get_display_bounds :: proc(window: ^Window) -> [4]f32
 	sdl.GetDisplayBounds(display_id, &rect)
 	return {f32(rect.x), f32(rect.y), f32(rect.w), f32(rect.h)}
 }
+
+vk_create_surface :: sdl.Vulkan_CreateSurface
 
 imgui_begin :: proc()
 {

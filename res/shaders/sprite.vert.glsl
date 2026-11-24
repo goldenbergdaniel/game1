@@ -6,7 +6,6 @@ struct Vertex
   float tint[4];
   float color[4];
   float uv[2];
-  uint tex;
 };
 
 layout(binding=0)
@@ -16,7 +15,7 @@ uniform ubo
   mat4 u_camera;
 };
 
-layout(binding=1) 
+layout(binding=0)
 readonly buffer ssbo
 {
   Vertex vertices[];
@@ -24,7 +23,6 @@ readonly buffer ssbo
 
 out vec4 v_tint;
 out vec4 v_color;
-out uint v_tex;
 out vec2 v_tex_coord;
 
 void main()
@@ -54,6 +52,4 @@ void main()
     vertices[gl_VertexID].uv[0],
     vertices[gl_VertexID].uv[1]
   );
-
-  v_tex = vertices[gl_VertexID].tex;
 }

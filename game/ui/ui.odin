@@ -1,7 +1,6 @@
 package ui
 
 import "core:fmt"
-import "core:log"
 import "core:strings"
 import "../basic/mem"
 
@@ -20,11 +19,14 @@ Tree :: struct
   count:           int,
   root:            ^Box,
   curr:            ^Box,
+  window_size:     [2]f32,
   cursor_pos:      [2]f32,
   last_cursor_pos: [2]f32,
   mouse_btn_down:  [Mouse_Btn_Kind]bool,
   perm_arena:      ^mem.Arena,
   temp_arena:      ^mem.Arena,
+  ref_pos:         [2]f32,
+  ref_size:        [2]f32,
 }
 
 tree_init :: proc(tree: ^Tree, cap: int, perm_arena, temp_arena: ^mem.Arena)
@@ -60,6 +62,8 @@ tree_alloc_box :: proc(tree: ^Tree) -> ^Box
 
 tree_clear :: proc(tree: ^Tree)
 {
+  mem.arena_clear(tree.temp_arena)
+  
   for &box in tree.boxes[:]
   {
     box = {}
@@ -156,7 +160,7 @@ tree_resolve_layout :: proc(tree: ^Tree)
 
       if .Floating in box.props
       {
-        box.computed_rel_pos = box.offset
+        box.computed_rel_pos = (box.offset - tree.ref_pos) * tree.ref_size
       }
 
       for child := box.first; child != nil; child = child.next
@@ -164,6 +168,7 @@ tree_resolve_layout :: proc(tree: ^Tree)
         if .Floating in child.props do continue
 
         offset += child.offset
+        // offset += (child.offset - tree.ref_pos) * tree.ref_size
 
         for axis in 0..<2
         {
@@ -226,10 +231,20 @@ tree_resolve_signals :: proc(tree: ^Tree)
     box.signal[.Curr].flags = {}
     
     box.signal[.Curr].flags += intersects ? {.Hovered} : {}
-    box.signal[.Curr].flags += global_tree.mouse_btn_down[.Left] && intersects ? {.Left_Pressed} : {}
-    box.signal[.Curr].flags += global_tree.mouse_btn_down[.Right] && intersects ? {.Right_Pressed} : {}
-    box.signal[.Curr].flags += global_tree.mouse_btn_down[.Middle] && intersects ? {.Middle_Pressed} : {}
+    box.signal[.Curr].flags += tree.mouse_btn_down[.Left] && intersects ? {.Left_Pressed} : {}
+    box.signal[.Curr].flags += tree.mouse_btn_down[.Right] && intersects ? {.Right_Pressed} : {}
+    box.signal[.Curr].flags += tree.mouse_btn_down[.Middle] && intersects ? {.Middle_Pressed} : {}
   }
+}
+
+tree_resolve :: proc(tree: ^Tree, rel_pos, rel_size: [2]f32)
+{
+  tree.ref_pos = rel_pos
+  tree.ref_size.x = rel_size.x if rel_size.x > 0 else 1
+  tree.ref_size.y = rel_size.x if rel_size.x > 0 else 1
+
+  tree_resolve_layout(tree)
+  tree_resolve_signals(tree)
 }
 
 tree_print_bfs :: proc(tree: ^Tree)
@@ -452,6 +467,8 @@ Layout :: struct
   color:           [4]f32,
   shade:           [3]f32,
   text_size:       f32,
+  text_align:      Justify,
+  text_color:      [3]f32,
 
   child_size:      [2]Size,
   child_align:     Alignment,
@@ -711,9 +728,12 @@ begin_tree :: proc(
   
   tree.cursor_pos = st.cursor_pos
   tree.mouse_btn_down = st.mouse_btn_down
+  tree.window_size = st.window_size
+
   tree.root.name = "root"
   tree.root.shade = {1, 1, 1}
   tree.curr = tree.root
+
   global_tree = tree
 
   layout_width(px(st.window_size.x))
@@ -721,13 +741,16 @@ begin_tree :: proc(
   layout_color(st.background_color)
 }
 
-end_tree :: proc(dt: f32)
+end_tree :: proc(dt: f32, resolve := true)
 {
   temp := mem.temp_begin(mem.get_scratch())
   defer mem.temp_end(temp)
 
-  tree_resolve_layout(global_tree)
-  tree_resolve_signals(global_tree)
+  if resolve
+  {
+    tree_resolve_layout(global_tree)
+    tree_resolve_signals(global_tree)
+  }
 
   iter := make_iterator_preorder(global_tree.root, temp)
   for box in iterate_preorder(&iter)
@@ -870,6 +893,7 @@ just_pressed :: proc(box: ^Box, btn: Mouse_Btn_Kind) -> bool
   }
 }
 
+@(require_results)
 hovered :: proc(box: ^Box) -> bool
 {
   return .Hovered in box.signal[.Curr].flags
@@ -902,6 +926,7 @@ layout_child_height :: proc(size: Size)
 layout_offset :: proc(off: [2]f32)
 {
   assert(global_tree.curr != nil)
+  // global_tree.curr.offset = (off - global_tree.rel_pos) * global_tree.rel_size
   global_tree.curr.offset = off
 }
 
@@ -939,6 +964,18 @@ layout_text_size :: proc(size: f32)
 {
   assert(global_tree.curr != nil)
   global_tree.curr.text_size = size
+}
+
+layout_text_align :: proc(align: Justify)
+{
+  assert(global_tree.curr != nil)
+  global_tree.curr.text_align = align
+}
+
+layout_text_color :: proc(color: [3]f32)
+{
+  assert(global_tree.curr != nil)
+  global_tree.curr.text_color = color
 }
 
 layout_child_text_size :: proc(size: f32)

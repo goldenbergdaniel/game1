@@ -6,7 +6,9 @@ struct Vertex
   float tint[4];
   float color[4];
   float uv[2];
-  uint tex;
+  uint  tex;
+  // vec2  half_size;
+  // float border_radius;
 };
 
 layout(binding=0)
@@ -16,7 +18,7 @@ uniform ubo
   mat4 u_camera;
 };
 
-layout(binding=1) 
+layout(binding=0)
 readonly buffer ssbo
 {
   Vertex vertices[];

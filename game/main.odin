@@ -14,7 +14,7 @@ import "ui"
 
 VIEWPORT_WIDTH  :: 192.0 // 192.0 or 240.0
 VIEWPORT_HEIGHT :: 108.0 // 108.0 or 135.0
-TIME_STEP       :: 1.0 / 40
+TIME_STEP       :: 1.0 / 60
 
 User :: struct
 {
@@ -70,20 +70,21 @@ main :: proc()
   user.window = platform.create_window(window_desc, &user.perm_arena)
   defer platform.destroy_window(&user.window)
 
-  user.screen = .Main_Menu
+  user.screen = .Game
 
-  render.init_renderer(&user.window)
+  render.init_renderer(&user.window, &user.perm_arena)
   init_resources(&user.perm_arena)
 
   platform.window_init_imgui(&user.window)
 
+  init_draw()
   init_audio()
   init_global()
 
   game_init(&curr_game)
   game_start(&curr_game)
 
-  ui.tree_init(&user.gui_tree, 1024, &user.perm_arena, &global.ui_frame_arena)
+  ui.tree_init(&user.gui_tree, 1024, &user.perm_arena, &global.gui_temp_arena)
 
   gui_init(&user.gui_tree)
 
@@ -159,17 +160,20 @@ main :: proc()
     switch user.screen
     {
     case .Main_Menu:
-      gui_render(&user.gui_tree)
+      draw_ui(&user.gui_tree)
 
     case .Game:
       alpha := accumulator / TIME_STEP
-      interpolate_games(&curr_game, &prev_game, &res_game, f32(alpha))
-      if res_game.started
+      // interpolate_games(&curr_game, &prev_game, &res_game, f32(alpha))
+      if curr_game.started
       {
-        game_render(&res_game)
+        // game_render(&res_game)
+        game_render(&curr_game)
+        // draw_ui(&global.wui_tree, res_game.camera.pos, window_size / {VIEWPORT_WIDTH, VIEWPORT_HEIGHT})
+        draw_ui(&global.wui_tree, curr_game.camera.pos, window_size / {VIEWPORT_WIDTH, VIEWPORT_HEIGHT})
       }
 
-      gui_render(&user.gui_tree)
+      // draw_ui(&user.gui_tree)
     }
 
     render_end_tick = time.tick_now()
@@ -196,7 +200,7 @@ logger_proc :: proc(
   level:   runtime.Logger_Level,
   text:    string,
   options: runtime.Logger_Options,
-  location := #caller_location
+  location := #caller_location,
 ){
   level_str: string
   color_code: string = "\033[0m"

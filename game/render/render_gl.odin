@@ -6,9 +6,10 @@ import "core:fmt"
 import "core:log"
 import "core:os"
 import gl "ext:opengl"
+import "../basic/mem"
 import "../platform"
 
-gl_init :: proc(window: ^platform.Window)
+gl_init :: proc(window: ^platform.Window, arena: ^mem.Arena)
 {
   gl.load_up_to(4, 6, platform.gl_set_proc_address)
 
@@ -21,27 +22,8 @@ gl_init :: proc(window: ^platform.Window)
   gl.Enable(gl.BLEND)
   
   // - Vertex array object ---
-  vao: u32
-  gl.GenVertexArrays(1, &vao)
-  gl.BindVertexArray(vao)
-
-  // - Uniform buffer ---
-  gl.CreateBuffers(1, &renderer.ubo)
-  gl.BindBufferBase(gl.UNIFORM_BUFFER, 0, renderer.ubo)
-  gl.NamedBufferStorage(renderer.ubo, size_of(renderer.uniforms), &renderer.uniforms, gl.DYNAMIC_STORAGE_BIT)
-
-  // - Shader storage buffer ---
-  gl.CreateBuffers(1, &renderer.ssbo)
-  gl.BindBufferBase(gl.SHADER_STORAGE_BUFFER, 1, renderer.ssbo)
-  gl.NamedBufferStorage(renderer.ssbo, size_of(renderer.vertices), raw_data(&renderer.vertices), gl.DYNAMIC_STORAGE_BIT)
-
-  // - Index buffer ---
-  gl.CreateBuffers(1, &renderer.ibo)
-  gl.VertexArrayElementBuffer(vao, renderer.ibo)
-  gl.NamedBufferData(renderer.ibo, size_of(renderer.indices), raw_data(&renderer.indices), gl.DYNAMIC_DRAW)
-
-  // - Textures ---
-  gl.CreateTextures(gl.TEXTURE_2D, MAX_TEXTURES, &renderer.textures[0])
+  gl.GenVertexArrays(1, &renderer.vao)
+  gl.BindVertexArray(renderer.vao)
 }
 
 gl_clear :: proc(color: v4f32)
@@ -50,48 +32,81 @@ gl_clear :: proc(color: v4f32)
   gl.Clear(gl.COLOR_BUFFER_BIT)
 }
 
-gl_draw :: proc()
+gl_draw :: proc(count: int)
 {
-  if renderer.vertices_count == 0 do return
-
-  renderer.uniforms.projection = cast(m4x4f32) renderer.pass.projection
-  renderer.uniforms.camera = cast(m4x4f32) renderer.pass.camera
+  pip := &renderer.pass.pipeline
 
   gl.Viewport(**([4]i32)(renderer.pass.viewport))
 
-  gl.NamedBufferSubData(renderer.ssbo, 0, renderer.vertices_count * size_of(Vertex), &renderer.vertices[0])
-  gl.NamedBufferSubData(renderer.ibo, 0, renderer.indices_count * size_of(u16), &renderer.indices[0])
-  gl.NamedBufferSubData(renderer.ubo, 0, size_of(renderer.uniforms), &renderer.uniforms)
-  
-  program := renderer.shaders[renderer.pass.shader.id]
+  pip.uniforms.projection = cast(m4x4f32) renderer.pass.projection
+  pip.uniforms.camera = cast(m4x4f32) renderer.pass.camera
+  gl.NamedBufferSubData(pip.ubo, 0, size_of(pip.uniforms), &pip.uniforms)
+
+  gl.VertexArrayElementBuffer(renderer.vao, renderer.pass.index_buf.handle)
+
+  program := pip.shader.handle
   gl.UseProgram(program)
-  gl.UniformBlockBinding(program, 0, 0)
+  gl.UniformBlockBinding(program, 0, pip.ubo_idx)
 
-  if "u_tex" in renderer.pass.shader.uniforms
+  for uniform in pip.shader.uniforms
   {
-    gl.Uniform1i(renderer.pass.shader.uniforms["u_tex"], 0)
+    switch uniform
+    {
+      case "u_tex":   gl.Uniform1i(pip.shader.uniforms[uniform], renderer.pass.texture)
+      case "u_fnt":   gl.Uniform1i(pip.shader.uniforms[uniform], 2)
+      case "u_light": gl.Uniform4f(pip.shader.uniforms[uniform], **renderer.pass.light_color)
+    }
   }
 
-  if "u_fnt" in renderer.pass.shader.uniforms
+  gl.DrawElements(gl.TRIANGLES, i32(count), gl.UNSIGNED_SHORT, nil)
+}
+
+gl_create_buffer :: proc(size: int, kind: enum{Vertex, Index}, binding: int) -> Buffer
+{
+  result: Buffer
+
+  gl.CreateBuffers(1, &result.handle)
+
+  switch kind
   {
-    gl.Uniform1i(renderer.pass.shader.uniforms["u_fnt"], 1)
+  case .Vertex:
+    gl.BindBufferBase(gl.SHADER_STORAGE_BUFFER, u32(binding), result.handle)
+    gl.NamedBufferStorage(result.handle, size, nil, gl.DYNAMIC_STORAGE_BIT)
+
+  case .Index:
+    gl.VertexArrayElementBuffer(renderer.vao, result.handle)
+    gl.NamedBufferData(result.handle, size, nil, gl.DYNAMIC_DRAW)
+    gl.VertexArrayElementBuffer(renderer.vao, 0)
   }
 
-  if "u_light" in renderer.pass.shader.uniforms
-  {
-    gl.Uniform4f(renderer.pass.shader.uniforms["u_light"], **renderer.pass.light_color)
-  }
+  return result
+}
 
-  gl.DrawElements(gl.TRIANGLES, i32(renderer.indices_count), gl.UNSIGNED_SHORT, nil)
+gl_write_buffer :: proc(buffer: Buffer, data: rawptr, size: int, offset: int)
+{
+  gl.NamedBufferSubData(buffer.handle, offset, size, data)
+}
 
-  renderer.vertices_count = 0
-  renderer.indices_count = 0
+gl_create_pipeline :: proc(shader: Shader, arena: ^mem.Arena) -> Pipeline
+{
+  @(static)
+  ubo_idx: u32
+
+  result: Pipeline
+  result.ubo_idx = ubo_idx
+  result.shader = shader
+
+  gl.CreateBuffers(1, &result.ubo)
+  gl.BindBufferBase(gl.UNIFORM_BUFFER, result.ubo_idx, result.ubo)
+  gl.NamedBufferStorage(result.ubo, size_of(result.uniforms), &result.uniforms, gl.DYNAMIC_STORAGE_BIT)
+
+  ubo_idx += 1
+
+  return result
 }
 
 gl_create_shader :: proc(vsrc, fsrc: string, uniforms: []cstring) -> Shader
 {
-  assert(renderer.shaders_count < MAX_SHADERS)
-
   result: Shader
   vsrc, fsrc := vsrc, fsrc
 
@@ -145,9 +160,7 @@ gl_create_shader :: proc(vsrc, fsrc: string, uniforms: []cstring) -> Shader
   gl.LinkProgram(program)
   verify_shader(program, gl.LINK_STATUS)
 
-  renderer.shaders[renderer.shaders_count] = program
-  result.id = cast(u32) renderer.shaders_count
-  renderer.shaders_count += 1
+  result.handle = program
 
   for uniform in uniforms
   {
@@ -161,33 +174,40 @@ gl_create_shader :: proc(vsrc, fsrc: string, uniforms: []cstring) -> Shader
   return result
 }
 
-gl_create_texture :: proc(pixels: []byte, width, height: i32, format := 4) -> Texture
+gl_create_texture :: proc(pixels: []byte, width, height: i32, format: int) -> Texture
 {
-  assert(renderer.textures_count < MAX_TEXTURES)
-
   result: Texture
   result.pixels = pixels
   result.width = width
   result.height = height
-  result.id = cast(u32) renderer.textures_count
 
-  tex := renderer.textures[result.id]
+  @(static)
+  unit: u32
+  result.unit = unit
+  unit += 1
 
-  gl.TextureStorage2D(tex, 1, gl.RGBA8, width, height)
-  gl.TextureSubImage2D(texture=tex, 
+  gl.CreateTextures(gl.TEXTURE_2D, 1, &result.handle)
+  gl.TextureStorage2D(result.handle, 1, gl.RGBA8 if format == 4 else gl.R8, width, height)
+  gl.TextureSubImage2D(texture=result.handle, 
                        level=0, 
                        xoffset=0, 
                        yoffset=0, 
                        width=width, 
                        height=height, 
-                       format=gl.RGBA if format == 4 else gl.ALPHA, 
+                       format=gl.RGBA if format == 4 else gl.RED,
                        type=gl.UNSIGNED_BYTE, 
                        pixels=raw_data(pixels))
-  gl.TextureParameteri(tex, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
-  gl.TextureParameteri(tex, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
-  gl.BindTextureUnit(result.id, tex)
+  gl.TextureParameteri(result.handle, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+  gl.TextureParameteri(result.handle, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+  gl.BindTextureUnit(result.unit, result.handle)
 
-  renderer.textures_count += 1
+  if format == 1
+  {
+    gl.TextureParameteri(result.handle, gl.TEXTURE_SWIZZLE_R, gl.ZERO)
+    gl.TextureParameteri(result.handle, gl.TEXTURE_SWIZZLE_G, gl.ZERO)
+    gl.TextureParameteri(result.handle, gl.TEXTURE_SWIZZLE_B, gl.ZERO)
+    gl.TextureParameteri(result.handle, gl.TEXTURE_SWIZZLE_A, gl.RED)
+  }
 
   return result
 }

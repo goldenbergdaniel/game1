@@ -15,16 +15,20 @@ import "basic/vmath"
 import "platform"
 import "render"
 import tt "transform_tree"
+import "ui"
 
 
 // Global //////////////////////////////////////////////////////////////////////////////////
 
+MAP_SIZE :: 768
 
 global: struct
 {
   frame_arena:     mem.Arena,
-  ui_frame_arena:  mem.Arena,
-  world_mem:       mem.Heap,
+  gui_temp_arena:  mem.Arena,
+  wui_temp_arena:  mem.Arena,
+  world_heap:      mem.Heap,
+  wui_tree:        ui.Tree,
   audio:           struct
   {
     music_volume:  f32,
@@ -45,8 +49,11 @@ init_global :: proc()
 {
   // WARN(dg): What if multiple games running on same thread? This needs to change.
   _ = mem.arena_init_growing(&global.frame_arena)
-  _ = mem.arena_init_growing(&global.ui_frame_arena)
-  _ = mem.heap_init(&global.world_mem, mem.default_allocator(), mem.MIB * 16)
+  _ = mem.arena_init_growing(&global.gui_temp_arena)
+  _ = mem.arena_init_growing(&global.wui_temp_arena)
+  _ = mem.heap_init(&global.world_heap, mem.default_allocator(), mem.MIB * 16)
+
+  ui.tree_init(&global.wui_tree, 1024, &user.perm_arena, &global.wui_temp_arena)
 
   global.temp.noise_sources.allocator = mem.allocator(&global.frame_arena)
   global.audio.music_volume = 0.0
@@ -59,9 +66,9 @@ init_global :: proc()
 Game :: struct
 {
   started:            bool,
+  interpolate:        bool,
   t:                  f32,
   t_mult:             f32,
-  interpolate:        bool,
   prev_keys:          [platform.Key_Kind]bool,
   prev_mouse_btns:    [platform.Mouse_Btn_Kind]bool,
   camera:             struct
@@ -111,13 +118,13 @@ set_active_game :: #force_inline proc(gm: ^Game)
 
 game_init :: proc(gm: ^Game)
 {
-  gm.transform_tree = tt.create_tree(MAX_ENTITIES-1, mem.allocator(&global.world_mem))
+  gm.transform_tree = tt.create_tree(MAX_ENTITIES-1, mem.allocator(&global.world_heap))
 }
 
 game_free :: proc(gm: ^Game)
 {
   mem.arena_destroy(&global.frame_arena)
-  mem.heap_destroy(&global.world_mem)
+  mem.heap_destroy(&global.world_heap)
   tt.destroy_tree(&gm.transform_tree)
 }
 
@@ -182,26 +189,32 @@ game_start :: proc(gm: ^Game)
 
   gm.t_mult = 1
   gm.camera.scl = {1, 1}
-  // gm.light_color = {1.0, 1.0, 1.0, 1.0}
-  gm.light_color = {1.0, 0.8, 0.8, 1.0}
+  gm.light_color = {1.0, 1.0, 1.0, 1.0}
+  // gm.light_color = {1.0, 0.8, 0.8, 1.0}
 
   player := spawn_player()
   entity_equip_weapon(player, .Nil)
 
   set_active_zone(gm.active_zone, true)
 
-  spawn_creature(.Deer, {170, 180})
-  spawn_creature(.Rabbit, {100, 100})
+  // spawn_entity(.Ground, {0, 0})
+
+  spawn_creature(.Rabbit, {100, 50})
   spawn_creature(.Rabbit, {200, 250})
   spawn_creature(.Rabbit, {200, 200})
-  spawn_creature(.Squirrel, {230, 190})
-  spawn_creature(.Zombie, {100, 100})
   spawn_creature(.Squirrel, {50, 50})
+  spawn_creature(.Squirrel, {230, 190})
+  spawn_creature(.Deer, {170, 180})
+  // spawn_creature(.Zombie, {100, 100})
+
+  npc := spawn_npc(.NPC_Generic, {300, 100})
+  npc.target_en = player.ref
+  gm.special_entities[.Debug] = npc
 
   play_sound(.Minecraft, volume=global.audio.music_volume)
 
-  spawn_entity(.Stump, {300, 100})
-  spawn_entity(.Stump, {100, 300})
+  spawn_entity(.Stump, {400, 100})
+  spawn_entity(.Stump, {100, 400})
 
   when false
   {
@@ -225,14 +238,41 @@ game_update :: proc(gm: ^Game, dt: f32)
 {
   set_active_game(gm)
 
-  // println(gm.special_entities[.Debug].animation.frame_idx)
-
   gm.started = true
 
   player := gm.special_entities[.Player]
   cursor_pos := screen_to_world_space(platform.get_cursor_position())
 
   gm.interpolate = true
+
+  ui.begin_tree(&global.wui_tree, {
+    background_color = {0.0, 0.0, 0.0, 0.0},
+    window_size = platform.window_get_size(&user.window), 
+    cursor_pos = platform.get_cursor_position(),
+    mouse_btn_down = {
+      .Left = platform.input.mouse_btns[.Left],
+      .Right = platform.input.mouse_btns[.Right],
+      .Middle = platform.input.mouse_btns[.Middle],
+    },
+  })
+
+  // if ui.P(ui.box("Banner"))
+  // {
+  //   ui.layout_props({.Floating})
+  //   ui.layout_offset({50, 50})
+  //   // ui.layout_width(ui.fit_children())
+  //   ui.layout_width(ui.px(200))
+  //   ui.layout_height(ui.px(40))
+  //   ui.layout_color({0.4, 0.4, 0.4, 0.9})
+  //   ui.layout_child_justify({nil, .Center})
+
+  //   if ui.P(ui.text("tooltip"))
+  //   {
+  //     ui.layout_text_size(2)
+  //   }
+  // }
+
+  // println(gm.special_entities[.Debug].animation.frame_idx)
 
   set_music_volume(global.audio.music_volume)
 
@@ -306,6 +346,14 @@ game_update :: proc(gm: ^Game, dt: f32)
       {
         set_active_zone(.Wilderness if gm.active_zone == .Shop else .Shop)
       }
+      else if key_just_down(.K)
+      {
+        game_save(gm, "res/data/debug.dat")
+      }
+      else if key_just_down(.L)
+      {
+        game_load(gm, "res/data/debug.dat")
+      }
     }
     else
     {
@@ -330,7 +378,7 @@ game_update :: proc(gm: ^Game, dt: f32)
 
     closest_dist := max(f32)
 
-    for &en in gm.entities do if .Collectable in en.props
+    for &en in gm.entities do if .Selectable in en.props
     {
       en_pos := tt.global_pos(en)
 
@@ -359,182 +407,26 @@ game_update :: proc(gm: ^Game, dt: f32)
       gm.selected_entity = {}
     }
 
-    selected := entity_from_ref(gm.selected_entity)
-    if entity_is_valid(selected)
+    selected_en := entity_from_ref(gm.selected_entity)
+    if entity_is_valid(selected_en)
     {
-      selected.props += {.Highlighted}
-      if mouse_btn_just_down(.Left)
+      selected_en.props += {.Highlighted}
+      if .Collectable in selected_en.props
       {
-        platform.consume_mouse_btn(.Left)
-        harvest_entity(selected)
-      }
-    }
-  }
-
-
-
-  // - Player movement (:move, :movement) ---
-  if player.state != .Harvest
-  {
-    EQUIPPED_MULT  :: 0.7
-    BACKWARD_MULT  :: 0.7
-    SNEAKING_MULT  :: 0.5
-    WALKING_NOISE  :: 50
-    SNEAKING_NOISE :: 35
-
-    backward, sneaking: bool
-
-    if platform.input_down(res.actions[.Sneak])
-    {
-      player.props += {.Sneaking}
-      sneaking = true
-    }
-    else
-    {
-      player.props -= {.Sneaking}
-      sneaking = false
-    }
-
-    if platform.input_down(res.actions[.Left]) && !platform.input_down(res.actions[.Right])
-    {
-      backward = cursor_pos.x > tt.local(player).pos.x
-      player.input_dir.x = -1
-    }
-    else if platform.input_down(res.actions[.Right]) && !platform.input_down(res.actions[.Left])
-    {
-      backward = cursor_pos.x < tt.local(player).pos.x
-      player.input_dir.x = 1
-    }
-    else
-    {
-      player.vel.x = 0
-      player.input_dir.x = 0
-    }
-
-    if platform.input_down(res.actions[.Up]) && !platform.input_down(res.actions[.Down])
-    {
-      player.input_dir.y = -1
-    }
-    else if platform.input_down(res.actions[.Down]) && !platform.input_down(res.actions[.Up])
-    {
-      player.input_dir.y = 1
-    }
-    else
-    {
-      player.vel.y = 0
-      player.input_dir.y = 0
-    }
-
-    if player.input_dir.x != 0 || player.input_dir.y != 0
-    {
-      speed_mult: f32 = 1.0
-      speed_mult *= backward ? BACKWARD_MULT : 1.0
-      speed_mult *= sneaking ? SNEAKING_MULT : 1.0
-      speed_mult *= !gm.weapon.holstered ? EQUIPPED_MULT : 1.0
-
-      player.speed_mult = speed_mult * (backward ? -1 : 1)
-
-      entity_set_state(player, .Walk)
-
-      noise: f32 = sneaking ? SNEAKING_NOISE : WALKING_NOISE
-      emit_noise(noise, tt.global_pos(player))
-
-      player.movement_speed = res.creatures[.Player].speed * speed_mult
-      if player.vel.x != 0 && player.vel.y != 0
-      {
-        player.vel = vmath.normalize(player.input_dir) * player.movement_speed
-      }
-      else
-      {
-        player.vel = player.input_dir * player.movement_speed
-      }
-    }
-    else
-    {
-      player.speed_mult = 0
-      entity_set_state(player, .Idle)
-    }
-
-    player.target_pos = cursor_pos
-    set_audio_listener_pos(tt.global_pos(player))
-  }
-  else
-  {
-    player.vel = {}
-  }
-
-  // - Creature ---
-  for &en in gm.entities do if en.flags.update
-  {
-    if .Flee_Noise in en.props
-    {
-      creature_desc := res.creatures[en.name]
-      noise := noise_at(tt.global_pos(en))
-
-      if noise > creature_desc.noise_threshold
-      {
-        if !en.flee_timer.ticking
+        if mouse_btn_just_down(.Left)
         {
-          timer_start(&en.flee_timer, creature_desc.reaction_time)
+          platform.consume_mouse_btn(.Left)
+          harvest_entity(selected_en)
         }
       }
-
-      if timer_timeout(&en.flee_timer)
+      else if selected_en.name == .NPC_Generic
       {
-        en.flee_timer.ticking = false
-        entity_set_state(&en, .Flee)
+        if mouse_btn_just_down(.Right)
+        {
+          platform.consume_mouse_btn(.Right)
+        }
       }
     }
-    
-    if .Hostile in en.props && en.state != .Flee
-    {
-      target_en, ok := entity_from_ref(en.target_en)
-      if !ok do break
-
-      if vmath.distance(tt.global_pos(en), tt.global_pos(target_en)) < res.creatures[en.name].view_dist
-      {
-        entity_set_state(&en, .Pursue)
-      }
-      else if en.state == .Pursue
-      {
-        entity_set_state(&en, .Wander)
-      }
-    }
-  }
-
-  // - Update state and move ---
-  for &en in gm.entities do if en.flags.update
-  {
-    en->update_state(&{dt=dt})
-
-    if .Flip_To_Target in en.props
-    {
-      if target, exists := entity_from_ref(en.target_en); exists
-      {
-        entity_flip_to_target(&en, tt.global_pos(target))
-      }
-      else
-      {
-        entity_flip_to_target(&en, en.target_pos)
-      }
-    }
-    
-    if .Flip_To_Movement in en.props && en.vel != {0, 0}
-    {
-      en.flip_h = en.vel.x < 0
-    }
-
-    tt.local(en).pos += en.vel * dt
-  }
-
-  // - Camera follow player
-  {
-    bounds: [2]Range(f32)
-    bounds.x.min = -ZONE_MARGIN_SIZE
-    bounds.x.max = f32(res.zones[gm.active_zone].width) + ZONE_MARGIN_SIZE
-    bounds.y.min = -ZONE_MARGIN_SIZE
-    bounds.y.max = f32(res.zones[gm.active_zone].height) + ZONE_MARGIN_SIZE
-    camera_follow_point(tt.global_pos(player), bounds)
   }
 
   // - Player attack (:attack, :combat) ---
@@ -649,6 +541,179 @@ game_update :: proc(gm: ^Game, dt: f32)
         muzzle_flash.flags.render = false
       }
     }
+  }
+
+  // - Player movement (:move, :movement) ---
+  if player.state != .Harvest
+  {
+    EQUIPPED_MULT  :: 0.7
+    BACKWARD_MULT  :: 1.0
+    SNEAKING_MULT  :: 0.5
+    WALKING_NOISE  :: 50
+    SNEAKING_NOISE :: 40
+
+    backward, sneaking: bool
+
+    if platform.input_down(res.actions[.Sneak])
+    {
+      player.props += {.Sneaking}
+      sneaking = true
+    }
+    else
+    {
+      player.props -= {.Sneaking}
+      sneaking = false
+    }
+
+    if platform.input_down(res.actions[.Left]) && !platform.input_down(res.actions[.Right])
+    {
+      backward = cursor_pos.x > tt.local(player).pos.x
+      player.input_dir.x = -1
+    }
+    else if platform.input_down(res.actions[.Right]) && !platform.input_down(res.actions[.Left])
+    {
+      backward = cursor_pos.x < tt.local(player).pos.x
+      player.input_dir.x = 1
+    }
+    else
+    {
+      player.vel.x = 0
+      player.input_dir.x = 0
+    }
+
+    if platform.input_down(res.actions[.Up]) && !platform.input_down(res.actions[.Down])
+    {
+      player.input_dir.y = -1
+    }
+    else if platform.input_down(res.actions[.Down]) && !platform.input_down(res.actions[.Up])
+    {
+      player.input_dir.y = 1
+    }
+    else
+    {
+      player.vel.y = 0
+      player.input_dir.y = 0
+    }
+
+    if player.input_dir.x != 0 || player.input_dir.y != 0
+    {
+      speed_mult: f32 = 1.0
+      speed_mult *= backward ? BACKWARD_MULT : 1.0
+      speed_mult *= sneaking ? SNEAKING_MULT : 1.0
+      speed_mult *= !gm.weapon.holstered ? EQUIPPED_MULT : 1.0
+
+      player.speed_mult = speed_mult * (backward ? -1 : 1)
+
+      entity_set_state(player, .Walk)
+
+      noise: f32 = sneaking ? SNEAKING_NOISE : WALKING_NOISE
+      emit_noise(noise, tt.global_pos(player))
+
+      player.movement_speed = res.creatures[.Player].speed * speed_mult
+      if player.vel.x != 0 && player.vel.y != 0
+      {
+        player.vel = vmath.normalize(player.input_dir) * player.movement_speed
+      }
+      else
+      {
+        player.vel = player.input_dir * player.movement_speed
+      }
+    }
+    else
+    {
+      player.speed_mult = 0
+      entity_set_state(player, .Idle)
+    }
+
+    player.target_pos = cursor_pos
+    set_audio_listener_pos(tt.global_pos(player))
+  }
+  else
+  {
+    player.vel = {}
+  }
+
+  // - Creature ---
+  for &en in gm.entities do if en.flags.update
+  {
+    if .Flee_Noise in en.props
+    {
+      creature_desc := res.creatures[en.name]
+
+      // NOTE(dg): This will not catch any noise emitted after this line.
+      noise := noise_at(tt.global_pos(en))
+      if noise > creature_desc.noise_threshold
+      {
+        if !en.flee_timer.ticking
+        {
+          timer_start(&en.flee_timer, creature_desc.reaction_time)
+        }
+      }
+
+      if timer_timeout(&en.flee_timer)
+      {
+        en.flee_timer.ticking = false
+        entity_set_state(&en, .Flee)
+      }
+    }
+    
+    if .Hostile in en.props && en.state != .Flee
+    {
+      target_en, ok := entity_from_ref(en.target_en)
+      if !ok do break
+
+      if vmath.distance(tt.global_pos(en), tt.global_pos(target_en)) < res.creatures[en.name].view_dist
+      {
+        entity_set_state(&en, .Pursue)
+      }
+      else if en.state == .Pursue
+      {
+        entity_set_state(&en, .Wander)
+      }
+    }
+  }
+
+  // - Update state and move ---
+  for &en in gm.entities do if en.flags.update
+  {
+    en->update_state(&{dt=dt})
+
+    if .Flip_To_Target in en.props
+    {
+      if target, exists := entity_from_ref(en.target_en); exists
+      {
+        entity_flip_to_target(&en, tt.global_pos(target))
+      }
+      else
+      {
+        entity_flip_to_target(&en, en.target_pos)
+      }
+    }
+    
+    if .Flip_To_Movement in en.props && en.vel != {0, 0}
+    {
+      en.flip_h = en.vel.x < 0
+    }
+
+    tt.local(en).pos += en.vel * dt
+
+    // - Flip child with parent ---
+    if en.parent.id != 0 && .Flip_To_Parent in en.props
+    {
+      parent := entity_from_ref(en.parent)
+      en.flip_h = parent.flip_h
+      en.flip_v = parent.flip_v
+    }
+  }
+
+  // - Camera follow player
+  {
+    bounds: [2]Range(f32)
+    bounds.x.min = -ZONE_MARGIN_SIZE
+    bounds.x.max = f32(res.zones[gm.active_zone].width) + ZONE_MARGIN_SIZE
+    bounds.y.min = -ZONE_MARGIN_SIZE
+    bounds.y.max = f32(res.zones[gm.active_zone].height) + ZONE_MARGIN_SIZE
+    camera_follow_point(tt.global_pos(player), bounds)
   }
 
   // - Collision detection (:collision, :collide) ---
@@ -1004,13 +1069,31 @@ game_update :: proc(gm: ^Game, dt: f32)
   {
     particle_update(&par, dt)
   }
+  
+  if ui.P(ui.text("Kalt"))
+  {
+    ui.layout_props({.Floating})
+    ui.layout_offset(tt.global_pos(gm.special_entities[.Player]) - {2, 17})
+    ui.layout_text_color({0.5, 0.5, 1.0})
+    ui.layout_text_size(2)
+  }
+
+  if ui.P(ui.text("Scientist"))
+  {
+    ui.layout_props({.Floating})
+    ui.layout_offset(tt.global_pos(gm.special_entities[.Debug]) - {6, 16})
+    ui.layout_text_color({1, 1, 0})
+    ui.layout_text_size(2)
+  }
+
+  ui.end_tree(dt)
 
   gm.prev_keys = platform.input.keys
   gm.prev_mouse_btns = platform.input.mouse_btns
 
   clear(&global.temp.noise_sources)
   free_finished_sounds()
-  free_all(mem.allocator(&global.frame_arena))
+  mem.arena_clear(&global.frame_arena)
 
   set_active_game(nil)
 }
@@ -1020,7 +1103,10 @@ game_render :: proc(gm: ^Game)
   set_active_game(gm)
 
   render.begin_pass({
-    shader = &res.shaders[.Sprite],
+    pipeline = res.pipelines[.Sprite],
+    texture = i32(Texture_Name.Ground),
+    vertex_buf = d_data.vertex_buffer,
+    index_buf = d_data.index_buffer,
     camera = vmath.transform_3x3f(-gm.camera.pos, gm.camera.rot, gm.camera.scl),
     projection = vmath.orthographic(0, VIEWPORT_WIDTH, 0, VIEWPORT_HEIGHT),
     viewport = user.viewport,
@@ -1028,20 +1114,37 @@ game_render :: proc(gm: ^Game)
     light_color = gm.light_color,
   })
 
-  // - Draw region ---
-  for tile_idx in 0..<len(gm.tiles)
-  {
-    tile := &gm.tiles[tile_idx]
-    if tile.sprite != .Nil
-    {
-      pos := cast(v2f32) tile_coord_from_idx(tile_idx)
-      pos *= TILE_SIZE
-      // pos += ({REGION_SPAN, REGION_SPAN}) * v2f32(region_coord)
-      pos += {TILE_SIZE/2.0, TILE_SIZE/2.0}
+  draw_ground({0, 0}, {MAP_SIZE, MAP_SIZE})
 
-      draw_sprite(tile.sprite, pos, scl={1.01, 1.01}, rot=f32(tile.rot))
-    }
-  }
+  d_flush_sprite()
+  render.end_pass()
+
+  render.begin_pass({
+    pipeline = res.pipelines[.Sprite],
+    texture = i32(Texture_Name.Sprite_Atlas),
+    vertex_buf = d_data.vertex_buffer,
+    index_buf = d_data.index_buffer,
+    camera = vmath.transform_3x3f(-gm.camera.pos, gm.camera.rot, gm.camera.scl),
+    projection = vmath.orthographic(0, VIEWPORT_WIDTH, 0, VIEWPORT_HEIGHT),
+    viewport = user.viewport,
+    clear_color = {0, 0, 0, 0},
+    light_color = gm.light_color,
+  })
+
+  // - Draw region ---
+  // for tile_idx in 0..<len(gm.tiles)
+  // {
+  //   tile := &gm.tiles[tile_idx]
+  //   if tile.sprite != .Nil
+  //   {
+  //     pos := cast(v2f32) tile_coord_from_idx(tile_idx)
+  //     pos *= TILE_SIZE
+  //     // pos += ({REGION_SPAN, REGION_SPAN}) * v2f32(region_coord)
+  //     pos += {TILE_SIZE/2.0, TILE_SIZE/2.0}
+
+  //     draw_sprite(tile.sprite, pos, scl={1.01, 1.01}, rot=f32(tile.rot))
+  //   }
+  // }
 
   // TODO(dg): Have one array of render objects so that entities,
   //           particles, and other objects can be sorted together.
@@ -1110,6 +1213,7 @@ game_render :: proc(gm: ^Game)
     }
   }
 
+  d_flush_sprite()
   render.end_pass()
 
   set_active_game(nil)
@@ -1125,6 +1229,7 @@ interpolate_games :: proc(curr_gm, prev_gm, res_gm: ^Game, alpha: f32)
   prev_tt := &prev_gm.transform_tree
 
   res_gm.camera.pos = vmath.lerp(prev_gm.camera.pos, curr_gm.camera.pos, alpha)
+  // res_gm.camera.pos = prev_gm.camera.pos
 
   // - Interpolate entities ---
   for i in 1..<len(res_gm.entities)
@@ -1429,6 +1534,7 @@ Entity :: struct
   },
   props:             bit_set[Entity_Prop],
   name:              Entity_Name,
+  name_str:          string,
   kind:              Entity_Kind,
   item_kind:         Item_Kind,
   #subtype xform:    tt.Transform,
@@ -1507,11 +1613,13 @@ Entity_Prop :: enum
   Interpolate,
   Flip_To_Target,
   Flip_To_Movement,
+  Flip_To_Parent,
   Kill_After_Time,
   Rotate_Over_Time,
   Flash_Color,
-  Collectable,
   Highlighted,
+  Selectable,
+  Collectable,
   Sneaking,
   Flee_Noise,
   Hostile,
@@ -1656,7 +1764,7 @@ alloc_entity :: proc(gm: ^Game) -> ^Entity
       en.ref.gen = en.gen
       en.xform = tt.alloc_transform(&gm.transform_tree)
       en.resolve_collision = entity_resolve_collision_stub
-      en.update_state = entity_state_stub
+      en.update_state = entity_state_idle
 
       result = &en
 
@@ -1819,9 +1927,36 @@ spawn_entity :: proc(
     en.sprite = sprite
   }
 
+  tt.local(en).scl = {1, 1}
   tt.local(en).pos = pos
 
   return en
+}
+
+spawn_npc :: proc(name: Entity_Name, pos: v2f32, deferred := false) -> ^Entity
+{
+  gm := get_active_game()
+
+  npc := alloc_entity(gm)
+  setup_entity(npc, deferred)
+
+  desc := &res.entities[name]
+
+  npc.name = name
+  npc.name_str = "Scientist"
+  npc.kind = desc.kind
+  npc.props += {.Interpolate} + desc.props
+  npc.z_layer = .Enemy
+  npc.collision_layer = .Enemy
+  npc.health = res.creatures[name].health
+  npc.animation.data = desc.animations
+  npc.collider = desc.collider
+
+  tt.local(npc).pos = pos
+  
+  spawn_shadow(npc, .Shadow_1, {0, -0.5})
+
+  return npc
 }
 
 spawn_creature :: proc(name: Entity_Name, pos: v2f32, deferred := false) -> ^Entity
@@ -1858,8 +1993,8 @@ spawn_creature :: proc(name: Entity_Name, pos: v2f32, deferred := false) -> ^Ent
     spawn_shadow(creature, .Shadow_3, {0, -1.5})
 
   case .Rabbit:
-    entity_set_state(creature, .Wander)
-    spawn_shadow(creature, .Shadow_2, {0.5, -1.5})
+    entity_set_state(creature, .Idle)
+    spawn_shadow(creature, res.creatures[name].shadow, {0, -1.5})
 
   case .Squirrel:
     entity_set_state(creature, .Idle)
@@ -1951,7 +2086,7 @@ spawn_shadow :: proc(owner: ^Entity, sprite: Sprite_Name, offet: v2f32, deferred
   shadow := alloc_entity(gm)
   setup_entity(shadow, deferred)
 
-  shadow.props += {.Interpolate}
+  shadow.props += {.Interpolate, .Flip_To_Parent}
   shadow.color = {0.2, 0.2, 0.2, 0}
   shadow.tint.a = 0.5
   shadow.animation.data[.Idle] = sprite
@@ -2317,21 +2452,19 @@ entity_set_state :: proc(en: ^Entity, st: Entity_State, reset := false)
   }
 }
 
-entity_state_stub :: proc(this: ^Entity, ctx: ^Entity_State_Context) {}
-
 entity_state_idle :: proc(this: ^Entity, ctx: ^Entity_State_Context)
 {
   gm := get_active_game()
 
-  anim: Animation_State
   if this.name == .Player
   {
+    anim: Animation_State
     handedness := res.weapons[gm.weapon.kind].handedness
     if .Sneaking in this.props
     {
       if !gm.weapon.holstered
       {
-        anim = handedness == .One_Handed ? .Sneak_Idle_One_Handed : .Sneak_Idle_Two_Handed
+        anim = (handedness == .One_Handed) ? .Sneak_Idle_One_Handed : .Sneak_Idle_Two_Handed
       }
       else
       {
@@ -2342,20 +2475,20 @@ entity_state_idle :: proc(this: ^Entity, ctx: ^Entity_State_Context)
     {
       if !gm.weapon.holstered
       {
-        anim = handedness == .One_Handed ? .Idle_One_Handed : .Idle_Two_Handed
+        anim = (handedness == .One_Handed) ? .Idle_One_Handed : .Idle_Two_Handed
       }
       else
       {
         anim = .Idle_Unarmed
       }
     }
+
+    entity_play_animation(this, anim, looping=true)
   }
-  else
+  else if this.kind == .Creature
   {
-    anim = .Idle
+    entity_play_animation(this, .Idle, looping=true)
   }
-  
-  entity_play_animation(this, anim, looping=true)
 }
 
 entity_state_walk :: proc(this: ^Entity, ctx: ^Entity_State_Context)
@@ -2370,7 +2503,7 @@ entity_state_walk :: proc(this: ^Entity, ctx: ^Entity_State_Context)
     {
       if !gm.weapon.holstered
       {
-        anim = handedness == .One_Handed ? .Sneak_Walk_One_Handed : .Sneak_Walk_Two_Handed
+        anim = (handedness == .One_Handed) ? .Sneak_Walk_One_Handed : .Sneak_Walk_Two_Handed
       }
       else
       {
@@ -2381,7 +2514,7 @@ entity_state_walk :: proc(this: ^Entity, ctx: ^Entity_State_Context)
     {
       if !gm.weapon.holstered
       {
-        anim = handedness == .One_Handed ? .Walk_One_Handed : .Walk_Two_Handed
+        anim = (handedness == .One_Handed) ? .Walk_One_Handed : .Walk_Two_Handed
       }
       else
       {
@@ -2419,7 +2552,7 @@ entity_state_wander :: proc(en: ^Entity, ctx: ^Entity_State_Context)
       attempts += 1
     }
 
-    if attempts >= 100
+    if attempts == 100
     {
       log.warn("[game]: Maximum attempts reached at selecting creature wander point!\n")
       point = wander.point
@@ -2579,7 +2712,7 @@ roll_loot_table :: proc(loot_table: Loot_Table_Name) -> Item_Kind
 
 
 TILE_SIZE        :: 8
-ZONE_MARGIN_SIZE :: TILE_SIZE * 2
+ZONE_MARGIN_SIZE :: 0
 MAX_ZONE_TILES   :: 128 * 128
 
 Zone_Name :: enum
@@ -2650,8 +2783,7 @@ generate_clump :: proc(kinds: []Entity_Name, count, radius: i32)
   }
 }
 
-generate_wilderness :: proc()
-{
+generate_wilderness :: proc() {
   gm := get_active_game()
   zone := res.zones[.Wilderness]
   size := zone.width / TILE_SIZE * zone.height / TILE_SIZE
@@ -2798,7 +2930,7 @@ debug_rect :: proc(
   scale:   v2f32,
   color:   v4f32 = {1, 1, 1, 0},
   opacity: f32 = 0.5,
-  sprite:  Sprite_Name = .Square,
+  sprite:  Sprite_Name = .Rect,
 ) -> (
   ^Debug_Entity,
 ){

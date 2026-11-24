@@ -18,6 +18,7 @@ void main()
   case 0:
     tex_color = texture(u_tex, v_tex_coord);
     break;
+
   case 1:
     tex_color = texture(u_fnt, v_tex_coord);
     break;

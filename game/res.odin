@@ -15,19 +15,20 @@ import "ui"
 
 Resources :: struct
 {
-  actions:       [Action_Name]platform.Input_Source,
-  shaders:       [Shader_Name]render.Shader,
-  textures:      [Texture_Name]render.Texture,
-  sprites:       [Sprite_Name]Sprite,
-  sounds:        [Sound_Name]Sound,
-  animations:    [Animation_Name]Animation_Desc,
-  entities:      [Entity_Name]Entity_Desc,
-  zones:         [Zone_Name]Zone_Desc,
-  particles:     [Particle_Name]Particle_Desc,
-  creatures:     [Entity_Name]Creature_Desc,
-  weapons:       [Weapon_Kind]Weapon_Desc,
-  items:         [Item_Kind]Item_Desc,
-  loot_tables:   [Loot_Table_Name][dynamic]Loot_Table_Entry,
+  actions:     [Action_Name]platform.Input_Source,
+  pipelines:   [Shader_Name]render.Pipeline,
+  shaders:     [Shader_Name]render.Shader,
+  textures:    [Texture_Name]render.Texture,
+  sprites:     [Sprite_Name]Sprite,
+  sounds:      [Sound_Name]Sound,
+  animations:  [Animation_Name]Animation_Desc,
+  entities:    [Entity_Name]Entity_Desc,
+  zones:       [Zone_Name]Zone_Desc,
+  particles:   [Particle_Name]Particle_Desc,
+  creatures:   [Entity_Name]Creature_Desc,
+  weapons:     [Weapon_Kind]Weapon_Desc,
+  items:       [Item_Kind]Item_Desc,
+  loot_tables: [Loot_Table_Name][dynamic]Loot_Table_Entry,
 }
 
 Action_Name :: enum
@@ -44,6 +45,7 @@ Action_Name :: enum
 
 Texture_Name :: enum
 {
+  Ground,
   Sprite_Atlas,
   Glyph_Atlas,
 }
@@ -51,7 +53,7 @@ Texture_Name :: enum
 Shader_Name :: enum
 {
   Sprite,
-  UI,
+  GUI,
 }
 
 Sprite_Name :: enum int
@@ -59,8 +61,7 @@ Sprite_Name :: enum int
   Nil,
 
   Rect,
-  Square,
-  UI_Square,
+  UI_Rect,
   Circle,
 
   Shadow_1,
@@ -112,6 +113,9 @@ Sprite_Name :: enum int
   Player_Harvest_Blood_7,
   Player_Harvest_Blood_8,
 
+  NPC_Generic_Idle_1,
+  NPC_Generic_Idle_2,
+
   Zombie_Idle_1,
   Zombie_Idle_2,
   Zombie_Walk_1,
@@ -145,14 +149,13 @@ Sprite_Name :: enum int
   Deer_Walk_4,
   Deer_Corpse,
 
-  Rabbit_Idle_1,
-  Rabbit_Idle_2,
-  Rabbit_Idle_3,
-  Rabbit_Idle_4,
-  Rabbit_Walk_1,
-  Rabbit_Walk_2,
-  Rabbit_Walk_3,
-  Rabbit_Walk_4,
+  Rabbit_Brown_Idle_1,
+  Rabbit_Brown_Idle_2,
+  Rabbit_Brown_Idle_3,
+  Rabbit_Brown_Walk_1,
+  Rabbit_Brown_Walk_2,
+  Rabbit_Brown_Walk_3,
+  Rabbit_Brown_Walk_4,
   Rabbit_Corpse,
 
   Squirrel_Idle_1,
@@ -164,6 +167,18 @@ Sprite_Name :: enum int
   Squirrel_Walk_3,
   Squirrel_Walk_4,
   Squirrel_Corpse,
+
+  Duck_Male_Idle_1,
+  Duck_Male_Idle_2,
+  Duck_Male_Idle_3,
+  Duck_Male_Idle_4,
+  Duck_Male_Walk_1,
+  Duck_Male_Walk_2,
+  Duck_Male_Walk_3,
+  Duck_Male_Walk_4,
+  Duck_Male_Corpse,
+
+  Shadow_Rabbit_Idle,
 
   Blood_Pool_1,
   Blood_Pool_2,
@@ -217,23 +232,6 @@ Sprite_Name :: enum int
   Tile_Plank_2,
 }
 
-Sound_Name :: enum
-{
-  Nil,
-  Thunk,
-  Gun_Shot,
-  Minecraft,
-  Forest_Ambience,
-}
-
-Sound_Group :: enum
-{
-  Nil,
-  Ambience,
-  Music,
-  Effect,
-}
-
 Animation_Name :: enum
 {
   Nil,
@@ -249,6 +247,8 @@ Animation_Name :: enum
   Player_Sneak_Walk_Two_Handed,
   Player_Harvest_Blood,
 
+  NPC_Generic_Idle,
+
   Zombie_Idle,
   Zombie_Walk,
   Zombie_Melee,
@@ -261,6 +261,9 @@ Animation_Name :: enum
 
   Squirrel_Idle,
   Squirrel_Walk,
+
+  Duck_Male_Idle,
+  Duck_Male_Walk,
 
   Blood_Pool_Expand_M,
   Blood_Pool_Expand_L,
@@ -297,6 +300,23 @@ Sprite_Or_Animation :: union #shared_nil
   Animation_Name,
 }
 
+Sound_Name :: enum
+{
+  Nil,
+  Thunk,
+  Gun_Shot,
+  Minecraft,
+  Forest_Ambience,
+}
+
+Sound_Group :: enum
+{
+  Nil,
+  Ambience,
+  Music,
+  Effect,
+}
+
 Entity_Name :: enum u64
 {
   Nil,
@@ -308,10 +328,13 @@ Entity_Name :: enum u64
   Blood_Pool_M,
   Blood_Pool_L,
 
+  NPC_Generic,
+
   Zombie,
   Deer,
   Rabbit,
   Squirrel,
+  Duck,
 
   Grass,
   Chamomile,
@@ -432,7 +455,7 @@ res: Resources
 init_resources :: proc(arena: ^mem.Arena)
 {
   context.allocator = mem.allocator(arena)
-
+  
   // - Actions ---
   {
     res.actions = [Action_Name]platform.Input_Source{
@@ -451,11 +474,28 @@ init_resources :: proc(arena: ^mem.Arena)
   {
     res.shaders[.Sprite] = render.create_shader(#load("../res/shaders/sprite.vert.glsl"),
                                                 #load("../res/shaders/sprite.frag.glsl"),
-                                                {"u_tex", "u_fnt", "u_light"})
+                                                {"u_tex", "u_light"})
 
-    res.shaders[.UI] = render.create_shader(#load("../res/shaders/ui.vert.glsl"),
-                                            #load("../res/shaders/ui.frag.glsl"),
-                                            {"u_tex", "u_fnt"})
+    res.shaders[.GUI] = render.create_shader(#load("../res/shaders/gui.vert.glsl"),
+                                             #load("../res/shaders/gui.frag.glsl"),
+                                             {"u_tex", "u_fnt"})
+  }
+
+  // - Pipeline ---
+  {
+    res.pipelines[.Sprite] = render.create_pipeline(res.shaders[.Sprite], arena)
+    res.pipelines[.GUI] = render.create_pipeline(res.shaders[.GUI], arena)
+  }
+
+  // - Ground ---
+  {
+    img, err := tga.load("res/textures/ground.tga")
+    if err != nil
+    {
+      panicf("Failed to open texture file!", err)
+    }
+
+    res.textures[.Ground] = render.create_texture(img.pixels[:], img.width, img.height)
   }
 
   // - Sprites ---
@@ -469,15 +509,15 @@ init_resources :: proc(arena: ^mem.Arena)
       panicf("Failed to open texture file!", err)
     }
 
-    res.textures[.Sprite_Atlas] = render.create_texture(img.pixels.buf[:], img.width, img.height)
+    res.textures[.Sprite_Atlas] = render.create_texture(img.pixels[:], img.width, img.height)
 
     for &sprite in res.sprites
     {
       sprite.pivot.xy = sprite.size * 0.5
     }
 
-    res.sprites[.UI_Square] = res.sprites[.Rect]
-    res.sprites[.UI_Square].pivot = {0.0, 0.0, 1}
+    res.sprites[.UI_Rect] = res.sprites[.Rect]
+    res.sprites[.UI_Rect].pivot = {0.0, 0.0, 1}
 
     res.sprites[.Shadow_1].pivot = {3.5, 0.5, 0}
     res.sprites[.Shadow_2].pivot = {5.5, 0.5, 0}
@@ -535,6 +575,9 @@ init_resources :: proc(arena: ^mem.Arena)
     res.sprites[.Player_Harvest_Blood_7   ].pivot = {2.5, 13.0, 0}
     res.sprites[.Player_Harvest_Blood_8   ].pivot = {2.5, 13.0, 0}
 
+    res.sprites[.NPC_Generic_Idle_1].pivot = {2.5, 13.0, 0}
+    res.sprites[.NPC_Generic_Idle_2].pivot = {2.5, 13.0, 0}
+
     res.sprites[.Zombie_Idle_1].pivot = {2.5, 13.0, 0}
     res.sprites[.Zombie_Idle_2].pivot = {2.5, 12.0, 0}
     res.sprites[.Zombie_Walk_1].pivot = {2.5, 13.0, 0}
@@ -558,14 +601,13 @@ init_resources :: proc(arena: ^mem.Arena)
     res.sprites[.Deer_Walk_4].pivot = {5.0, 13.0, 0}
     res.sprites[.Deer_Corpse].pivot = {0.5, 1.0, 1}
 
-    res.sprites[.Rabbit_Idle_1].pivot = {4.0, 8.0, 0}
-    res.sprites[.Rabbit_Idle_2].pivot = {4.0, 8.0, 0}
-    res.sprites[.Rabbit_Idle_3].pivot = {4.0, 7.0, 0}
-    res.sprites[.Rabbit_Idle_4].pivot = {4.0, 7.0, 0}
-    res.sprites[.Rabbit_Walk_1].pivot = {4.0, 9.0, 0}
-    res.sprites[.Rabbit_Walk_2].pivot = {4.0, 9.0, 0}
-    res.sprites[.Rabbit_Walk_3].pivot = {4.0, 10.0, 0}
-    res.sprites[.Rabbit_Walk_4].pivot = {4.0, 10.0, 0}
+    res.sprites[.Rabbit_Brown_Idle_1].pivot = {4.0, 8.0, 0}
+    res.sprites[.Rabbit_Brown_Idle_2].pivot = {4.0, 7.0, 0}
+    res.sprites[.Rabbit_Brown_Idle_3].pivot = {4.0, 7.0, 0}
+    res.sprites[.Rabbit_Brown_Walk_1].pivot = {4.0, 9.0, 0}
+    res.sprites[.Rabbit_Brown_Walk_2].pivot = {4.0, 9.0, 0}
+    res.sprites[.Rabbit_Brown_Walk_3].pivot = {4.0, 10.0, 0}
+    res.sprites[.Rabbit_Brown_Walk_4].pivot = {4.0, 10.0, 0}
     res.sprites[.Rabbit_Corpse].pivot = {5.5, 4.0, 0}
 
     res.sprites[.Squirrel_Idle_1].pivot = {5.5, 7.0, 0}
@@ -577,6 +619,8 @@ init_resources :: proc(arena: ^mem.Arena)
     res.sprites[.Squirrel_Walk_3].pivot = {3.5, 7.0, 0}
     res.sprites[.Squirrel_Walk_4].pivot = {3.5, 8.0, 0}
     res.sprites[.Squirrel_Corpse].pivot = {6.5, 4.0, 0}
+
+    res.sprites[.Shadow_Rabbit_Idle].pivot = {5.0, 0.5, 0}
 
     for &sprite in res.sprites
     {
@@ -616,8 +660,8 @@ init_resources :: proc(arena: ^mem.Arena)
     res.zones = {
       .Wilderness = {
         name = "The Wilderness",
-        width = 96 * TILE_SIZE,
-        height = 96 * TILE_SIZE,
+        width = MAP_SIZE,
+        height = MAP_SIZE,
       },
       .Shop = {
         name = "The Shop",
@@ -722,6 +766,13 @@ init_resources :: proc(arena: ^mem.Arena)
         },
       },
 
+      .NPC_Generic_Idle = {
+        frames = {
+          {sprite=.NPC_Generic_Idle_1, duration=4.0},
+          {sprite=.NPC_Generic_Idle_2, duration=0.1},
+        },
+      },
+
       .Blood_Pool_Expand_M = {
         frames = {
           {sprite=.Blood_Pool_1, duration=0.25},
@@ -759,18 +810,17 @@ init_resources :: proc(arena: ^mem.Arena)
 
       .Rabbit_Idle = {
         frames = {
-          {sprite=.Rabbit_Idle_1, duration=0.3},
-          {sprite=.Rabbit_Idle_2, duration=0.3},
-          {sprite=.Rabbit_Idle_3, duration=0.3},
-          {sprite=.Rabbit_Idle_4, duration=0.3},
+          {sprite=.Rabbit_Brown_Idle_1, duration=0.4},
+          {sprite=.Rabbit_Brown_Idle_2, duration=0.2},
+          {sprite=.Rabbit_Brown_Idle_3, duration=0.2},
         },
       },
       .Rabbit_Walk = {
         frames = {
-          {sprite=.Rabbit_Walk_1, duration=0.2},
-          {sprite=.Rabbit_Walk_2, duration=0.2},
-          {sprite=.Rabbit_Walk_3, duration=0.2},
-          {sprite=.Rabbit_Walk_4, duration=0.2},
+          {sprite=.Rabbit_Brown_Walk_1, duration=0.2},
+          {sprite=.Rabbit_Brown_Walk_2, duration=0.2},
+          {sprite=.Rabbit_Brown_Walk_3, duration=0.2},
+          {sprite=.Rabbit_Brown_Walk_4, duration=0.2},
         },
       },
 
@@ -788,6 +838,23 @@ init_resources :: proc(arena: ^mem.Arena)
           {sprite=.Squirrel_Walk_2, duration=0.2},
           {sprite=.Squirrel_Walk_3, duration=0.2},
           {sprite=.Squirrel_Walk_4, duration=0.2},
+        },
+      },
+      
+      .Duck_Male_Idle = {
+        frames = {
+          {sprite=.Duck_Male_Idle_1, duration=0.3},
+          {sprite=.Duck_Male_Idle_2, duration=0.3},
+          {sprite=.Duck_Male_Idle_3, duration=0.3},
+          {sprite=.Duck_Male_Idle_4, duration=0.3},
+        },
+      },
+      .Duck_Male_Walk = {
+        frames = {
+          {sprite=.Duck_Male_Walk_1, duration=0.2},
+          {sprite=.Duck_Male_Walk_2, duration=0.2},
+          {sprite=.Duck_Male_Walk_3, duration=0.2},
+          {sprite=.Duck_Male_Walk_4, duration=0.2},
         },
       },
 
@@ -937,6 +1004,16 @@ init_resources :: proc(arena: ^mem.Arena)
         },
       },
 
+      .NPC_Generic = {
+        props = {.Flip_To_Target, .Selectable},
+        animations = #partial {
+          .Idle = .NPC_Generic_Idle,
+        },
+        collider = Circle{
+          radius = 4,
+        },
+      },
+
       .Deer = {
         kind = .Creature,
         props = {.Flee_Noise},
@@ -973,6 +1050,18 @@ init_resources :: proc(arena: ^mem.Arena)
           radius = 4,
         },
       },
+      .Duck = {
+        kind = .Creature,
+        props = {.Flee_Noise},
+        animations = #partial {
+          .Idle = .Duck_Male_Idle,
+          .Walk = .Duck_Male_Walk,
+        },
+        collider = Circle{
+          origin = {0, -2},
+          radius = 4,
+        },
+      },
       .Zombie = {
         kind = .Creature,
         props = {.Hostile, .Flip_To_Movement, .Flip_To_Target},
@@ -990,7 +1079,7 @@ init_resources :: proc(arena: ^mem.Arena)
         animations = #partial {.Idle = .Grass},
       },
       .Lavender = {
-        props = {.Collectable},
+        props = {.Selectable, .Collectable},
         animations = #partial {.Idle = .Lavender},
         collider = Circle{
           radius = 4,
@@ -999,7 +1088,7 @@ init_resources :: proc(arena: ^mem.Arena)
       },
       .Chamomile = {
         animations = #partial {.Idle = .Chamomile},
-        props = {.Collectable},
+        props = {.Selectable, .Collectable},
         collider = Circle{
           radius = 3,
         },
@@ -1007,7 +1096,7 @@ init_resources :: proc(arena: ^mem.Arena)
       },
       .Sunflower = {
         animations = #partial {.Idle = .Sunflower},
-        props = {.Collectable},
+        props = {.Selectable, .Collectable},
         collider = Circle{
           radius = 3,
         },
@@ -1015,7 +1104,7 @@ init_resources :: proc(arena: ^mem.Arena)
       },
       .Brown_Mushroom = {
         animations = #partial {.Idle = .Brown_Mushroom},
-        props = {.Collectable},
+        props = {.Selectable, .Collectable},
         collider = Circle{
           radius = 3,
         },
@@ -1023,7 +1112,7 @@ init_resources :: proc(arena: ^mem.Arena)
       },
       .Red_Mushroom = {
         animations = #partial {.Idle = .Red_Mushroom},
-        props = {.Collectable},
+        props = {.Selectable, .Collectable},
         collider = Circle{
           radius = 3,
         },
@@ -1070,6 +1159,7 @@ init_resources :: proc(arena: ^mem.Arena)
       .Rabbit = {
         corpse = .Rabbit_Corpse,
         blood_pool = .Blood_Pool_M,
+        shadow = .Shadow_Rabbit_Idle,
         wander_range = {10, 50},
         flee_range = {50, 100},
         noise_threshold = 35,
@@ -1271,7 +1361,7 @@ init_resources :: proc(arena: ^mem.Arena)
 
 build_sprite_atlas :: proc(textures_path, atlas_path: string)
 {
-  MAX_ATLAS_WIDTH :: 128
+  MAX_ATLAS_WIDTH :: 256
   PADDING         :: 1
 
   scratch := mem.temp_begin(mem.get_scratch())
@@ -1285,6 +1375,9 @@ build_sprite_atlas :: proc(textures_path, atlas_path: string)
   num_rows := 1
 
   // - First pass ---
+
+  sprite_name_found: [Sprite_Name]bool
+  sprite_name_found[.UI_Rect] = true
 
   os.walker_init(&walker, textures_path)
   for fi in os.walker_walk(&walker)
@@ -1302,6 +1395,7 @@ build_sprite_atlas :: proc(textures_path, atlas_path: string)
     }
 
     sprite_name := sprite_name_from_string(sprite_name_str)
+    sprite_name_found[sprite_name] = true
     if sprite_name == nil && sprite_name_str != "nil" do continue
 
     sprite_img, err := tga.load(fi.fullpath, allocator=mem.allocator(scratch))
@@ -1320,6 +1414,11 @@ build_sprite_atlas :: proc(textures_path, atlas_path: string)
 
     atlas_width += sprite_img.width + 1
     max_sprite_height = max(max_sprite_height, sprite_img.height)
+  }
+
+  for found, name in sprite_name_found do if !found
+  {
+    log.warnf("[game]: Sprite '%s' not found!\n", name)
   }
 
   max_sprite_height += PADDING
@@ -1371,10 +1470,10 @@ build_sprite_atlas :: proc(textures_path, atlas_path: string)
       for c in 0..<sprite_img.width
       {
         pos := atlas_pos[.Abs] + atlas_pos[.Rel]
-        atlas_pixels[pos.x + (pos.y * atlas_width)].r = sprite_img.pixels.buf[sprite_pos+0]
-        atlas_pixels[pos.x + (pos.y * atlas_width)].g = sprite_img.pixels.buf[sprite_pos+1]
-        atlas_pixels[pos.x + (pos.y * atlas_width)].b = sprite_img.pixels.buf[sprite_pos+2]
-        atlas_pixels[pos.x + (pos.y * atlas_width)].a = sprite_img.pixels.buf[sprite_pos+3]
+        atlas_pixels[pos.x + (pos.y * atlas_width)].r = sprite_img.pixels[sprite_pos+0]
+        atlas_pixels[pos.x + (pos.y * atlas_width)].g = sprite_img.pixels[sprite_pos+1]
+        atlas_pixels[pos.x + (pos.y * atlas_width)].b = sprite_img.pixels[sprite_pos+2]
+        atlas_pixels[pos.x + (pos.y * atlas_width)].a = sprite_img.pixels[sprite_pos+3]
         sprite_pos += 4
         atlas_pos[.Rel].x += 1
       }

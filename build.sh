@@ -10,7 +10,7 @@ echo "[mode:$MODE]"
 if [[ $MODE == "check" ]]; then
   odin check game -collection:ext=ext
 elif [[ $MODE == "debug" ]]; then
-  odin build game -collection:ext=ext -linker:mold -o:none -debug
+  odin build game -collection:ext=ext -linker:mold -o:none
   ./game.bin
 elif [[ $MODE == "release" ]]; then
   odin build game -collection:ext=ext -linker:mold -o:speed
