@@ -164,16 +164,16 @@ main :: proc()
 
     case .Game:
       alpha := accumulator / TIME_STEP
-      // interpolate_games(&curr_game, &prev_game, &res_game, f32(alpha))
-      if curr_game.started
+      interpolate_games(&curr_game, &prev_game, &res_game, f32(alpha))
+      if res_game.started
       {
-        // game_render(&res_game)
-        game_render(&curr_game)
-        // draw_ui(&global.wui_tree, res_game.camera.pos, window_size / {VIEWPORT_WIDTH, VIEWPORT_HEIGHT})
-        draw_ui(&global.wui_tree, curr_game.camera.pos, window_size / {VIEWPORT_WIDTH, VIEWPORT_HEIGHT})
+        game_render(&res_game)
+        // game_render(&curr_game)
+        draw_ui(&global.wui_tree, res_game.camera.pos, window_size / {VIEWPORT_WIDTH, VIEWPORT_HEIGHT})
+        // draw_ui(&global.wui_tree, curr_game.camera.pos, window_size / {VIEWPORT_WIDTH, VIEWPORT_HEIGHT})
       }
 
-      // draw_ui(&user.gui_tree)
+      draw_ui(&user.gui_tree)
     }
 
     render_end_tick = time.tick_now()
