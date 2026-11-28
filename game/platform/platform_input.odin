@@ -204,6 +204,9 @@ sdl_translate_event :: proc(sdl_event: ^sdl.Event) -> Event
       kind=.Quit,
     }
 
+  case .WINDOW_RESIZED:
+    result = Event{kind=.Window_Resized}
+
   case .KEY_DOWN:
     input.key_down = true
 		result = Event{

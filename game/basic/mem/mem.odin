@@ -98,6 +98,7 @@ arena_init_growing :: virtual.arena_init_growing
 arena_init_static  :: virtual.arena_init_static
 arena_destroy			 :: virtual.arena_destroy
 arena_clear				 :: virtual.arena_free_all
+arena_push_clone	 :: virtual.new_clone
 
 temp_begin :: virtual.arena_temp_begin
 temp_end	 :: virtual.arena_temp_end

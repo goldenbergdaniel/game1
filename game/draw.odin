@@ -1,5 +1,6 @@
 package game
 
+import "core:slice"
 import "basic/vmath"
 import "basic/mem"
 import "platform"
@@ -7,7 +8,7 @@ import "render"
 import "ui"
 
 D_MAX_VERTEX_COUNT :: 40000
-D_MAX_INDEX_COUNT  :: 60000
+D_MAX_INDEX_COUNT  :: D_MAX_VERTEX_COUNT * 1.5
 
 D_Vertex :: union
 {
@@ -21,6 +22,7 @@ D_Sprite_Vertex :: struct
   tint:  v4f32,
   color: v4f32,
   uv:    v2f32,
+  tex:   u32,
 }
 
 D_GUI_Vertex :: struct
@@ -32,58 +34,103 @@ D_GUI_Vertex :: struct
   tex:   u32,
 }
 
-D_Data :: struct
+D_State :: struct
 {
-  sprite_vertices: [dynamic; D_MAX_VERTEX_COUNT]D_Sprite_Vertex,
-  sprite_indices:  [dynamic; D_MAX_INDEX_COUNT]u16,
-  gui_vertices:    [dynamic; D_MAX_VERTEX_COUNT]D_GUI_Vertex,
-  gui_indices:     [dynamic; D_MAX_INDEX_COUNT]u16,
-  vertex_buffer:   render.Buffer,
-  index_buffer:    render.Buffer,
+  sprite_vertices:   [dynamic; D_MAX_VERTEX_COUNT]D_Sprite_Vertex,
+  sprite_indices:    [dynamic; D_MAX_INDEX_COUNT]u16,
+  gui_vertices:      [dynamic; D_MAX_VERTEX_COUNT]D_GUI_Vertex,
+  gui_indices:       [dynamic; D_MAX_INDEX_COUNT]u16,
+  sprite_vertex_buf: render.Buffer,
+  sprite_index_buf:  render.Buffer,
+  gui_vertex_buf:    render.Buffer,
+  gui_index_buf:     render.Buffer,
+  push_data:         struct
+  {
+    xform:           m3x3f32,
+    light_color:     v4f32,
+    vertex_buf:      u64,
+  },  
 }
 
-d_data: D_Data
+d_st: D_State
 
 init_draw :: proc()
 {
-  d_data.vertex_buffer = render.create_buffer(cap(d_data.gui_vertices) * size_of(D_GUI_Vertex), .Vertex, 0)
-  d_data.index_buffer = render.create_buffer(cap(d_data.gui_indices) * size_of(u16), .Index, 0)
+  render.init_renderer(slice.enumerated_array(&res.textures))
+
+  d_st.sprite_vertex_buf = render.create_buffer(.Storage, size_of(d_st.sprite_vertices))
+  d_st.sprite_index_buf = render.create_buffer(.Index, cap(d_st.sprite_indices) * size_of(u16))
+
+  d_st.gui_vertex_buf = render.create_buffer(.Storage, size_of(d_st.sprite_vertices))
+  d_st.gui_index_buf = render.create_buffer(.Index, cap(d_st.sprite_indices) * size_of(u16))
+
+  // res.pipelines[.Sprite] = render.create_graphics_pipeline({
+  //   vert_shader_src = #load("../res/shaders/sprite.vert.glsl"),
+  //   frag_shader_src = #load("../res/shaders/sprite.frag.glsl"),
+  //   uniform_names = {"u_tex", "u_light"},
+  // })
+
+  // res.pipelines[.GUI] = render.create_graphics_pipeline({
+  //   vert_shader_src = #load("../res/shaders/gui.vert.glsl"),
+  //   frag_shader_src = #load("../res/shaders/gui.frag.glsl"),
+  //   uniform_names = {"u_tex", "u_fnt"},
+  // })
+
+  res.pipelines[.Sprite] = render.create_graphics_pipeline({
+    vert_shader_src = #load("shaders/out/shader.vert.spv"),
+    frag_shader_src = #load("shaders/out/shader.frag.spv"),
+    push_data_size = size_of(d_st.push_data),
+    color_attachment_fmt = render.get_color_target().format,
+    depth_test_en = false,
+    stencil_test_en = false,
+    blend_en = true,
+  })
+
+  res.pipelines[.GUI] = render.create_graphics_pipeline({
+    vert_shader_src = #load("shaders/out/shader.vert.spv"),
+    frag_shader_src = #load("shaders/out/shader.frag.spv"),
+    push_data_size = size_of(d_st.push_data),
+    color_attachment_fmt = render.get_color_target().format,
+    depth_test_en = false,
+    stencil_test_en = false,
+    blend_en = true,
+  })
 }
 
 d_flush_sprite :: proc()
 {
-  render.write_buffer(d_data.vertex_buffer, 
-                      raw_data(d_data.sprite_vertices[:]), 
-                      len(d_data.sprite_vertices) * size_of(D_Sprite_Vertex), 
+  render.write_buffer(d_st.sprite_vertex_buf, 
+                      raw_data(d_st.sprite_vertices[:]), 
+                      len(d_st.sprite_vertices) * size_of(D_Sprite_Vertex), 
                       0)
 
-  render.write_buffer(d_data.index_buffer, 
-                      raw_data(d_data.sprite_indices[:]), 
-                      len(d_data.sprite_indices) * size_of(u16), 
+  render.write_buffer(d_st.sprite_index_buf, 
+                      raw_data(d_st.sprite_indices[:]), 
+                      len(d_st.sprite_indices) * size_of(u16), 
                       0)
 
-  render.draw(len(d_data.sprite_indices))
+  render.draw_indexed(len(d_st.sprite_indices), 1, 0, 0)
 
-  clear(&d_data.sprite_vertices)
-  clear(&d_data.sprite_indices)
+  clear(&d_st.sprite_vertices)
+  clear(&d_st.sprite_indices)
 }
 
 d_flush_gui :: proc()
 {
-  render.write_buffer(d_data.vertex_buffer, 
-                      raw_data(d_data.gui_vertices[:]), 
-                      len(d_data.gui_vertices) * size_of(D_GUI_Vertex), 
+  render.write_buffer(d_st.gui_vertex_buf, 
+                      raw_data(d_st.gui_vertices[:]), 
+                      len(d_st.gui_vertices) * size_of(D_GUI_Vertex), 
                       0)
 
-  render.write_buffer(d_data.index_buffer, 
-                      raw_data(d_data.gui_indices[:]), 
-                      len(d_data.gui_indices) * size_of(u16), 
+  render.write_buffer(d_st.gui_index_buf, 
+                      raw_data(d_st.gui_indices[:]), 
+                      len(d_st.gui_indices) * size_of(u16), 
                       0)
 
-  render.draw(len(d_data.gui_indices))
+  render.draw_indexed(len(d_st.gui_indices), 1, 0, 0)
 
-  clear(&d_data.gui_vertices)
-  clear(&d_data.gui_indices)
+  clear(&d_st.gui_vertices)
+  clear(&d_st.gui_indices)
 }
 
 d_push_vertex :: proc(vertex: D_Vertex)
@@ -91,18 +138,18 @@ d_push_vertex :: proc(vertex: D_Vertex)
   switch v in vertex
   {
   case D_Sprite_Vertex:
-    if len(d_data.sprite_vertices) == cap(d_data.sprite_vertices)
+    if len(d_st.sprite_vertices) == cap(d_st.sprite_vertices)
     {
       d_flush_sprite()
     }
-    append(&d_data.sprite_vertices, v)
+    append(&d_st.sprite_vertices, v)
 
   case D_GUI_Vertex:
-    if len(d_data.gui_vertices) == cap(d_data.gui_vertices)
+    if len(d_st.gui_vertices) == cap(d_st.gui_vertices)
     {
       d_flush_gui()
     }
-    append(&d_data.gui_vertices, v)
+    append(&d_st.gui_vertices, v)
   }
 }
 
@@ -114,11 +161,11 @@ d_push_sprite_indices :: proc()
     1, 2, 3,
   }
 
-  offset := cast(u16) len(d_data.sprite_vertices) - 4
+  offset := cast(u16) len(d_st.sprite_vertices) - 4
 
   for i in layout
   {
-    append(&d_data.sprite_indices, i + offset)
+    append(&d_st.sprite_indices, i + offset)
   }
 }
 
@@ -130,13 +177,14 @@ d_push_gui_indices :: proc()
     1, 2, 3,
   }
 
-  offset := cast(u16) len(d_data.gui_vertices) - 4
+  offset := cast(u16) len(d_st.gui_vertices) - 4
 
   for i in layout
   {
-    append(&d_data.gui_indices, i + offset)
+    append(&d_st.gui_indices, i + offset)
   }
 }
+
 
 // Sprite /////////////////////////////////////////////////////////////////////////////////////////
 
@@ -158,10 +206,10 @@ draw_ground :: proc(pos, dim: v2f32)
   p3 := xform * v3f32{1, 1, 1}
   p4 := xform * v3f32{0, 1, 1}
 
-  d_push_vertex(D_Sprite_Vertex{p1.xy, {1, 1, 1, 1}, {0, 0, 0, 0}, {0, 0}})
-  d_push_vertex(D_Sprite_Vertex{p2.xy, {1, 1, 1, 1}, {0, 0, 0, 0}, {1, 0}})
-  d_push_vertex(D_Sprite_Vertex{p3.xy, {1, 1, 1, 1}, {0, 0, 0, 0}, {1, 1}})
-  d_push_vertex(D_Sprite_Vertex{p4.xy, {1, 1, 1, 1}, {0, 0, 0, 0}, {0, 1}})
+  d_push_vertex(D_Sprite_Vertex{p1.xy, {1, 1, 1, 1}, {0, 0, 0, 0}, {0, 0}, u32(Texture_Name.Ground)})
+  d_push_vertex(D_Sprite_Vertex{p2.xy, {1, 1, 1, 1}, {0, 0, 0, 0}, {1, 0}, u32(Texture_Name.Ground)})
+  d_push_vertex(D_Sprite_Vertex{p3.xy, {1, 1, 1, 1}, {0, 0, 0, 0}, {1, 1}, u32(Texture_Name.Ground)})
+  d_push_vertex(D_Sprite_Vertex{p4.xy, {1, 1, 1, 1}, {0, 0, 0, 0}, {0, 1}, u32(Texture_Name.Ground)})
   d_push_sprite_indices()
 }
 
@@ -188,14 +236,15 @@ draw_sprite :: proc(
   p3 := xform * v3f32{1, 1, 1}
   p4 := xform * v3f32{0, 1, 1}
 
-  tl, tr, br, bl := render.uv_from_texture(&res.textures[.Sprite_Atlas], 
-                                           sprite_data.coord, 
-                                           sprite_data.size)
+  tl, tr, br, bl := render.uv_from_rect(f32(res.textures[.Sprite_Atlas].width), 
+                                        f32(res.textures[.Sprite_Atlas].height),
+                                        sprite_data.coord, 
+                                        sprite_data.size)
 
-  d_push_vertex(D_Sprite_Vertex{p1.xy, tint, color, tl})
-  d_push_vertex(D_Sprite_Vertex{p2.xy, tint, color, tr})
-  d_push_vertex(D_Sprite_Vertex{p3.xy, tint, color, br})
-  d_push_vertex(D_Sprite_Vertex{p4.xy, tint, color, bl})
+  d_push_vertex(D_Sprite_Vertex{p1.xy, tint, color, tl, u32(Texture_Name.Sprite_Atlas)})
+  d_push_vertex(D_Sprite_Vertex{p2.xy, tint, color, tr, u32(Texture_Name.Sprite_Atlas)})
+  d_push_vertex(D_Sprite_Vertex{p3.xy, tint, color, br, u32(Texture_Name.Sprite_Atlas)})
+  d_push_vertex(D_Sprite_Vertex{p4.xy, tint, color, bl, u32(Texture_Name.Sprite_Atlas)})
   d_push_sprite_indices()
 }
 
@@ -222,16 +271,18 @@ draw_gui_quad :: proc(
   p3 := xform * v3f32{1, 1, 1}
   p4 := xform * v3f32{0, 1, 1}
 
-  tl, tr, br, bl := render.uv_from_texture(&res.textures[.Sprite_Atlas], 
-                                           sprite_data.coord, 
-                                           sprite_data.size)
+  tl, tr, br, bl := render.uv_from_rect(f32(res.textures[.Sprite_Atlas].width), 
+                                        f32(res.textures[.Sprite_Atlas].height),
+                                        sprite_data.coord, 
+                                        sprite_data.size)
 
-  d_push_vertex(D_GUI_Vertex{p1.xy, tint, color, tl, 0})
-  d_push_vertex(D_GUI_Vertex{p2.xy, tint, color, tr, 0})
-  d_push_vertex(D_GUI_Vertex{p3.xy, tint, color, br, 0})
-  d_push_vertex(D_GUI_Vertex{p4.xy, tint, color, bl, 0})
+  d_push_vertex(D_GUI_Vertex{p1.xy, tint, color, tl, u32(Texture_Name.Sprite_Atlas)})
+  d_push_vertex(D_GUI_Vertex{p2.xy, tint, color, tr, u32(Texture_Name.Sprite_Atlas)})
+  d_push_vertex(D_GUI_Vertex{p3.xy, tint, color, br, u32(Texture_Name.Sprite_Atlas)})
+  d_push_vertex(D_GUI_Vertex{p4.xy, tint, color, bl, u32(Texture_Name.Sprite_Atlas)})
   d_push_gui_indices()
 }
+
 
 // Text //////////////////////////////////////////////////////////////////////////////////
 
@@ -254,9 +305,10 @@ draw_text :: proc(
     }
 
     glyph := ui.glyph_from_rune(r)
-    tl, tr, br, bl := render.uv_from_texture(&res.textures[.Glyph_Atlas], 
-                                             v2f32(glyph.coord), 
-                                             {f32(glyph.width), f32(glyph.height)})
+    tl, tr, br, bl := render.uv_from_rect(f32(res.textures[.Glyph_Atlas].width), 
+                                          f32(res.textures[.Glyph_Atlas].height),
+                                          v2f32(glyph.coord), 
+                                          {f32(glyph.width), f32(glyph.height)})
 
     offset := pos + {cursor.x + glyph.bearing.x * size, cursor.y - glyph.bearing.y * size}
     offset.y += 10 * line_height * size
@@ -271,10 +323,10 @@ draw_text :: proc(
     p3 := xform * v3f32{1, 1, 1}
     p4 := xform * v3f32{0, 1, 1}
 
-    d_push_vertex(D_GUI_Vertex{p1.xy, {1, 1, 1, 1}, color, tl, 1})
-    d_push_vertex(D_GUI_Vertex{p2.xy, {1, 1, 1, 1}, color, tr, 1})
-    d_push_vertex(D_GUI_Vertex{p3.xy, {1, 1, 1, 1}, color, br, 1})
-    d_push_vertex(D_GUI_Vertex{p4.xy, {1, 1, 1, 1}, color, bl, 1})
+    d_push_vertex(D_GUI_Vertex{p1.xy, {1, 1, 1, 1}, color, tl, u32(Texture_Name.Glyph_Atlas)})
+    d_push_vertex(D_GUI_Vertex{p2.xy, {1, 1, 1, 1}, color, tr, u32(Texture_Name.Glyph_Atlas)})
+    d_push_vertex(D_GUI_Vertex{p3.xy, {1, 1, 1, 1}, color, br, u32(Texture_Name.Glyph_Atlas)})
+    d_push_vertex(D_GUI_Vertex{p4.xy, {1, 1, 1, 1}, color, bl, u32(Texture_Name.Glyph_Atlas)})
     d_push_gui_indices()
   }
 }
@@ -301,9 +353,10 @@ draw_decorated_text :: proc(
         }
 
         glyph := ui.glyph_from_rune(r)
-        tl, tr, br, bl := render.uv_from_texture(&res.textures[.Glyph_Atlas], 
-                                                v2f32(glyph.coord), 
-                                                {f32(glyph.width), f32(glyph.height)})
+        tl, tr, br, bl := render.uv_from_rect(f32(res.textures[.Glyph_Atlas].width), 
+                                              f32(res.textures[.Glyph_Atlas].height),
+                                              v2f32(glyph.coord), 
+                                              {f32(glyph.width), f32(glyph.height)})
 
         offset := pos + {cursor.x + glyph.bearing.x * size, cursor.y - glyph.bearing.y * size}
         offset.y += 10 * line_height * size
@@ -318,10 +371,10 @@ draw_decorated_text :: proc(
         p3 := xform * v3f32{1, 1, 1}
         p4 := xform * v3f32{0, 1, 1}
 
-        d_push_vertex(D_GUI_Vertex{p1.xy, {1, 1, 1, 1}, color, tl, 1})
-        d_push_vertex(D_GUI_Vertex{p2.xy, {1, 1, 1, 1}, color, tr, 1})
-        d_push_vertex(D_GUI_Vertex{p3.xy, {1, 1, 1, 1}, color, br, 1})
-        d_push_vertex(D_GUI_Vertex{p4.xy, {1, 1, 1, 1}, color, bl, 1})
+        d_push_vertex(D_GUI_Vertex{p1.xy, {1, 1, 1, 1}, color, tl, u32(Texture_Name.Glyph_Atlas)})
+        d_push_vertex(D_GUI_Vertex{p2.xy, {1, 1, 1, 1}, color, tr, u32(Texture_Name.Glyph_Atlas)})
+        d_push_vertex(D_GUI_Vertex{p3.xy, {1, 1, 1, 1}, color, br, u32(Texture_Name.Glyph_Atlas)})
+        d_push_vertex(D_GUI_Vertex{p4.xy, {1, 1, 1, 1}, color, bl, u32(Texture_Name.Glyph_Atlas)})
         d_push_gui_indices()
       }
     }
@@ -340,17 +393,32 @@ draw_ui :: proc(tree: ^ui.Tree, ref_pos: v2f32 = {0, 0}, ref_size: v2f32 = {0, 0
   window_size := platform.window_get_size(&user.window)
 
   ui.tree_resolve(tree, ref_pos, ref_size)
+
+  render.transition_image(render.get_color_target(), .Color_Attachment)
   
   render.begin_pass({
     pipeline = res.pipelines[.GUI],
-    texture = i32(Texture_Name.Sprite_Atlas),
-    vertex_buf = d_data.vertex_buffer,
-    index_buf = d_data.index_buffer,
-    camera = vmath.translation_3x3f({0, 0}),
-    projection = vmath.orthographic(0, window_size.x, 0, window_size.y),
+    color_attachments = {{
+      image = render.get_color_target(),
+      load_op = .None,
+      store_op = .Store,
+    }},
+    // texture = i32(Texture_Name.Sprite_Atlas),
+    // vertex_buf = d_st.vertex_buffer,
+    index_buf = &d_st.sprite_index_buf,
+    // camera = vmath.translation_3x3f({0, 0}),
+    // projection = vmath.orthographic(0, window_size.x, 0, window_size.y),
     viewport = {0, 0, window_size.x, window_size.y},
+    scissor = {0, 0, window_size.x, window_size.y},
     clear_color = {0, 0, 0, 0},
   })
+
+  d_st.push_data.xform = vmath.IDENTITY_3X3F
+  d_st.push_data.xform[1][1] *= -1
+  d_st.push_data.xform *= vmath.orthographic(0, window_size.x, 0, window_size.y)
+  d_st.push_data.light_color = 1
+  d_st.push_data.vertex_buf = d_st.gui_vertex_buf.addr
+  render.push_data(&d_st.push_data, size_of(d_st.push_data))
 
   iter := ui.make_iterator_preorder(tree.root, scratch)
   for box in ui.iterate_preorder(&iter)
@@ -420,4 +488,83 @@ rgba_from_hsva :: proc(hsva: v4f32) -> (rgba: v4f32)
   }
 
   return {r, g, b, a}
+}
+
+// Vulkan ////////////////////////////////////////////////////////////////////////////////
+
+VK_State :: struct
+{
+  vertices:   [4]D_Sprite_Vertex,
+  indices:    [6]u16,
+  vertex_buf: render.Buffer,
+  index_buf:  render.Buffer,
+  textures:   [2]render.Image,
+  pipeline:   render.Pipeline,
+  push_data:  struct
+  {
+    xform:       m3x3f32,
+    light_color: v4f32,
+    vertex_buf:  u64,
+  },
+}
+
+vk_init :: proc(st: ^VK_State)
+{
+  st.vertex_buf = render.create_buffer(.Storage, size_of(st.vertices))
+  st.index_buf = render.create_buffer(.Index, size_of(st.indices))
+
+  st.vertices = {
+    {{  5,   5}, {1, 1, 1, 1}, {0, 0, 0, 0}, {0, 0}, 0},
+    {{105,   5}, {1, 1, 1, 1}, {0, 0, 0, 0}, {1, 0}, 0},
+    {{105, 105}, {1, 1, 1, 1}, {0, 0, 0, 0}, {1, 1}, 0},
+    {{  5, 105}, {1, 1, 1, 1}, {0, 0, 0, 0}, {0, 1}, 0},
+  }
+  render.write_buffer(st.vertex_buf, &st.vertices[0], size_of(st.vertices), 0)
+
+  st.indices = {
+    0, 1, 3,
+    1, 2, 3,
+  }
+  render.write_buffer(st.index_buf, &st.indices[0], size_of(st.indices), 0)
+
+  st.pipeline = render.create_graphics_pipeline({
+    vert_shader_src = #load("shaders/out/shader.vert.spv"),
+    frag_shader_src = #load("shaders/out/shader.frag.spv"),
+    push_data_size = size_of(st.push_data),
+    color_attachment_fmt = render.get_color_target().format,
+    depth_test_en = false,
+    stencil_test_en = false,
+    blend_en = false,
+  })
+}
+
+vk_render :: proc(st: ^VK_State)
+{
+  window_size := platform.window_get_size(&user.window)
+
+  render.transition_image(render.get_color_target(), .Color_Attachment)
+
+  render.begin_pass({
+    pipeline = st.pipeline,
+    index_buf = &st.index_buf,
+    color_attachments = {{
+      image = render.get_color_target(),
+      load_op = .Clear,
+      store_op = .Store,
+    }},
+    clear_color = {0.0, 0.0, 0.0, 1.0},
+    viewport = user.viewport,
+    scissor = {0, 0, window_size.x, window_size.y},
+  })
+
+  st.push_data.xform = vmath.IDENTITY_3X3F
+  st.push_data.xform[1][1] *= -1
+  st.push_data.xform *= vmath.orthographic(0, VIEWPORT_WIDTH, 0, VIEWPORT_HEIGHT)
+  st.push_data.light_color = {1, 1, 1, 1}
+  st.push_data.vertex_buf = st.vertex_buf.addr
+  render.push_data(&st.push_data, size_of(st.push_data))
+
+  render.draw_indexed(len(st.indices), 1, 0, 0)
+
+  render.end_pass()
 }

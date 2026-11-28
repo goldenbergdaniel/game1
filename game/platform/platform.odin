@@ -25,6 +25,7 @@ Window :: struct
     },
   },
   should_close: bool,
+	update_swapchain: bool,
 }
 
 Window_Props :: enum
@@ -59,6 +60,7 @@ Event_Kind :: enum
   Nil,
   Quit,
   Key_Down,
+	Window_Resized,
   Key_Up,
   Mouse_Btn_Down,
   Mouse_Btn_Up,
@@ -202,7 +204,10 @@ window_get_size_in_pixels :: proc(window: ^Window) -> [2]f32
 
 window_draw :: proc(window: ^Window)
 {
-	sdl.GL_SwapWindow(window.handle)
+	if window.desc.renderer == .OpenGL
+	{
+		sdl.GL_SwapWindow(window.handle)
+	}
 }
 
 window_pump_events :: proc(window: ^Window)
@@ -237,6 +242,8 @@ window_pump_events :: proc(window: ^Window)
     switch event.kind
     {
     case .Nil:
+		case .Window_Resized:
+			window.update_swapchain = true
     case .Quit:
       window.should_close = true
     case .Key_Down:

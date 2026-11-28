@@ -1,70 +1,77 @@
 #version 450
 #extension GL_EXT_buffer_reference : require
+#extension GL_EXT_scalar_block_layout : require
+#extension GL_EXT_nonuniform_qualifier : require
 
-layout(set=0, binding=0) 
-readonly uniform Uniform_Buffer
-{
-  mat4 transform;
-} uniforms;
-
-#ifdef VS /////////////////////////////////////////////////////////////////////
+// COMMON /////////////////////////////////////////////////////////////////////
 
 struct Vertex
 {
-	vec3 position;
-  vec3 normal;
+	vec2 position;
+	vec4 tint;
 	vec4 color;
   vec2 uv;
+  uint tex;
 };
 
-layout(buffer_reference) 
+layout(buffer_reference, scalar) 
 readonly buffer Vertex_Buffer
 {
-	Vertex vertices[];
+	Vertex data[];
 };
 
-layout(push_constant) 
-uniform Push_Constants
+layout(push_constant, scalar)
+uniform Push_Data
 {
+  mat3 xform;
   vec4 light_color;
-  vec2 tiling;
   Vertex_Buffer vertex_buf;
-} constants;
+} pd;
 
-layout(location=0) out vec3 v_normal;
-layout(location=1) out vec4 v_color;
-layout(location=2) out vec2 v_uv;
+#ifdef VS /////////////////////////////////////////////////////////////////////
+
+out VS_Out
+{
+  layout(location=0) vec4 tint;
+  layout(location=1) vec4 color;
+  layout(location=2) vec2 uv;
+  layout(location=3) flat uint tex;
+  layout(location=4) flat uint inst_idx;
+} vout;
 
 void main()
 {
-  Vertex vertex = constants.vertex_buf.vertices[gl_VertexIndex];
+  Vertex vert = pd.vertex_buf.data[gl_VertexIndex];
 
-  gl_Position = uniforms.transform * vec4(vertex.position, 1);
-  v_normal = vertex.normal;
-  v_color = vertex.color;
-  v_uv = vertex.uv * constants.tiling;
+  gl_Position = vec4(pd.xform * vec3(vert.position, 1.0), 1.0);
+  vout.tint = vert.tint;
+  vout.color = vert.color;
+  vout.uv = vert.uv;
+  vout.tex = vert.tex;
+  vout.inst_idx = gl_InstanceIndex;
 }
 
 #endif
 #ifdef FS /////////////////////////////////////////////////////////////////////
 
-layout(location=0) in vec3 v_normal;
-layout(location=1) in vec4 v_color;
-layout(location=2) in vec2 v_uv;
+in VS_Out
+{
+  layout(location=0) vec4 tint;
+  layout(location=1) vec4 color;
+  layout(location=2) vec2 uv;
+  layout(location=3) flat uint tex;
+  layout(location=4) flat uint inst_idx;
+} vout;
 
-layout(set=0, binding=2) uniform sampler2D u_texture;
+layout(set=0, binding=0) uniform sampler2D textures[];
 
-layout(location=0) out vec4 f_color;
-
-const float ambient = 0.2;
-const vec3 light_dir = {-0.5, 0, -0.5};
+layout(location=0) out vec4 frag_color;
 
 void main()
 {
-  vec4 texel = texture(u_texture, v_uv);
+  vec4 texel = texture(textures[nonuniformEXT(vout.tex)], vout.uv);
 
-  float diffuse = 0.15 * dot(v_normal, light_dir);
-  f_color = texel * (ambient + diffuse);
+  frag_color = (texel + vout.color) * vout.tint * pd.light_color;
 }
 
 #endif

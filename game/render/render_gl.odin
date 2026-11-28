@@ -9,10 +9,48 @@ import gl "ext:opengl"
 import "../basic/mem"
 import "../platform"
 
-gl_init :: proc(window: ^platform.Window, arena: ^mem.Arena)
+GL_Buffer :: struct
+{
+  handle: u32,
+}
+
+GL_Image :: struct
+{
+  handle: u32,
+  unit:   u32,
+}
+
+GL_Shader :: struct
+{
+  handle:   u32,
+  uniforms: map[cstring]i32,
+}
+
+GL_Pipeline :: struct
+{
+  shader:       GL_Shader,
+  uniforms:     struct
+  {
+    projection: m4x4f32,
+    camera:     m4x4f32,
+  },
+  ubo:          u32,
+  ubo_idx:      u32,
+}
+
+@(private="file")
+g: struct
+{
+  vao: u32,
+}
+
+gl_init_device :: proc()
 {
   gl.load_up_to(4, 6, platform.gl_set_proc_address)
+}
 
+gl_init_renderer :: proc()
+{
   // - Features ---
   gl.Disable(gl.DEPTH_TEST)
   gl.DepthMask(false)
@@ -22,8 +60,8 @@ gl_init :: proc(window: ^platform.Window, arena: ^mem.Arena)
   gl.Enable(gl.BLEND)
   
   // - Vertex array object ---
-  gl.GenVertexArrays(1, &renderer.vao)
-  gl.BindVertexArray(renderer.vao)
+  gl.GenVertexArrays(1, &g.vao)
+  gl.BindVertexArray(g.vao)
 }
 
 gl_clear :: proc(color: v4f32)
@@ -34,7 +72,7 @@ gl_clear :: proc(color: v4f32)
 
 gl_draw :: proc(count: int)
 {
-  pip := &renderer.pass.pipeline
+  pip := &renderer.pass.pipeline.gl
 
   gl.Viewport(**([4]i32)(renderer.pass.viewport))
 
@@ -42,7 +80,7 @@ gl_draw :: proc(count: int)
   pip.uniforms.camera = cast(m4x4f32) renderer.pass.camera
   gl.NamedBufferSubData(pip.ubo, 0, size_of(pip.uniforms), &pip.uniforms)
 
-  gl.VertexArrayElementBuffer(renderer.vao, renderer.pass.index_buf.handle)
+  gl.VertexArrayElementBuffer(g.vao, renderer.pass.index_buf.gl.handle)
 
   program := pip.shader.handle
   gl.UseProgram(program)
@@ -61,53 +99,53 @@ gl_draw :: proc(count: int)
   gl.DrawElements(gl.TRIANGLES, i32(count), gl.UNSIGNED_SHORT, nil)
 }
 
-gl_create_buffer :: proc(size: int, kind: enum{Vertex, Index}, binding: int) -> Buffer
+gl_create_buffer :: proc(size: int, kind: enum{Storage, Index}, binding: int) -> GL_Buffer
 {
-  result: Buffer
+  result: GL_Buffer
 
   gl.CreateBuffers(1, &result.handle)
 
   switch kind
   {
-  case .Vertex:
+  case .Storage:
     gl.BindBufferBase(gl.SHADER_STORAGE_BUFFER, u32(binding), result.handle)
     gl.NamedBufferStorage(result.handle, size, nil, gl.DYNAMIC_STORAGE_BIT)
 
   case .Index:
-    gl.VertexArrayElementBuffer(renderer.vao, result.handle)
+    gl.VertexArrayElementBuffer(g.vao, result.handle)
     gl.NamedBufferData(result.handle, size, nil, gl.DYNAMIC_DRAW)
-    gl.VertexArrayElementBuffer(renderer.vao, 0)
+    gl.VertexArrayElementBuffer(g.vao, 0)
   }
 
   return result
 }
 
-gl_write_buffer :: proc(buffer: Buffer, data: rawptr, size: int, offset: int)
+gl_write_buffer :: proc(buffer: GL_Buffer, data: rawptr, size: int, offset: int)
 {
   gl.NamedBufferSubData(buffer.handle, offset, size, data)
 }
 
-gl_create_pipeline :: proc(shader: Shader, arena: ^mem.Arena) -> Pipeline
+gl_create_pipeline :: proc(desc: Graphics_Pipeline_Desc) -> GL_Pipeline
 {
   @(static)
   ubo_idx: u32
 
-  result: Pipeline
+  result: GL_Pipeline
   result.ubo_idx = ubo_idx
-  result.shader = shader
+  ubo_idx += 1
+
+  result.shader = gl_create_shader(desc.vert_shader_src, desc.frag_shader_src, desc.uniform_names)
 
   gl.CreateBuffers(1, &result.ubo)
   gl.BindBufferBase(gl.UNIFORM_BUFFER, result.ubo_idx, result.ubo)
   gl.NamedBufferStorage(result.ubo, size_of(result.uniforms), &result.uniforms, gl.DYNAMIC_STORAGE_BIT)
 
-  ubo_idx += 1
-
   return result
 }
 
-gl_create_shader :: proc(vsrc, fsrc: string, uniforms: []cstring) -> Shader
+gl_create_shader :: proc(vsrc, fsrc: []u8, uniforms: []cstring) -> GL_Shader
 {
-  result: Shader
+  result: GL_Shader
   vsrc, fsrc := vsrc, fsrc
 
   verify_shader :: proc(id, type: u32)
@@ -174,12 +212,9 @@ gl_create_shader :: proc(vsrc, fsrc: string, uniforms: []cstring) -> Shader
   return result
 }
 
-gl_create_texture :: proc(pixels: []byte, width, height: i32, format: int) -> Texture
+gl_create_texture :: proc(pixels: []byte, width, height: i32, format: int) -> GL_Image
 {
-  result: Texture
-  result.pixels = pixels
-  result.width = width
-  result.height = height
+  result: GL_Image
 
   @(static)
   unit: u32

@@ -18,24 +18,28 @@ TIME_STEP       :: 1.0 / 60
 
 User :: struct
 {
-  perm_arena: mem.Arena,
-  window:     platform.Window,
-  viewport:   v4f32,
-  screen:     Screen,
-  show_dbgui: bool,
-  gui_tree:   ui.Tree,
+  perm_arena:  mem.Arena,
+  frame_arena: mem.Arena,
+  window:      platform.Window,
+  viewport:    v4f32,
+  screen:      Screen,
+  show_dbgui:  bool,
+  gui_tree:    ui.Tree,
 }
 
 Screen :: enum
 {
-  Main_Menu,
+  // Main_Menu,
   Game,
+  Vulkan_Test,
 }
 
 user: User
 
 update_start_tick, update_end_tick: time.Tick
 render_start_tick, render_end_tick: time.Tick
+
+vk_state: VK_State
 
 main :: proc()
 {
@@ -56,8 +60,13 @@ main :: proc()
   arena_err = mem.arena_init_static(&user.perm_arena)
   if arena_err != nil
   {
-    log.fatalf("[game]: Failed to allocate static arena! (%v)\n", arena_err)
-    os.exit(1)
+    log.fatalf("[game]: Failed to create arena! (%v)\n", arena_err)
+  }
+
+  arena_err = mem.arena_init_growing(&user.frame_arena)
+  if arena_err != nil
+  {
+    log.fatalf("[game]: Failed to create arena! (%v)\n", arena_err)
   }
 
   window_desc := platform.Window_Desc{
@@ -65,19 +74,21 @@ main :: proc()
     width = 1280,
     height = 720,
     props = {.Vsync, .Resizeable},
-    renderer = .OpenGL,
+    renderer = .Vulkan,
   }
   user.window = platform.create_window(window_desc, &user.perm_arena)
   defer platform.destroy_window(&user.window)
 
   user.screen = .Game
 
-  render.init_renderer(&user.window, &user.perm_arena)
+  render.init_device(&user.window, &user.perm_arena, &user.frame_arena)
+
   init_resources(&user.perm_arena)
-
-  platform.window_init_imgui(&user.window)
-
   init_draw()
+  vk_init(&vk_state)
+
+  // platform.window_init_imgui(&user.window)
+  
   init_audio()
   init_global()
 
@@ -94,6 +105,12 @@ main :: proc()
   for !user.window.should_close
   {
     platform.window_pump_events(&user.window)
+
+    if user.window.update_swapchain
+    {
+      render.recreate_swapchain()
+      user.window.update_swapchain = false 
+    }
 
     // - Global keybinds ---
     {
@@ -157,10 +174,12 @@ main :: proc()
 
     render_start_tick = time.tick_now()
 
+    render.begin_frame()
+
     switch user.screen
     {
-    case .Main_Menu:
-      draw_ui(&user.gui_tree)
+    // case .Main_Menu:
+      // draw_ui(&user.gui_tree)
 
     case .Game:
       alpha := accumulator / TIME_STEP
@@ -168,25 +187,28 @@ main :: proc()
       if res_game.started
       {
         game_render(&res_game)
-        // game_render(&curr_game)
         draw_ui(&global.wui_tree, res_game.camera.pos, window_size / {VIEWPORT_WIDTH, VIEWPORT_HEIGHT})
-        // draw_ui(&global.wui_tree, curr_game.camera.pos, window_size / {VIEWPORT_WIDTH, VIEWPORT_HEIGHT})
       }
 
       draw_ui(&user.gui_tree)
+
+    case .Vulkan_Test:
+      vk_render(&vk_state)
     }
+
+    render.end_frame()
 
     render_end_tick = time.tick_now()
 
-    if user.show_dbgui
-    {
-      platform.imgui_begin()
-      update_debug_gui(&curr_game, TIME_STEP * curr_game.t_mult)
-      platform.imgui_end()
-    }
+    // if user.show_dbgui
+    // {
+    //   platform.imgui_begin()
+    //   update_debug_gui(&curr_game, TIME_STEP * curr_game.t_mult)
+    //   platform.imgui_end()
+    // }
 
     prev_keys = platform.input.keys
-    platform.window_draw(&user.window)
+    // platform.window_draw(&user.window)
 
     if user.window.should_close
     {
@@ -233,8 +255,8 @@ v2f32 :: [2]f32
 v3f32 :: [3]f32
 v4f32 :: [4]f32
 
-m2f32 :: matrix[2,2]f32
-m3f32 :: matrix[3,3]f32
+m2x2f32 :: matrix[2,2]f32
+m3x3f32 :: matrix[3,3]f32
 
 Range :: basic.Range
 

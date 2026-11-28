@@ -17,8 +17,8 @@ Resources :: struct
 {
   actions:     [Action_Name]platform.Input_Source,
   pipelines:   [Shader_Name]render.Pipeline,
-  shaders:     [Shader_Name]render.Shader,
-  textures:    [Texture_Name]render.Texture,
+  // shaders:     [Shader_Name]render.Shader,
+  textures:    [Texture_Name]render.Image,
   sprites:     [Sprite_Name]Sprite,
   sounds:      [Sound_Name]Sound,
   animations:  [Animation_Name]Animation_Desc,
@@ -470,23 +470,6 @@ init_resources :: proc(arena: ^mem.Arena)
     }
   }
 
-  // - Shaders ---
-  {
-    res.shaders[.Sprite] = render.create_shader(#load("../res/shaders/sprite.vert.glsl"),
-                                                #load("../res/shaders/sprite.frag.glsl"),
-                                                {"u_tex", "u_light"})
-
-    res.shaders[.GUI] = render.create_shader(#load("../res/shaders/gui.vert.glsl"),
-                                             #load("../res/shaders/gui.frag.glsl"),
-                                             {"u_tex", "u_fnt"})
-  }
-
-  // - Pipeline ---
-  {
-    res.pipelines[.Sprite] = render.create_pipeline(res.shaders[.Sprite], arena)
-    res.pipelines[.GUI] = render.create_pipeline(res.shaders[.GUI], arena)
-  }
-
   // - Ground ---
   {
     img, err := tga.load("res/textures/ground.tga")
@@ -495,7 +478,7 @@ init_resources :: proc(arena: ^mem.Arena)
       panicf("Failed to open texture file!", err)
     }
 
-    res.textures[.Ground] = render.create_texture(img.pixels[:], img.width, img.height)
+    res.textures[.Ground] = render.create_texture(img.pixels[:], img.width, img.height, .R8G8B8A8_SRGB)
   }
 
   // - Sprites ---
@@ -509,7 +492,7 @@ init_resources :: proc(arena: ^mem.Arena)
       panicf("Failed to open texture file!", err)
     }
 
-    res.textures[.Sprite_Atlas] = render.create_texture(img.pixels[:], img.width, img.height)
+    res.textures[.Sprite_Atlas] = render.create_texture(img.pixels[:], img.width, img.height, .R8G8B8A8_SRGB)
 
     for &sprite in res.sprites
     {
@@ -647,7 +630,7 @@ init_resources :: proc(arena: ^mem.Arena)
     font, err := ui.load_font("res/fonts/Jersey10.ttf", 14, {}, arena)
     if err == nil
     {
-      res.textures[.Glyph_Atlas] = render.create_texture(font.pixels, font.width, font.height, format=1)
+      res.textures[.Glyph_Atlas] = render.create_texture(font.pixels, font.width, font.height, format=.A8_UNORM)
     }
     else
     {

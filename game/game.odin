@@ -149,12 +149,7 @@ game_save :: proc(gm: ^Game, path: string)
     return
   }
 
-  save_buf := bytes.make_buffer(make([]byte, size_of(Game)), .LE)
-  bytes.write_u8(&save_buf, cast(u8) gm.active_zone)
-  os.write(file, save_buf.data)
-
-  file_info, _ := os.fstat(file, mem.allocator(scratch))
-  log.infof("[game]: Saved data to file '%s'.\n", file_info.fullpath)
+  log.warn("[game]: Saving and loading not implemented.\n")
 }
 
 game_load :: proc(gm: ^Game, path: string)
@@ -170,34 +165,24 @@ game_load :: proc(gm: ^Game, path: string)
     return
   }
 
-  save_data := make([]byte, size_of(Game))
-  os.read(file, save_data)
-  save_buf := bytes.make_buffer(save_data, .LE)
-  gm.active_zone = cast(Zone_Name) bytes.read_u8(&save_buf)
-
-  file_info, _ := os.fstat(file, mem.allocator(scratch))
-  log.infof("[game]: Loaded data from file '%s'.\n", file_info.fullpath)
+  log.warn("[game]: Saving and loading not implemented.\n")
 }
 
 game_start :: proc(gm: ^Game)
 {
   set_active_game(gm)
 
-  game_load(gm, "res/data/debug.dat")
-
   global.debug.silence_noise = false
 
   gm.t_mult = 1
   gm.camera.scl = {1, 1}
-  gm.light_color = {1.0, 1.0, 1.0, 1.0}
-  // gm.light_color = {1.0, 0.8, 0.8, 1.0}
+  // gm.light_color = {1.0, 1.0, 1.0, 1.0}
+  gm.light_color = {0.9, 0.7, 0.7, 1.0}
 
   player := spawn_player()
   entity_equip_weapon(player, .Nil)
 
-  set_active_zone(gm.active_zone, true)
-
-  // spawn_entity(.Ground, {0, 0})
+  set_active_zone(.Wilderness, true)
 
   spawn_creature(.Rabbit, {100, 50})
   spawn_creature(.Rabbit, {200, 250})
@@ -211,28 +196,15 @@ game_start :: proc(gm: ^Game)
   npc.target_en = player.ref
   gm.special_entities[.Debug] = npc
 
-  play_sound(.Minecraft, volume=global.audio.music_volume)
-
   spawn_entity(.Stump, {400, 100})
   spawn_entity(.Stump, {100, 400})
 
-  when false
-  {
-    heart := alloc_entity(gm)
-    setup_entity(heart, false)
-    heart.animation.state = .Idle
-    heart.animation.data[.Idle] = Animation_Name.Heart_Healthy
-    entity_play_animation(heart, .Idle, true)
-    gm.special_entities[.Debug] = heart
-  }
+  play_sound(.Minecraft, volume=global.audio.music_volume)
 
   set_active_game(nil)
 }
 
-game_quit :: proc(gm: ^Game)
-{
-  game_save(gm, "res/data/debug.dat")
-}
+game_quit :: proc(gm: ^Game) {}
 
 game_update :: proc(gm: ^Game, dt: f32)
 {
@@ -246,7 +218,7 @@ game_update :: proc(gm: ^Game, dt: f32)
   gm.interpolate = true
 
   ui.begin_tree(&global.wui_tree, {
-    background_color = {0.0, 0.0, 0.0, 0.0},
+    background_color = 0,
     window_size = platform.window_get_size(&user.window), 
     cursor_pos = platform.get_cursor_position(),
     mouse_btn_down = {
@@ -255,24 +227,6 @@ game_update :: proc(gm: ^Game, dt: f32)
       .Middle = platform.input.mouse_btns[.Middle],
     },
   })
-
-  // if ui.P(ui.box("Banner"))
-  // {
-  //   ui.layout_props({.Floating})
-  //   ui.layout_offset({50, 50})
-  //   // ui.layout_width(ui.fit_children())
-  //   ui.layout_width(ui.px(200))
-  //   ui.layout_height(ui.px(40))
-  //   ui.layout_color({0.4, 0.4, 0.4, 0.9})
-  //   ui.layout_child_justify({nil, .Center})
-
-  //   if ui.P(ui.text("tooltip"))
-  //   {
-  //     ui.layout_text_size(2)
-  //   }
-  // }
-
-  // println(gm.special_entities[.Debug].animation.frame_idx)
 
   set_music_volume(global.audio.music_volume)
 
@@ -706,7 +660,7 @@ game_update :: proc(gm: ^Game, dt: f32)
     }
   }
 
-  // - Camera follow player
+  // - Camera follow player ---
   {
     bounds: [2]Range(f32)
     bounds.x.min = -ZONE_MARGIN_SIZE
@@ -755,7 +709,7 @@ game_update :: proc(gm: ^Game, dt: f32)
       {
         if entity_is_same(en_a, en_b) do continue
 
-        if en_b.collision_layer in COLLISION_MATRIX[en_a.collision_layer]
+        if en_b.collision_layer in collision_matrix[en_a.collision_layer]
         {
           if collider_overlap(en_a.collider, en_b.collider)
           {
@@ -1070,13 +1024,13 @@ game_update :: proc(gm: ^Game, dt: f32)
     particle_update(&par, dt)
   }
   
-  if ui.P(ui.text("Kalt"))
-  {
-    ui.layout_props({.Floating})
-    ui.layout_offset(tt.global_pos(gm.special_entities[.Player]) - {2, 17})
-    ui.layout_text_color({0.5, 0.5, 1.0})
-    ui.layout_text_size(2)
-  }
+  // if ui.P(ui.text("Kalt"))
+  // {
+  //   ui.layout_props({.Floating})
+  //   ui.layout_offset(tt.global_pos(gm.special_entities[.Player]) - {2, 17})
+  //   ui.layout_text_color({0.5, 0.5, 1.0})
+  //   ui.layout_text_size(2)
+  // }
 
   if ui.P(ui.text("Scientist"))
   {
@@ -1085,6 +1039,36 @@ game_update :: proc(gm: ^Game, dt: f32)
     ui.layout_text_color({1, 1, 0})
     ui.layout_text_size(2)
   }
+
+  // for &en in gm.entities do if en.flags.update
+  // {
+  //   if en.name == .Zombie
+  //   {
+  //     if ui.P(ui.text("Zombie"))
+  //     {
+  //       ui.layout_props({.Floating})
+  //       ui.layout_offset(tt.global_pos(en) - {6, 16})
+  //       ui.layout_text_color({0.7, 0.1, 0.1})
+  //       ui.layout_text_size(2)
+  //     }
+  //   }
+  // }
+
+  // if ui.P(ui.box("Banner"))
+  // {
+  //   ui.layout_props({.Floating})
+  //   ui.layout_offset({50, 50})
+  //   // ui.layout_width(ui.fit_children())
+  //   ui.layout_width(ui.px(200))
+  //   ui.layout_height(ui.px(40))
+  //   ui.layout_color({0.4, 0.4, 0.4, 0.9})
+  //   ui.layout_child_justify({nil, .Center})
+
+  //   if ui.P(ui.text("Text"))
+  //   {
+  //     ui.layout_text_size(2)
+  //   }
+  // }
 
   ui.end_tree(dt)
 
@@ -1102,34 +1086,37 @@ game_render :: proc(gm: ^Game)
 {
   set_active_game(gm)
 
+  window_size := platform.window_get_size(&user.window)
+
+  render.transition_image(render.get_color_target(), .Color_Attachment)
+
   render.begin_pass({
     pipeline = res.pipelines[.Sprite],
-    texture = i32(Texture_Name.Ground),
-    vertex_buf = d_data.vertex_buffer,
-    index_buf = d_data.index_buffer,
-    camera = vmath.transform_3x3f(-gm.camera.pos, gm.camera.rot, gm.camera.scl),
-    projection = vmath.orthographic(0, VIEWPORT_WIDTH, 0, VIEWPORT_HEIGHT),
+    color_attachments = {{
+      image = render.get_color_target(),
+      load_op = .Clear,
+      store_op = .Store,
+    }},
+    // texture = i32(Texture_Name.Ground),
+    // vertex_buf = d_st.vertex_buffer,
+    index_buf = &d_st.sprite_index_buf,
+    // camera = vmath.transform_3x3f(-gm.camera.pos, gm.camera.rot, gm.camera.scl),
+    // projection = vmath.orthographic(0, VIEWPORT_WIDTH, 0, VIEWPORT_HEIGHT),
     viewport = user.viewport,
+    scissor = {0, 0, window_size.x, window_size.y},
     clear_color = {0, 0, 0, 1},
-    light_color = gm.light_color,
+    // light_color = gm.light_color,
   })
+
+  d_st.push_data.xform = vmath.IDENTITY_3X3F
+  d_st.push_data.xform[1][1] *= -1
+  d_st.push_data.xform *= vmath.orthographic(0, VIEWPORT_WIDTH, 0, VIEWPORT_HEIGHT)
+  d_st.push_data.xform *= vmath.transform_3x3f(-gm.camera.pos, gm.camera.rot, gm.camera.scl)
+  d_st.push_data.light_color = gm.light_color
+  d_st.push_data.vertex_buf = d_st.sprite_vertex_buf.addr
+  render.push_data(&d_st.push_data, size_of(d_st.push_data))
 
   draw_ground({0, 0}, {MAP_SIZE, MAP_SIZE})
-
-  d_flush_sprite()
-  render.end_pass()
-
-  render.begin_pass({
-    pipeline = res.pipelines[.Sprite],
-    texture = i32(Texture_Name.Sprite_Atlas),
-    vertex_buf = d_data.vertex_buffer,
-    index_buf = d_data.index_buffer,
-    camera = vmath.transform_3x3f(-gm.camera.pos, gm.camera.rot, gm.camera.scl),
-    projection = vmath.orthographic(0, VIEWPORT_WIDTH, 0, VIEWPORT_HEIGHT),
-    viewport = user.viewport,
-    clear_color = {0, 0, 0, 0},
-    light_color = gm.light_color,
-  })
 
   // - Draw region ---
   // for tile_idx in 0..<len(gm.tiles)
@@ -1706,7 +1693,7 @@ Item_Kind :: enum
 NIL_ENTITY: Entity
 
 @(rodata)
-COLLISION_MATRIX: [Collision_Layer]bit_set[Collision_Layer] = {
+collision_matrix: [Collision_Layer]bit_set[Collision_Layer] = {
   .Nil               = {},
   .Player            = {.Item, .Enemy},
   .Player_Projectile = {.Enemy},
@@ -2087,7 +2074,7 @@ spawn_shadow :: proc(owner: ^Entity, sprite: Sprite_Name, offet: v2f32, deferred
   setup_entity(shadow, deferred)
 
   shadow.props += {.Interpolate, .Flip_To_Parent}
-  shadow.color = {0.2, 0.2, 0.2, 0}
+  shadow.color.rgb = 0.01
   shadow.tint.a = 0.5
   shadow.animation.data[.Idle] = sprite
   shadow.z_index = -999
@@ -2256,7 +2243,7 @@ entity_flip_to_target :: proc(en: ^Entity, target: v2f32)
   }
 }
 
-entity_xform :: proc(en: ^Entity) -> m3f32
+entity_xform :: proc(en: ^Entity) -> m3x3f32
 {
   top_left :: proc(en: ^Entity) -> v2f32
   {
@@ -2717,8 +2704,8 @@ MAX_ZONE_TILES   :: 128 * 128
 
 Zone_Name :: enum
 {
-  Shop,
   Wilderness,
+  Shop,
 }
 
 Zone_Desc :: struct

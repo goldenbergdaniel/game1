@@ -44,30 +44,30 @@ gui_update :: proc(tree: ^ui.Tree, dt: f32)
     show_options = false
   }
   
-  if user.screen == .Main_Menu
-  {
-    ui.layout_child_width(ui.pct(1.0))
-    ui.layout_child_height(ui.pct(1.0))
-    ui.layout_child_align(.Vertical)
-    ui.layout_child_justify({.Center, nil})
+  // if user.screen == .Main_Menu
+  // {
+  //   ui.layout_child_width(ui.pct(1.0))
+  //   ui.layout_child_height(ui.pct(1.0))
+  //   ui.layout_child_align(.Vertical)
+  //   ui.layout_child_justify({.Center, nil})
 
-    if !show_options
-    {
-      ui_main_menu()
-    }
-    else if show_options
-    {
-      ui_options_menu()
-    }
+  //   if !show_options
+  //   {
+  //     ui_main_menu()
+  //   }
+  //   else if show_options
+  //   {
+  //     ui_options_menu()
+  //   }
 
-    ui.spacer(ui.px(0), ui.pct(0.05))
+  //   ui.spacer(ui.px(0), ui.pct(0.05))
 
-    if (ui.P(ui.text("© 2026 Daniel Goldenberg")))
-    {
-      ui.layout_text_size(1)
-    }
-  }
-  else if user.screen == .Game
+  //   if (ui.P(ui.text("© 2026 Daniel Goldenberg")))
+  //   {
+  //     ui.layout_text_size(1)
+  //   }
+  // }
+  if user.screen == .Game
   {
     ui.layout_child_width(ui.pct(1.0))
     ui.layout_child_height(ui.pct(1.0))
