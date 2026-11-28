@@ -29,7 +29,7 @@ gui_init :: proc(tree: ^ui.Tree)
 gui_update :: proc(tree: ^ui.Tree, dt: f32)
 {
   ui.begin_tree(tree, {
-    background_color = {0.1, 0.1, 0.1, 1.0},
+    background_color = {0.0252, 0.0252, 0.0252, 1.0},
     window_size = platform.window_get_size(&user.window), 
     cursor_pos = platform.get_cursor_position(),
     mouse_btn_down = {
@@ -86,6 +86,7 @@ ui_main_menu :: proc()
   if (ui.P(ui.text("Untitled")))
   {
     ui.layout_text_size(8)
+    ui.layout_text_color({0.0762, 0.1248, 0.0437})
   }
 
   ui.spacer(ui.px(0), ui.pct(0.1))
@@ -110,6 +111,7 @@ ui_main_menu :: proc()
 
         if ui.P(ui.text(names[i]))
         {
+          ui.layout_text_color({1, 1, 1})
           ui.layout_text_size(3)
         }
 
@@ -135,7 +137,7 @@ ui_main_menu :: proc()
           platform.consume_mouse_btn(.Left)
         }
 
-        ui.layout_color({0.2, 0.2, 0.2, 1.0})
+        ui.layout_color({0.05, 0.05, 0.05, 1.0})
       }
 
       ui.spacer(ui.px(0), ui.px(10))
@@ -172,7 +174,7 @@ ui_options_menu :: proc()
       {
         ui.layout_width(ui.pct(0.4))
         ui.layout_height(ui.px(60))
-        ui.layout_color({0.2, 0.2, 0.2, 1.0})
+        ui.layout_color({0.05, 0.05, 0.05, 1.0})
         ui.layout_child_justify({.Center, .Center})
 
         @(static)

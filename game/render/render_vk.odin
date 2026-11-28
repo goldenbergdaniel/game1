@@ -767,7 +767,7 @@ vk_create_swapchain :: proc(old_swapchain: ^VK_Swapchain) -> VK_Swapchain
   for &image, i in swapchain_images[:swapchain.image_count]
   {
     swapchain.images[i].vk.handle = image
-    swapchain.images[i].vk.format = g.device.surface_format.format 
+    swapchain.images[i].vk.format = g.device.surface_format.format
 
     vk.CreateImageView(g.device.handle, &{
       sType = .IMAGE_VIEW_CREATE_INFO,

@@ -560,7 +560,7 @@ vk_render :: proc(st: ^VK_State)
   st.push_data.xform = vmath.IDENTITY_3X3F
   st.push_data.xform[1][1] *= -1
   st.push_data.xform *= vmath.orthographic(0, VIEWPORT_WIDTH, 0, VIEWPORT_HEIGHT)
-  st.push_data.light_color = {1, 1, 1, 1}
+  st.push_data.light_color = 1
   st.push_data.vertex_buf = st.vertex_buf.addr
   render.push_data(&st.push_data, size_of(st.push_data))
 
