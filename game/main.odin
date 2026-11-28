@@ -29,7 +29,7 @@ User :: struct
 
 Screen :: enum
 {
-  // Main_Menu,
+  Main_Menu,
   Game,
   Vulkan_Test,
 }
@@ -87,7 +87,7 @@ main :: proc()
   init_draw()
   vk_init(&vk_state)
 
-  // platform.window_init_imgui(&user.window)
+  platform.window_init_imgui(&user.window)
   
   init_audio()
   init_global()
@@ -178,8 +178,8 @@ main :: proc()
 
     switch user.screen
     {
-    // case .Main_Menu:
-      // draw_ui(&user.gui_tree)
+    case .Main_Menu:
+      draw_ui(&user.gui_tree)
 
     case .Game:
       alpha := accumulator / TIME_STEP
